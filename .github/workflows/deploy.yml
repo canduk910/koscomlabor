@@ -47,7 +47,7 @@ jobs:
           rsync -az --delete \
             --exclude node_modules --exclude .next --exclude .git --exclude .idea --exclude .claude \
             --exclude _workspace --exclude server --exclude deploy --exclude "*.pem" --exclude ".env*" \
-            --exclude tsconfig.tsbuildinfo \
+            --exclude tsconfig.tsbuildinfo --exclude design --exclude .github \
             ./ ncp:/root/koscomlabor-web/src/
 
       - name: 배포 실행 (재빌드·재기동)
