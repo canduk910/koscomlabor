@@ -10,6 +10,5 @@ deploy
 .env
 .env.*
 tsconfig.tsbuildinfo
-design/Koscom_CI.jpg
-design/kfiu_mark_jpg.jpg
+design
 *.md
