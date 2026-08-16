@@ -1,0 +1,17 @@
+# koscomlabor.cloud / www.koscomlabor.cloud — 공식페이지 프론트 (koscomlabor-web 컨테이너)
+# 기존 Caddyfile(/root/digital_onnuri/backend/deploy/Caddyfile) 말미에 추가되는 블록.
+# 기존 onnuri·union-api 블록은 무변경. 반영: caddy validate 통과 후 caddy reload (restart 금지).
+#
+# 주의: 루트(@) DNS 가 이 서버를 가리키기 전까지 koscomlabor.cloud 인증서 발급은
+# 실패→백오프 재시도 상태가 된다 — 의도된 상태이며, 사용자의 가비아 DNS 수정 시 자동 발급된다.
+# www 는 DNS 가 이미 이 서버라 즉시 발급된다.
+koscomlabor.cloud, www.koscomlabor.cloud {
+	encode zstd gzip
+	reverse_proxy koscomlabor-web:3000
+	tls {$TLS_EMAIL}
+
+	log {
+		output stdout
+		format console
+	}
+}

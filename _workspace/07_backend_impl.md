@@ -1,7 +1,7 @@
 # 07. 방명록 백엔드 구현 요약 · 배포 기록 (Docker/NCP VM)
 
-작성일: 2026-08-16 (배포 반영 갱신) | 작성자: backend-developer | 기준 명세: `_workspace/06_backend_api_spec.md`
-상태: **NCP VM 배포 완료 (컨테이너 가동·스모크 통과·백업 크론 설치). 단, 공개 도메인 미확정 — 4절 참조**
+작성일: 2026-08-16 (공개 배포 반영 갱신) | 작성자: backend-developer | 기준 명세: `_workspace/06_backend_api_spec.md`
+상태: **API 공개 완료 — https://union-api.koscomlabor.cloud (TLS 유효, 스모크 통과). 프론트 배포는 6절**
 
 ---
 
@@ -154,11 +154,12 @@ ssh root@101.79.31.30 'cd /root/koscomlabor-api && docker compose build && \
 
 **onnuri 무영향 확인**: 배포 전후 https://onnuri.koscomlabor.cloud 응답 SHA1 동일(`ef2365c4…`) · onnuri-app/db/caddy 컨테이너 가동시간 연속(재시작 없음) · Caddyfile 백업본과 diff 동일(원복 확인) · caddy 에러 로그 없음 · onnuri 백엔드(api.koscomlabor.cloud) 정상 응답.
 
-## 4. 미결 사항 (리더/사용자 결정 필요)
+## 4. 공개 완료 기록 (2026-08-16 — 2.6절 절차 이행)
 
-1. **방명록 API 공개 도메인** — `api.koscomlabor.cloud` 사용 불가(onnuri 백엔드 현역, 2.3절). **제안: `union-api.koscomlabor.cloud`** (대안: guestbook-api.*, jibu-api.*). 확정 시 2.6절 절차 15분 내 공개 가능. 06 명세의 Base URL·프론트 `NEXT_PUBLIC_API_BASE_URL` 도 확정값으로 갱신 필요
-2. 프론트 프로덕션 도메인 확정 시 CORS_ORIGINS 추가 (현재 http://localhost:3000 만)
-3. Object Storage 2차 백업 콘솔 작업 (2.5절 가이드)
+1. **API 도메인 확정·공개: `https://union-api.koscomlabor.cloud`** (리더 확정, 가비아 A 레코드 반영 완료). Caddy 블록 append → `caddy validate` "Valid configuration" → `caddy reload`. Let's Encrypt 인증서 자동 발급, `/health` 200 실측
+2. **CORS 갱신 완료**: `https://koscomlabor.cloud`, `https://www.koscomlabor.cloud`, `http://localhost:3000` — 3개 Origin 모두 preflight ACAO 실측, 비허용 Origin 차단 실측
+3. **공개 도메인 경유 스모크**: GET 200 배열 / POST 201 4필드 / 30초 재등록 429+Retry-After / CORS 3종 — 전부 PASS, 테스트 글은 관리자 삭제로 정리
+4. 잔여: Object Storage 2차 백업 콘솔 작업 (2.5절 가이드), 루트(@) DNS 가비아 수정 (사용자 — 6절 참조)
 
 ## 5. 운영 시 알아둘 것
 
@@ -166,3 +167,40 @@ ssh root@101.79.31.30 'cd /root/koscomlabor-api && docker compose build && \
 - 관리자 삭제는 soft delete. 완전 삭제 요구 시: 백업 확인 후 `docker exec koscomlabor-db psql -U guestbook_app -d guestbook -c "DELETE FROM guestbook_entries WHERE id='<id>';"`
 - `GET /health` 는 rate limit 미적용 (모니터링용)
 - 파괴적 docker 명령(prune, `down -v`) 금지 — `down -v` 는 DB 볼륨을 삭제한다
+
+## 6. 프론트 실서비스 배포 (koscomlabor.cloud / www.koscomlabor.cloud)
+
+### 6.1 저장소 변경 (최소 — 프론트 소스 무수정)
+
+| 파일 | 변경 |
+|---|---|
+| `next.config.ts` | `output: "standalone"` 한 줄 추가 (Docker self-contained 출력) |
+| `Dockerfile` (신규, 루트) | node:22-alpine 멀티스테이지. `NEXT_PUBLIC_API_BASE_URL` 은 **build ARG** 로 주입 (NEXT_PUBLIC 은 빌드타임 임베드). 런타임 이미지에 standalone·static·public·**content/**(마크다운 fs 읽기 대상) 복사 |
+| `.dockerignore` (신규, 루트) | node_modules·.next·.git·_workspace·server·deploy·시크릿·원본 CI jpg 제외 |
+| `deploy/web/` (신규) | `docker-compose.yml`·`Caddyfile.web-block`·`deploy.sh` — 서버 배치 사본의 원본 |
+
+### 6.2 서버 구성
+
+```
+/root/koscomlabor-web/
+├── docker-compose.yml      # web 서비스: build ./src (ARG 로 API URL 임베드), deploy_web 네트워크, 호스트 포트 미개방
+├── deploy.sh               # 재배포: rsync 후 build + up -d web
+├── Caddyfile.web-block
+└── src/                    # 저장소 rsync 사본
+```
+
+Caddy: `koscomlabor.cloud, www.koscomlabor.cloud` → `reverse_proxy koscomlabor-web:3000` 블록 append (validate → reload).
+**루트(@) DNS 는 아직 GitHub IP 잔존** — 루트 인증서 발급은 실패→백오프 재시도 상태가 정상이며, 사용자가 가비아에서 A 레코드를 101.79.31.30 으로 바꾸면 자동 발급된다. www 는 즉시 발급.
+
+### 6.3 재배포 절차
+
+```bash
+# 로컬에서
+rsync -az --delete \
+  --exclude node_modules --exclude .next --exclude .git --exclude .idea --exclude .claude \
+  --exclude _workspace --exclude server --exclude deploy --exclude "*.pem" --exclude ".env*" \
+  ./ root@101.79.31.30:/root/koscomlabor-web/src/
+ssh root@101.79.31.30 '/root/koscomlabor-web/deploy.sh'
+```
+
+`NEXT_PUBLIC_API_BASE_URL` 변경 시 compose 의 build args 수정 후 재빌드 필요 (런타임 env 로는 반영 안 됨).
