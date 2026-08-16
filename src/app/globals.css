@@ -1,26 +1,48 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * 디자인 토큰 — _workspace/02_designer_spec.md §1 그대로 적용.
+ * 다크 모드는 스펙 범위 제외 (create-next-app 기본 다크모드 미디어쿼리 제거됨).
+ * 주조색 #1d4ed8 계열은 플레이스홀더 — 공식 CI 확보 시 교체 후 대비 재검증 필요.
+ */
+@theme {
+  /* ---- 색상 (12) ---- */
+  --color-bg: #ffffff;             /* 페이지 기본 배경 */
+  --color-surface: #f9fafb;        /* 탭바·푸터·카드 배경 */
+  --color-ink: #1a1a1a;            /* 본문·제목 텍스트 */
+  --color-ink-muted: #4b5563;      /* 보조 텍스트(날짜·출처·비선택 탭) */
+  --color-primary: #1d4ed8;        /* 주조색 — UI 요소(포커스 링·아이콘)와 큰 텍스트 전용 */
+  --color-primary-strong: #1e40af; /* 본문 크기 링크·선택 탭 배경·버튼 배경 */
+  --color-primary-tint: #eff6ff;   /* 탭 hover 배경 */
+  --color-urgent: #b91c1c;         /* 긴급 — 보더·구분선 등 UI 요소 전용 */
+  --color-urgent-strong: #991b1b;  /* 긴급 텍스트·긴급 배지 배경 */
+  --color-urgent-tint: #fef2f2;    /* 긴급 배너 배경 */
+  --color-border-strong: #6b7280;  /* 의미 있는 UI 경계(입력 필드 등)·보조 아이콘 */
+  --color-border-soft: #e5e7eb;    /* 장식용 구분선 전용 — 의미 전달 UI에 사용 금지 */
+
+  /* ---- 타이포그래피 스케일 (5단계) ---- */
+  --text-display: 2.5rem;                 /* 40px 페이지 대제목 */
+  --text-display--line-height: 1.3;
+  --text-display--font-weight: 700;
+  --text-h1: 2rem;                        /* 32px 섹션 제목 */
+  --text-h1--line-height: 1.3;
+  --text-h1--font-weight: 700;
+  --text-h2: 1.5rem;                      /* 24px 소제목·카드 제목 */
+  --text-h2--line-height: 1.3;
+  --text-h2--font-weight: 600;
+  --text-body: 1.125rem;                  /* 18px 본문 기본 */
+  --text-body--line-height: 1.7;
+  --text-caption: 0.9375rem;              /* 15px 보조 정보 — 이보다 작은 텍스트 금지 */
+  --text-caption--line-height: 1.5;
+
+  /* ---- 간격·레이아웃 (3) ---- */
+  --spacing-touch: 2.75rem;   /* 44px 최소 터치 대상 (min-h-touch / min-w-touch) */
+  --container-prose: 42rem;   /* 672px 본문 줄 길이 상한 (한글 35~40자) */
+  --container-page: 48rem;    /* 768px 페이지 콘텐츠 컨테이너 상한 */
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+html {
+  font-size: 100%;
+  color: var(--color-ink);
+  background: var(--color-bg);
 }
