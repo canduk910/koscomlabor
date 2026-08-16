@@ -1,9 +1,11 @@
+import { listPosts } from "@/lib/api/posts";
+import { getApiConnection } from "@/lib/api/http";
 import {
-  getLatestUrgentNotice,
-  getUpcomingDeadlinePosts,
-  getVerifiedNews,
-  getVerifiedNotices,
-} from "@/lib/content";
+  type PostListItem,
+  selectUpcomingDeadlines,
+  toPostListItem,
+} from "@/lib/postView";
+import type { PostListStatus } from "@/components/board/PostList";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { HeroPanel } from "@/components/home/HeroPanel";
@@ -12,18 +14,46 @@ import { OnnuriGuideCard } from "@/components/home/OnnuriGuideCard";
 import { BoardTabs } from "@/components/board/BoardTabs";
 
 /**
- * 메인페이지 v2 (스펙 §3·§11) — 헤더 / 히어로 패널 / [조건부] 마감 스트립 /
- * 가이드 카드 / 탭 게시판 / 딥블루 푸터.
- * - 히어로(§11.4)가 구 긴급 배너(§3.2)를 대체: urgent 최신 1건 바인딩 또는 폴백.
- * - 간격: 헤더↓히어로 1.5rem, 히어로↓스트립 0.75rem, (스트립)↓다음 요소 2rem,
- *   카드↓탭 2rem (§9.1·§11.4).
- * - 목록 데이터는 서버에서 로드(verified 게이트 통과분만)해 탭 컴포넌트에 전달.
+ * 메인페이지 (스펙 §3·§11·§14) — DB(API) 전환판.
+ * 렌더 전략: 서버 컴포넌트 fetch + ISR revalidate 60초 (리더 권장안 채택).
+ * 정적 프리렌더 포기 — 컨테이너가 next server이므로 가능. D-n·마감 스트립도
+ * 요청 시점(최대 60초 지연) 계산으로 전환되어 빌드 고정 한계가 해소된다.
+ * API 미설정/실패 시 목록은 빈 상태 + 정직한 안내 (가짜 동작 금지).
  */
-export default function Home() {
-  const notices = getVerifiedNotices();
-  const news = getVerifiedNews();
-  const urgentNotice = getLatestUrgentNotice();
-  const deadlinePosts = getUpcomingDeadlinePosts();
+export const revalidate = 60;
+
+interface CategoryData {
+  posts: PostListItem[];
+  status: PostListStatus;
+}
+
+async function loadCategory(category: "notice" | "news"): Promise<CategoryData> {
+  const result = await listPosts({ category });
+  if (!result.ok) {
+    return {
+      posts: [],
+      status: result.reason === "unconfigured" ? "unconfigured" : "error",
+    };
+  }
+  return { posts: result.data.map(toPostListItem), status: "ok" };
+}
+
+export default async function Home() {
+  const connection = getApiConnection();
+  const [notices, news] =
+    connection.status === "configured"
+      ? await Promise.all([loadCategory("notice"), loadCategory("news")])
+      : [
+          { posts: [], status: "unconfigured" as const },
+          { posts: [], status: "unconfigured" as const },
+        ];
+
+  // 히어로 urgent 바인딩: 서버 정렬(urgent 우선 → 최신순)이므로 공지 목록의
+  // 첫 항목이 urgent면 그것이 곧 "urgent 최신 1건" — 별도 쿼리 없이 파생
+  const first = notices.posts[0];
+  const urgentNotice = first !== undefined && first.urgent ? first : null;
+
+  const deadlinePosts = selectUpcomingDeadlines([...notices.posts, ...news.posts]);
 
   return (
     <>
@@ -40,7 +70,12 @@ export default function Home() {
             <OnnuriGuideCard />
           </div>
           <div className="mt-8">
-            <BoardTabs notices={notices} news={news} />
+            <BoardTabs
+              notices={notices.posts}
+              news={news.posts}
+              noticesStatus={notices.status}
+              newsStatus={news.status}
+            />
           </div>
         </div>
       </main>

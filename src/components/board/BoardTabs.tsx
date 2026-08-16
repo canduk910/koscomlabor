@@ -1,9 +1,9 @@
 "use client";
 
 import { useRef, useSyncExternalStore } from "react";
-import type { PostSummary } from "@/lib/content";
+import type { PostListItem } from "@/lib/postView";
 import { isTabId, ROUTES, TAB_QUERY_PARAM, type TabId } from "@/lib/routes";
-import { PostList } from "@/components/board/PostList";
+import { PostList, type PostListStatus } from "@/components/board/PostList";
 import { GuestbookPanel } from "@/components/board/GuestbookPanel";
 
 const TABS: ReadonlyArray<{ id: TabId; label: string }> = [
@@ -33,8 +33,10 @@ function readServerTab(): TabId {
 }
 
 interface BoardTabsProps {
-  notices: PostSummary[];
-  news: PostSummary[];
+  notices: PostListItem[];
+  news: PostListItem[];
+  noticesStatus: PostListStatus;
+  newsStatus: PostListStatus;
 }
 
 /**
@@ -44,7 +46,7 @@ interface BoardTabsProps {
  * - 탭 전환 시 URL 쿼리 ?tab= 동기화 (replaceState — 정적 렌더 유지 목적)
  * - 목록 데이터는 서버에서 로드되어 props로 전달된다
  */
-export function BoardTabs({ notices, news }: BoardTabsProps) {
+export function BoardTabs({ notices, news, noticesStatus, newsStatus }: BoardTabsProps) {
   const activeTab = useSyncExternalStore(
     subscribeToUrl,
     readTabFromUrl,
@@ -129,11 +131,7 @@ export function BoardTabs({ notices, news }: BoardTabsProps) {
         hidden={activeTab !== "notices"}
         className="mt-4"
       >
-        <PostList
-          posts={notices}
-          kind="notice"
-          emptyMessage="등록된 공지사항이 없습니다"
-        />
+        <PostList posts={notices} kind="notice" status={noticesStatus} />
       </div>
       <div
         role="tabpanel"
@@ -143,11 +141,7 @@ export function BoardTabs({ notices, news }: BoardTabsProps) {
         hidden={activeTab !== "news"}
         className="mt-4"
       >
-        <PostList
-          posts={news}
-          kind="news"
-          emptyMessage="등록된 소식이 없습니다"
-        />
+        <PostList posts={news} kind="news" status={newsStatus} />
       </div>
       <div
         role="tabpanel"

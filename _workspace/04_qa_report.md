@@ -1,3 +1,53 @@
+# QA 리포트: 공지·소식 DB 전환 + admin 풀스택 (10회차)
+
+- 작성: qa-tester | 작성일: 2026-08-17
+- 검증 기준: 06 명세 Part 2(§10~17), 02 스펙 §14·§13.5.2(지부명 규칙)·§13.5.1(8차 축소 개정), 03 구현 §15, 07 §7
+- 환경: 로컬 PostgreSQL 16 + `server/` 기동(ADMIN_PASSWORD_HASH는 QA 전용 임시 해시로 env 오버라이드 — 평문·해시 미출력, 검증 후 삭제) + 프론트 `next start`(API 연결 빌드)
+- 검증 방법: **프론트 프로덕션 파서 직접 실행**(4회차 방식 + 쿠키 자ar 래퍼로 브라우저 모사) 27케이스 + curl 원시 헤더 실측 + 실렌더 HTML 검사 + 폰트 메트릭 재계산 + 대비 스크립트 + 빌드 3종(프론트)+server typecheck
+- 정리: 테스트 게시물·첨부·세션 DB 삭제(posts 0/attachments 0/sessions 0), 업로드 파일 6개 제거(디렉토리 0), 프로세스 2종 종료, 임시 스크립트·비밀 파일 삭제, API 미설정 클린 재빌드 복원
+
+## 10회차 요약: 통과 18 | 실패 0 | 미검증 4 | 비고 3
+
+### 통과 항목
+
+| # | 분류 | 확인 내용 |
+|---|------|----------|
+| 1 | **응답 shape 3자 교차 (최우선)** | 목록 `GET /posts?category=`: **최상위 배열** + `x-total-count` + `access-control-expose-headers` 실측, 프로덕션 `listPosts` 파서 `ok:true` 통과(notice/news/urgent 필터 3케이스). 상세 `getPost`: PostSummary+body 파싱 통과. 첨부 배열: `parseAttachment` 5필드(id/filename/mimeType/sizeBytes/url) 전부 명세 §11.1과 일치. null 허용 필드(url·source·deadline·body)가 링크형/작성형 양쪽에서 정확히 구분 반환됨 |
+| 2 | 인증 — 무인증 차단 | 무인증 `adminMe`·`adminListPosts` → 401 → 프론트 `reason:"unauthorized"` 정확 분기. 잘못된 비밀번호 로그인 → 401(계정 힌트 없는 단일 메시지 "인증에 실패했습니다.") |
+| 3 | 인증 — 세션 쿠키 | 로그인 성공 시 `Set-Cookie: admin_session=…; Max-Age=43199; Path=/admin; HttpOnly; SameSite=Lax` 실측(명세 §12.1 일치, 값은 리포트에서 마스킹). `Secure`는 `COOKIE_SECURE` 기본 `true`(config.ts:70) — 로컬만 false, 프로덕션 기본 안전. 쿠키 보유 후 `adminMe` 통과 |
+| 4 | CORS credentials | 허용 Origin(localhost:3000) preflight: `allow-origin` 정확 매칭 + **`allow-credentials: true`** + methods `GET, POST, PATCH, DELETE` + expose `X-Total-Count`. 비허용 Origin은 ACAO 미반환(와일드카드 없음 — §15-2 승인 조건 충족). 프론트 admin 전 요청 `credentials:"include"`(admin.ts:86) 코드 확인 |
+| 5 | 세션 만료 처리 | `AdminApp.tsx:120` — 목록 조회가 `unauthorized`면 `setPhase("login")`으로 로그인 화면 복귀(세션 만료 UX). 로그인 에러 3분기 문구가 §14.2 지정 문구와 문자 단위 일치 |
+| 6 | **번들 비밀 유출 0건** | 클라이언트 번들 15파일 + admin SSR HTML 고정문자열 검사: QA 평문 비밀번호·argon2 해시·Bearer 토큰·`ADMIN_PASSWORD`/`ADMIN_API_TOKEN`/`IP_HASH_SECRET`/`DATABASE_URL`/`argon2` **전부 0건** |
+| 7 | CRUD E2E — 생성 | 작성형 공지(urgent+deadline+출처) 201, 링크형 소식(url) 201 — 둘 다 상세 shape 반환·파서 통과. `publishedAt`은 입력에 없고 서버 자동 기록(§15-6 판정 준수, `AdminPostInput`에 필드 부재 확인) |
+| 8 | CRUD E2E — 수정·삭제 | PATCH 부분 수정(제목·urgent) 200 반영. DELETE soft → **공개 상세 404·공개 목록 0건·admin 목록엔 `deletedAt` 노출**·삭제 글의 첨부 파일도 404(공개 차단, 파일은 보존) |
+| 9 | 공개 렌더 E2E (ISR) | API 연결 빌드 실렌더: 히어로 urgent 바인딩(긴급 배지·hero 제목·CTA `/notices/<uuid>`), 마감 스트립 **D-3·8/20**(오늘 KST 2026-08-17 기준 정확), 링크형 카드, 작성형 상세(h1·마크다운 h2 매핑·출처·첨부 행), 링크형 상세("원문 보기" 외부 링크). **ISR 60초 재검증 실측**(urgent 복구 → 재검증 후 히어로 반영, 삭제 → 재검증 후 빈 상태·폴백 복귀) — D-n이 요청 시점 계산으로 전환된 것 확인 |
+| 10 | §14.1 링크형 카드 3중 병행 | 카드 전체 `target="_blank" rel="noopener noreferrer"`, 메타 "외부 링크(새 창) · example.com"(**호스트만** — 전체 URL 미노출), ↗ 아이콘, 접근성 이름에 메타 문구 포함(`<a>` 내부 텍스트) — HTML 실측 |
+| 11 | §14.1 첨부 표시 | 목록 카드 "첨부 1"(문서 아이콘+caption), 상세 첨부 행(파일명·크기 "2KB"·API 절대 URL·↓ 아이콘·surface 카드). 다운로드 **바이트 완전 일치**(2125B), `content-disposition: attachment`, `cache-control: public, max-age=31536000, immutable`, 잘못된 filename 접근 404(§11.3 규정) |
+| 12 | preview-link 3상태 | 성공(example.com → "Example Domain" 추출), 실패 폴백(존재하지 않는 호스트 → `link-fetch-failed` + 수동 입력 안내), 로딩 상태는 `PostForm.tsx:308` `role="status"` 코드 확인. 제목 필드 항상 편집 가능 |
+| 13 | **SSRF 회귀 (프론트 경유)** | 6케이스 전부 차단: 127.0.0.1:3001(포트 규칙), 127.0.0.1:80·localhost 이름·192.168.0.1·169.254.169.254(대역 규칙 "허용되지 않는 대상입니다"), `file://`(스킴 규칙). 전부 `link-fetch-failed`로 프론트에 정확 분기 |
+| 14 | 업로드 화이트리스트 | 정상 PDF 201. `.php`(MIME 불일치) 거부, **확장자 위장 `fake.pdf`(매직바이트 불일치) 거부** — 이중 검사 실동작. 프론트 선검증 상수(5개·10MB·pdf/png/jpg/webp)가 백엔드 한도와 동일 수치 |
+| 15 | **지부명 표기 전수** | `grep -rn "코스콤지부" src/` → 짧은 표기 **0건**, 정식 표기 "코스콤(한국증권전산)지부" 10건(헤더·푸터·히어로 록업·메타데이터·admin 포함) — §13.5.2 공통 문구 규칙 준수 |
+| 16 | 접근성 | admin 폼: 전 필드 가시 `<label htmlFor>`, "(필수)" 텍스트 표기(별표·색 단독 아님), `<fieldset><legend>` 2종(글 유형·카테고리), `autoComplete="current-password"`, `inputMode="url"`, `type="date"`, 로그인 에러 `role="alert"`, 저장·업로드·preview `role="status"`. **DeleteDialog**: `role="alertdialog"`+`aria-modal`+labelledby/describedby, **초기 포커스=취소**(useEffect), Tab 포커스 트랩, Esc·오버레이 클릭 취소. `/admin` `<meta name="robots" content="noindex, nofollow">` 실측 |
+| 17 | 대비 (§14.6 재사용 설계) | 실사용 11조합 재실측 — 텍스트 전부 AAA(#8 11.37·#10 10.45·#12 8.46·#13 7.74·#14 8.46·#22 9.23·#2 16.65·#6 7.56·#7 7.23), UI 보더·아이콘 #20 4.83·#21 4.63(3:1 통과). **신규 조합 0건**, admin 하드코딩 hex 0건 |
+| 18 | 회귀·빌드 | 방명록 API 200(Part 1 무영향), 상세 라우트 `[id]` 전환 정상 + **카테고리 불일치 id 404**(공지 id를 news 경로로 열람 차단), 탭 ARIA 유지, 폰트(Pretendard CSS 3참조·`font-display` 11개소)·헤더 v4 8차 축소분(`border-y-4`·`py-2 md:py-3`·마크 h-8/h-9·록업 15/17.7→16/18.9px) 스펙 일치. **등폭 재계산: 헤더 8차 모바일 0.37px·md 0.20px, 히어로 0.50/0.24px — 전부 ±2px 이내**. 375px 헤더 252.3px(여유 122.7px). 프론트 `tsc`0·`lint`0·`build` 통과(/ ○ ISR 1m, /admin ○, 상세 ƒ), `server` typecheck 통과 |
+
+### 비고
+
+1. **로컬 DB에 이전 스모크 잔여 데이터 존재** — 정리 시 posts 8건·attachments 6건이 삭제됨(이번 QA 생성분은 posts 2·attachment 1). 나머지는 개발자 스모크 잔여로 추정 — 로컬 개발 DB 한정이라 프로덕션 영향 없으나, 스모크 후 정리 완결성 개선 권고. 방명록 테이블에도 `[Part1 회귀 확인 - 삭제 예정]` 1행 잔존(권한 제약으로 미삭제 — 로컬 한정, 개발자 정리 요청).
+2. `src/lib/api/admin.ts:92` `(await response.json()) as unknown` — `any`를 `unknown`으로 **좁히는** 방어적 캐스팅으로 타입 우회 아님(우회 grep 실질 0건).
+3. DeleteDialog 오버레이 `div onClick`(취소) — 키보드 경로는 Esc·취소 버튼이 보장하므로 접근성 장벽 아님(보조 수단).
+
+### 미검증
+
+| # | 항목 | 사유 |
+|---|------|------|
+| 1 | **admin UI 브라우저 실조작** — 라디오 전환 시 입력값 유지, preview 3상태 시각 전환, 파일 선택·선검증 UX, 다이얼로그 포커스 트랩 실동작, 실브라우저 CORS 쿠키 전송 | 브라우저 자동화 환경 없음 — 쿠키 자ar 래퍼로 계약·분기는 실행 검증, 쿠키 속성·CORS 헤더는 curl 실측으로 대체 |
+| 2 | 프로덕션 도메인 CORS·`Secure` 쿠키 실동작 | 미배포 — 로컬 localhost:3000 origin만 확인. 배포 시 07 §7.1 스모크 필요 |
+| 3 | 게시물당 5개 초과·10MB 초과 업로드 한도 실측 | 대용량 전송 시간 제약 — 프론트 선검증 상수·백엔드 한도 수치 일치는 코드 확인 |
+| 4 | 스크린리더 실낭독, 실뷰포트 렌더 | 환경 제약(기존 회차와 동일) |
+
+---
+
 # QA 리포트: 헤더 v4 + 히어로 모드 2 등폭 록업 (9회차)
 
 - 작성: qa-tester | 작성일: 2026-08-16

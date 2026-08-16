@@ -28,8 +28,10 @@ export const ROUTES = {
   /** 메인페이지의 특정 탭으로 이동 (기본 탭인 공지사항은 쿼리 없이 홈) */
   homeTab: (tab: TabId): string =>
     tab === "notices" ? "/" : `/?${TAB_QUERY_PARAM}=${tab}`,
-  /** 공지사항 상세 */
-  notice: (slug: string): string => `/notices/${encodeURIComponent(slug)}`,
-  /** 금융노조 소식 상세 */
-  news: (slug: string): string => `/news/${encodeURIComponent(slug)}`,
+  /** 공지사항 상세 (DB 전환 — id는 uuid, §15-7) */
+  notice: (id: string): string => `/notices/${encodeURIComponent(id)}`,
+  /** 금융노조 소식 상세 (DB 전환 — id는 uuid, §15-7) */
+  news: (id: string): string => `/news/${encodeURIComponent(id)}`,
+  /** 관리자 화면 */
+  admin: "/admin",
 } as const;

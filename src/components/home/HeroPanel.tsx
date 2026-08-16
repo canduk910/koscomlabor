@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { PostSummary } from "@/lib/content";
+import type { PostListItem } from "@/lib/postView";
 import { ROUTES } from "@/lib/routes";
 import { UrgentBadge } from "@/components/ui/UrgentBadge";
 import { ArrowRightIcon } from "@/components/ui/icons";
@@ -13,7 +13,7 @@ import { ArrowRightIcon } from "@/components/ui/icons";
  *   따라 코너 밖으로 3/4을 내보내고 콘텐츠(z-10) 아래에 둔다.
  * - 제목은 h2 (페이지 h1은 헤더 지부명 유지 — §11.4 마크업 규정).
  */
-export function HeroPanel({ post }: { post: PostSummary | null }) {
+export function HeroPanel({ post }: { post: PostListItem | null }) {
   return (
     <section
       aria-label="주요 소식"
@@ -30,7 +30,7 @@ export function HeroPanel({ post }: { post: PostSummary | null }) {
         <div className="relative z-10">
           <p className="flex flex-wrap items-center gap-3">
             <UrgentBadge withIcon />
-            <time dateTime={post.dateIso} className="text-caption text-primary-soft">
+            <time dateTime={post.publishedAt} className="text-caption text-primary-soft">
               {post.dateLabel}
             </time>
           </p>
@@ -41,7 +41,7 @@ export function HeroPanel({ post }: { post: PostSummary | null }) {
           <div aria-hidden="true" className="mt-4 h-1 w-16 bg-white" />
           <p className="mt-6">
             <Link
-              href={ROUTES.notice(post.slug)}
+              href={ROUTES.notice(post.id)}
               className="font-display inline-flex min-h-touch items-center gap-2 rounded-full bg-white px-6 text-body font-medium tracking-[-0.01em] text-primary hover:bg-primary-soft focus-visible:outline-3 focus-visible:outline-white focus-visible:outline-offset-2"
             >
               자세히 보기

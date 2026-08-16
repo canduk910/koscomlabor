@@ -363,7 +363,69 @@ npx tsc --noEmit / npm run lint / npm run build → 전부 통과 (오류·경�
 - 이슈: Pillow 기본 RGB ICO를 Next 빌드의 ico 파서가 거부("PNG is not in RGBA format") → RGBA(불투명 알파)로 재생성해 해결
 - 검증: tsc/lint/build 3종 통과, `next start`에서 /icon.png·/apple-icon.png·/favicon.ico 전부 200, head에 자동 링크 3종 확인, 서빙 응답 512×512 PNG 실측. server/ 미접촉
 
-## 15. 자가 검증 결과 (최초 구현, 2026-08-16)
+## 15. 공지·소식 DB 전환 + admin 화면 (2026-08-17, 리더 지시 — 06 명세 Part 2·스펙 §14·07 §7.2)
+
+### 렌더 전략 결정
+
+**서버 컴포넌트 fetch + ISR revalidate 60초 채택** (리더 권장안). 컨테이너가 next server이므로 정적 프리렌더를 포기하고 ISR로 전환 — `/` ○(revalidate 1m), `/notices/[id]`·`/news/[id]` ƒ(dynamic + fetch revalidate). **D-n·마감 스트립·히어로 바인딩이 요청 시점(최대 60초 지연) 계산으로 전환되어 기존 "빌드 시점 고정" 한계 해소**(§10 기록 항목). API 미설정/실패 시 목록은 빈 상태 + 정직한 안내, admin은 "API 미연결" 카드 (가짜 동작 금지).
+
+### 변경 파일
+
+**API 계층 (신규 3)** — 06 명세가 계약의 출처, 필드 단위 일치·명시 검증:
+- `src/lib/api/http.ts` — 공용: `ApiResult`/`ApiFailureReason`(방명록 방식 계승 + unauthorized/not-found/link-fetch-failed/payload-too-large 추가), 에러 body code 분기 + 상태 코드 폴백, `getApiConnection`/`resolveApiUrl`. 방명록(guestbook.ts)은 커밋 안정성을 위해 자체 구현 유지 — 통합 리팩토링은 별도 과업
+- `src/lib/api/posts.ts` — 공개: `listPosts`(§11.1 최상위 배열)·`getPost`(§11.2), `ApiPostSummary/Detail/Attachment` 파서(필드별 typeof, null 가능 필드 명시 처리)
+- `src/lib/api/admin.ts` — **전 요청 `credentials: "include"`**(07 §7.2): login/logout/me(§12), CRUD·adminListPosts(deletedAt 노출)(§13.1), preview-link(§13.2), 첨부 업로드/삭제(§13.3). 클라이언트 선검증 상수(5개/10MB/pdf·png·jpg·webp — 백엔드 한도 동일 수치). publishedAt은 입력에 없음(§15-6 서버 자동 기록)
+
+**뷰·데이터 (2)**:
+- `src/lib/postView.ts` — API 정본→표시 파생(`PostListItem`/`PostDetailView`): KST 날짜 표기, 링크형 도메인 추출(호스트만 — 전체 URL 노출 금지), 파일 크기 표기(≥1MB 소수1자리/미만 KB), 첨부 절대 URL, 마감 필터
+- `src/lib/content.ts` — **page 카테고리 전용으로 축소**: notice/news 로더 전부 제거(§16 — 이관 시점 콘텐츠 0건, 데이터 이관 없음), verified 게이트는 파일 기반(AI 경유) 경로에 존속(06 §14 게시 정책)
+
+**공개 화면 (7 수정 + 라우트 이동)**:
+- `page.tsx` — API 기반 재작성. 히어로 urgent 바인딩은 공지 목록 첫 항목 파생(서버가 urgent 우선 정렬 보장 — 별도 `urgent=true` 쿼리 생략, 요청 수 절약. §11.1의 전용 쿼리와 결과 동일)
+- `notices/[slug]`→`notices/[id]`, `news/[slug]`→`news/[id]` (§15-7 승인) — generateStaticParams/dynamicParams 제거, API getPost + 404, **카테고리 불일치 id도 404**(공지 id를 소식 경로로 열람 차단)
+- `PostList.tsx` — 링크형 카드(§14.1: 카드 전체 외부 링크 새 창, ↗ 16px + 메타 "외부 링크(새 창) · 도메인" 3중 병행) / 첨부 존재 표시(문서 아이콘 + "첨부 n") / status 3상(ok·error·unconfigured)별 빈 상태
+- `PostArticle.tsx` — 첨부 블록(§14.1: surface 행 카드·파일명 15px/600·크기 caption·행 전체 다운로드 링크·hover primary+밑줄), 링크형 상세는 "원문 보기" 외부 링크 행, body null 허용
+- `HeroPanel`/`DeadlineStrip`/`BoardTabs`/`EmptyState` — `PostListItem` 타입 전환(slug→id, publishedAt), status props, subMessage prop
+- `routes.ts` — notice/news(id), `ROUTES.admin` 추가
+
+**admin 화면 (신규 5)** — §14, 신규 색 조합 0건·전부 Pretendard:
+- `src/app/admin/page.tsx` — **noindex**(robots 메타 실측 확인), 공개 헤더·푸터 + "관리자" 배지(h1)
+- `src/components/admin/AdminApp.tsx` — 세션 확인(adminMe)→로그인→목록/등록/수정/삭제. 로그인 에러 3분기(§14.2 문구 그대로), 목록 unauthorized 시 로그인 화면 복귀(세션 만료), 삭제된 글은 "삭제됨" 표시+액션 숨김
+- `src/components/admin/PostForm.tsx` — 유형·카테고리 라디오(§4.2 탭 시각·시맨틱 radio, 전환 시 입력값 유지), preview-link 3상태(로딩/성공/실패 — 실패 시 제목 포커스, 제목 항상 편집 가능), 소식+작성형 출처 "(필수)" 동적, urgent 체크박스 24px, deadline date 필드, 파일 선검증 + 저장 후 순차 업로드(부분 실패 개별 보고)
+- `src/components/admin/DeleteDialog.tsx` — alertdialog + aria-modal + labelledby/describedby, 초기 포커스 취소·포커스 트랩·Esc·오버레이 클릭(§14.5)
+- `src/components/admin/styles.ts` — 보조/위험/삭제확정 버튼 등 §14.3 스타일 상수
+
+**지부명 규칙**: 상세 metadata 접미사 2곳 + admin 문구 전부 "코스콤(한국증권전산)지부" — `grep "코스콤지부"` 중 짧은 표기 0건 확인 (리더 적용분 SiteFooter/layout 보존)
+
+### 해석 지점 (QA·디자이너 참고)
+
+1. 히어로 urgent 바인딩을 목록 파생으로 구현 (전용 쿼리 대비 요청 1회 절약 — 서버 정렬 규약 의존)
+2. 링크형 상세 페이지(§14 미정의): 제목+메타+"원문 보기" 외부 링크 행+선택 코멘트(body) 렌더 — 목록에서는 진입 경로 없음(카드가 외부 직행), 직접 URL 접근 대비
+3. 카테고리 라디오는 링크형에도 노출 (API가 링크형에도 category 필수 — §14.4는 작성형 항목에만 기술)
+4. urgent·deadline 필드는 유형 공통 노출 (§14.1 "기존 규칙 그대로 적용 가능" 근거)
+5. 링크형 body(한줄 코멘트) 입력 필드는 §14.4 폼 스펙에 없어 미노출 (API는 허용 — 필요 시 디자이너 추가)
+6. admin 목록 페이지네이션 UI 미구현 (기본 50건 — 방명록 제안 A와 동일하게 초과 시점에)
+
+### 자가 검증 (2026-08-17)
+
+```
+npx tsc --noEmit / npm run lint / npm run build → 전부 통과 (오류·경고 0)
+빌드: / ○ ISR(1m) · /admin ○(noindex) · 상세 2라우트 ƒ dynamic
+```
+
+**실통신 스모크 (로컬 백엔드: server/ 무수정 — ADMIN_PASSWORD_HASH만 셸 env 오버라이드 기동, PostgreSQL 로컬)**:
+- 로그인(세션 쿠키 발급) → 작성형 공지(urgent+deadline+출처) 등록 201 → 링크형 소식 등록 201 → preview-link(example.com) 200 제목 추출
+- 프론트(API 연결 빌드 + next start) HTML 실측: 히어로 모드1 바인딩·CTA `/notices/<uuid>`·마감 스트립(D-4·8/20)·목록 카드·링크형 외부 링크(target=_blank·도메인 표기)·상세(h1·마크다운 h2 매핑·출처·긴급 배지) 전부 렌더
+- 첨부: PDF 업로드 201 → 상세 첨부 행(파일명·크기·API 절대 URL)·목록 "첨부 1" 렌더, **ISR 60초 재생성 실측**(캐시 스테일 → 재생성 후 반영)
+- 삭제: soft delete 200 → 공개 상세 404·목록 0건 → 로그아웃 200
+- 정리: 스모크 게시물 2건 DB hard delete·업로드 파일 제거·API 미설정 클린 재빌드(준비 중 안내·히어로 폴백·잔존 0건 확인)
+
+### 미검증 (통합 QA 대상)
+
+- **admin UI 브라우저 실조작** — 스모크는 API 계약(curl)+공개 렌더 실측까지. 폼 상호작용(라디오 전환·preview 3상태·파일 선검증·다이얼로그 포커스 트랩)·세션 쿠키의 실브라우저 CORS credentials 동작은 QA 브라우저 테스트 필요
+- 프로덕션 도메인 CORS(허용 Origin 목록)에서의 쿠키 전송 — 로컬은 localhost:3000 origin 케이스만 구성상 확인
+
+## 16. 자가 검증 결과 (최초 구현, 2026-08-16)
 
 ```
 npx tsc --noEmit   → 통과 (오류 0)

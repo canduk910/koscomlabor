@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { PostSummary } from "@/lib/content";
+import type { PostListItem } from "@/lib/postView";
 import { ROUTES } from "@/lib/routes";
 import { daysUntilKst, formatMonthDaySlash } from "@/lib/date";
 
@@ -13,7 +13,7 @@ import { daysUntilKst, formatMonthDaySlash } from "@/lib/date";
  *   (색만으로 임박을 전달하지 않음). soft 배경 위 빨강 텍스트는 대비 미달로 금지.
  * - 항목 간 세로 구분선 1px 장식(aria-hidden).
  */
-export function DeadlineStrip({ posts }: { posts: PostSummary[] }) {
+export function DeadlineStrip({ posts }: { posts: PostListItem[] }) {
   if (posts.length === 0) return null;
 
   return (
@@ -25,11 +25,9 @@ export function DeadlineStrip({ posts }: { posts: PostSummary[] }) {
           const imminent = days !== null && days <= 7;
           const monthDay = formatMonthDaySlash(post.deadline);
           const href =
-            post.category === "news"
-              ? ROUTES.news(post.slug)
-              : ROUTES.notice(post.slug);
+            post.category === "news" ? ROUTES.news(post.id) : ROUTES.notice(post.id);
           return (
-            <li key={`${post.category}-${post.slug}`} className="flex shrink-0 items-center gap-1">
+            <li key={post.id} className="flex shrink-0 items-center gap-1">
               {index > 0 ? (
                 <span aria-hidden="true" className="h-4 w-px shrink-0 bg-primary" />
               ) : null}
