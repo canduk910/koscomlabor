@@ -59,7 +59,7 @@ NCP Object Storage 버킷 생성은 콘솔 작업 → 배포 단계에서 단계
 
 공통 사항:
 
-- Base URL: `https://api.koscomlabor.cloud` (프론트 `NEXT_PUBLIC_API_BASE_URL`에 설정)
+- Base URL: ~~`https://api.koscomlabor.cloud`~~ → **미확정** (배포 실사 결과 해당 도메인은 기존 onnuri 백엔드가 사용 중 — 07 문서 2.3/4절. 제안: `union-api.koscomlabor.cloud`. 확정 시 프론트 `NEXT_PUBLIC_API_BASE_URL`에 설정)
 - 모든 요청/응답은 `application/json; charset=utf-8`
 - 필드명은 **camelCase** (DB의 snake_case 컬럼은 API 경계에서 변환)
 - 시각은 **ISO 8601 UTC** 문자열 (예: `"2026-08-16T05:30:00.000Z"`)

@@ -39,7 +39,9 @@ services:
     environment:
       HOST: 0.0.0.0   # 컨테이너 내부 바인딩 — caddy 가 deploy_web 네트워크로 접근
       PORT: "3001"
-      DATABASE_URL: postgres://guestbook_app:${POSTGRES_PASSWORD}@db:5432/guestbook
+      # 호스트명은 반드시 koscomlabor-db (서비스명 "db" 금지 — deploy_web 네트워크의
+      # onnuri-db 가 "db" 별칭을 갖고 있어 다중 네트워크에서 오해석된다. 실측 확인됨)
+      DATABASE_URL: postgres://guestbook_app:${POSTGRES_PASSWORD}@koscomlabor-db:5432/guestbook
     depends_on:
       db:
         condition: service_healthy
@@ -54,7 +56,7 @@ services:
       target: build
     env_file: .env
     environment:
-      DATABASE_URL: postgres://guestbook_app:${POSTGRES_PASSWORD}@db:5432/guestbook
+      DATABASE_URL: postgres://guestbook_app:${POSTGRES_PASSWORD}@koscomlabor-db:5432/guestbook
     command: ["npx", "node-pg-migrate", "up", "-m", "migrations", "--migration-file-language", "sql"]
     depends_on:
       db:

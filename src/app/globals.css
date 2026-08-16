@@ -1,22 +1,25 @@
 @import "tailwindcss";
 
 /*
- * 디자인 토큰 — _workspace/02_designer_spec.md §1 그대로 적용.
+ * 디자인 토큰 — _workspace/02_designer_spec.md §1 (2026-08-16 CI 실측 개정) 그대로 적용.
  * 다크 모드는 스펙 범위 제외 (create-next-app 기본 다크모드 미디어쿼리 제거됨).
- * 주조색 #1d4ed8 계열은 플레이스홀더 — 공식 CI 확보 시 교체 후 대비 재검증 필요.
+ * 색상 근거: 스펙 §10.1 픽셀 실측 (KFIU 파랑/빨강, 코스콤 오렌지).
  */
 @theme {
-  /* ---- 색상 (12) ---- */
+  /* ---- 색상 (15) — 2026-08-16 CI 실측 개정 ---- */
   --color-bg: #ffffff;             /* 페이지 기본 배경 */
   --color-surface: #f9fafb;        /* 탭바·푸터·카드 배경 */
   --color-ink: #1a1a1a;            /* 본문·제목 텍스트 */
   --color-ink-muted: #4b5563;      /* 보조 텍스트(날짜·출처·비선택 탭) */
-  --color-primary: #1d4ed8;        /* 주조색 — UI 요소(포커스 링·아이콘)와 큰 텍스트 전용 */
-  --color-primary-strong: #1e40af; /* 본문 크기 링크·선택 탭 배경·버튼 배경 */
-  --color-primary-tint: #eff6ff;   /* 탭 hover 배경 */
-  --color-urgent: #b91c1c;         /* 긴급 — 보더·구분선 등 UI 요소 전용 */
-  --color-urgent-strong: #991b1b;  /* 긴급 텍스트·긴급 배지 배경 */
-  --color-urgent-tint: #fef2f2;    /* 긴급 배너 배경 */
+  --color-primary: #093389;        /* 주조색 — KFIU 깃발 파랑 원색(실측). 텍스트·UI 겸용(11.37:1) */
+  --color-primary-strong: #093389; /* primary와 동일 값 — 토큰명 유지 목적(§10). 기존 사용처 그대로 유효 */
+  --color-primary-tint: #eff6ff;   /* 탭 hover 배경 (1차 값 유지) */
+  --color-urgent: #d0101b;         /* KFIU 깃발 빨강 원색(실측) — 보더 등 UI 전용, 텍스트 금지 */
+  --color-urgent-strong: #9c0d14;  /* KFIU 빨강 동일 색상군 파생 — 긴급 텍스트·긴급 배지 배경 */
+  --color-urgent-tint: #fef2f2;    /* 긴급 배너 배경 (1차 값 유지) */
+  --color-accent: #ec6d1e;         /* 코스콤 오렌지 원색(실측) — 로고·장식 전용, 텍스트/의미 UI 금지 */
+  --color-accent-strong: #7a3806;  /* 오렌지 동일 색상군 파생 — accent 텍스트·아이콘 */
+  --color-accent-tint: #fdf0e7;    /* 온누리 가이드 카드(§9) 배경 */
   --color-border-strong: #6b7280;  /* 의미 있는 UI 경계(입력 필드 등)·보조 아이콘 */
   --color-border-soft: #e5e7eb;    /* 장식용 구분선 전용 — 의미 전달 UI에 사용 금지 */
 
