@@ -192,6 +192,12 @@ ssh root@101.79.31.30 'cd /root/koscomlabor-api && docker compose build && \
 Caddy: `koscomlabor.cloud, www.koscomlabor.cloud` → `reverse_proxy koscomlabor-web:3000` 블록 append (validate → reload).
 **루트(@) DNS 는 아직 GitHub IP 잔존** — 루트 인증서 발급은 실패→백오프 재시도 상태가 정상이며, 사용자가 가비아에서 A 레코드를 101.79.31.30 으로 바꾸면 자동 발급된다. www 는 즉시 발급.
 
+### 6.2-1 디자인 v2 재배포 · 일일 재빌드 (2026-08-16)
+
+- **디자인 v2 (a0ad5c5) 재배포 완료.** Pretendard 는 npm `pretendard` 패키지에서 postinstall(`scripts/sync-pretendard.mjs`)로 `public/fonts/pretendard/` 에 동기화(셀프호스팅, 외부 CDN 0건). Docker 빌드에서 postinstall 이 돌도록 **deps 스테이지에 `COPY scripts ./scripts` 를 npm ci 앞에 추가** (없으면 npm ci 가 postinstall 실패로 중단됨 — 실측 후 반영). 빌드 로그에서 woff2 92개 동기화 확인
+- **일일 재빌드 크론 (리더 결정)**: 매일 **00:10 KST** `/root/koscomlabor-web/deploy.sh` — 마감 스트립 D-n 표기가 빌드 시점 고정이므로 날짜 경과 반영 목적. Dockerfile 의 `ARG BUILD_DATE` 캐시 버스트로 deps 캐시는 유지하고 `npm run build` 만 재실행 (소요 약 40초, 00:30 onnuri 배치와 충돌 없음). 로그: `/root/koscomlabor-web/rebuild.log`, 로테이션: `/etc/logrotate.d/koscomlabor-web` (주 1회, 4세대, 압축)
+- 크론 전체 현황: 00:10 웹 재빌드 → 00:30 onnuri 배치(기존) → 03:00 DB 백업 → 03:30 ip_hash 정리
+
 ### 6.3 재배포 절차
 
 ```bash

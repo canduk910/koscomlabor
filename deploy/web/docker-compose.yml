@@ -14,6 +14,7 @@ services:
       context: ./src
       args:
         NEXT_PUBLIC_API_BASE_URL: https://union-api.koscomlabor.cloud
+        BUILD_DATE: dev   # deploy.sh 가 --build-arg BUILD_DATE=$(date +%F) 로 덮어씀 (일일 재빌드 캐시 버스트)
     image: koscomlabor-web:latest
     container_name: koscomlabor-web
     restart: unless-stopped

@@ -8,6 +8,8 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
+# postinstall(scripts/sync-pretendard.mjs)이 npm ci 시점에 실행되므로 scripts/ 를 먼저 복사
+COPY scripts ./scripts
 RUN npm ci
 
 FROM deps AS build
@@ -15,7 +17,10 @@ ARG NEXT_PUBLIC_API_BASE_URL
 ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY . .
-RUN npm run build
+# 일일 재빌드 캐시 버스트: 마감 스트립 D-n 이 빌드 시점 고정이므로
+# BUILD_DATE 가 바뀌면 이 지점부터 재실행된다 (deps 캐시는 유지)
+ARG BUILD_DATE=dev
+RUN echo "build date: $BUILD_DATE" && npm run build
 
 FROM node:22-alpine AS prod
 WORKDIR /app
