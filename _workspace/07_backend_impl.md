@@ -250,3 +250,28 @@ ssh root@101.79.31.30 '/root/koscomlabor-web/deploy.sh'
 - 계약 출처: 06 명세 Part 2 (§10–16). 기존 방명록과 반대 방향 — 프론트가 명세를 따름
 - CORS credentials 활성화됨: fetch 시 `credentials: "include"` 필요 (세션 쿠키)
 - 목록 shape: 최상위 배열 + X-Total-Count 헤더 (방명록과 동일 규약)
+
+## 8. CI/CD (GitHub Actions, 2026-08-16)
+
+저장소: github.com/canduk910/koscomlabor (private, main 단일 브랜치 운영)
+
+### 8.1 구성
+
+| 워크플로 | 트리거 | 내용 |
+|---|---|---|
+| `.github/workflows/ci.yml` | 모든 push·PR | web: npm ci → tsc --noEmit → lint → build (NEXT_PUBLIC_API_BASE_URL 더미) / server: npm ci → typecheck → build. setup-node npm 캐시 |
+| `.github/workflows/deploy.yml` | **main push 의 CI 성공 시** (workflow_run) | checkout(CI 통과 커밋) → rsync → `/root/koscomlabor-web/deploy.sh` → https://koscomlabor.cloud 200 헬스 확인(10회 재시도). concurrency 로 중복 배포 방지(진행 중 배포 취소 안 함) |
+
+### 8.2 배포 SSH 보안
+
+- **전용 ed25519 배포 키** — GitHub Secrets `DEPLOY_SSH_KEY` (외 `SSH_HOST`, `SSH_USER`). 로컬 키 파일은 등록 즉시 삭제, 값 미출력
+- 서버 authorized_keys 에 **command 제한**: `/root/koscomlabor-web/deploy-key-wrapper.sh` 가 (a) `/root/koscomlabor-web/src/` 대상 rsync (b) `deploy.sh` 실행 — 두 가지만 허용, 그 외 명령·포트포워딩·pty 거부. 키 유출 시에도 임의 root 셸 불가
+- 호스트키 고정: `.github/known_hosts` (ssh-keyscan 사전 등록, StrictHostKeyChecking=yes)
+
+### 8.3 운영 규칙 (사용자 안내)
+
+1. **main 에 push 하면 CI 통과 시 웹이 자동 배포된다** (약 2–4분). 배포를 원치 않는 작업은 브랜치에서
+2. **API(server/)는 CD 제외** — Part 2 배포 보류·.env(ADMIN_PASSWORD_HASH) 선행 조건 때문. 수동 배포 유지 (§7.1). Part 2 일괄 배포 후 API CD 편입 별도 판단
+3. 배포 실패 시: GitHub Actions 로그 확인 → 서버측 로그는 `/root/koscomlabor-web/rebuild.log` 및 `docker logs koscomlabor-web`
+4. 서버 호스트키 재설치 등으로 변경되면 `.github/known_hosts` 재생성 필요 (ssh-keyscan)
+5. 일일 00:10 재빌드 크론과 CD 는 독립 — 충돌 없음 (deploy.sh 는 동일 스크립트, docker 가 빌드 직렬화)

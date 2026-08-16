@@ -1,0 +1,65 @@
+# CD — main push 의 CI 성공 후 웹(프론트)만 NCP 서버에 배포.
+#
+# 범위: koscomlabor-web 컨테이너 재빌드·재기동 (deploy.sh).
+# API(server/)는 CD 제외 — Part 2 배포 보류·.env 선행 조건 때문 (수동 배포, 07 문서).
+#
+# SSH 키는 command 제한 배포 전용 키 (rsync → /root/koscomlabor-web/src/ 와
+# deploy.sh 실행만 허용 — 서버의 deploy-key-wrapper.sh).
+name: Deploy Web
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: deploy-web-production
+  cancel-in-progress: false # 진행 중 배포는 끊지 않는다 (반쪽 배포 방지)
+
+jobs:
+  deploy:
+    name: deploy web to NCP
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: SSH 설정 (배포 키 + 고정 known_hosts, StrictHostKeyChecking 유지)
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          cp .github/known_hosts ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host ncp
+            HostName ${{ secrets.SSH_HOST }}
+            User ${{ secrets.SSH_USER }}
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          EOF
+
+      - name: rsync 소스 동기화
+        run: |
+          rsync -az --delete \
+            --exclude node_modules --exclude .next --exclude .git --exclude .idea --exclude .claude \
+            --exclude _workspace --exclude server --exclude deploy --exclude "*.pem" --exclude ".env*" \
+            --exclude tsconfig.tsbuildinfo \
+            ./ ncp:/root/koscomlabor-web/src/
+
+      - name: 배포 실행 (재빌드·재기동)
+        run: ssh ncp /root/koscomlabor-web/deploy.sh
+
+      - name: 헬스 확인 (https://koscomlabor.cloud 200)
+        run: |
+          for i in $(seq 1 10); do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 https://koscomlabor.cloud/ || echo 000)
+            echo "attempt $i: HTTP $CODE"
+            if [ "$CODE" = "200" ]; then exit 0; fi
+            sleep 5
+          done
+          echo "헬스 체크 실패" >&2
+          exit 1

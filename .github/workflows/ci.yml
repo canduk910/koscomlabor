@@ -1,0 +1,48 @@
+# CI — 프론트(Next.js) + 백엔드(server/) 검증
+# main push 시 성공하면 deploy.yml(workflow_run)이 웹 배포를 이어간다.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: web (typecheck·lint·build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - name: Build (NEXT_PUBLIC_API_BASE_URL 은 CI 더미 값 — 실배포 값은 서버 compose 가 주입)
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: https://ci-dummy.invalid
+
+  server:
+    name: server (typecheck·build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
