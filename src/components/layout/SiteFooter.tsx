@@ -14,7 +14,7 @@ export function SiteFooter() {
     <footer className="mt-16 bg-primary py-8">
       <div className="mx-auto w-full max-w-page px-4 md:px-6">
         <p className="text-caption font-bold text-white">
-          전국금융산업노동조합 코스콤지부
+          전국금융산업노동조합 코스콤(한국증권전산)지부
         </p>
         <div className="rounded-badge mt-3 inline-flex items-center gap-4 bg-bg px-3 py-2">
           <Image
@@ -33,7 +33,7 @@ export function SiteFooter() {
           />
         </div>
         <p className="mt-3 text-caption text-primary-soft">
-          © 2026 전국금융산업노동조합 코스콤지부
+          © 2026 전국금융산업노동조합 코스콤(한국증권전산)지부
         </p>
       </div>
     </footer>
