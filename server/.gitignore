@@ -11,3 +11,4 @@ node_modules/
 
 # 로그
 *.log
+uploads/
