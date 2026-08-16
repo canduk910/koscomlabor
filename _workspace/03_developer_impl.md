@@ -356,7 +356,14 @@ npx tsc --noEmit / npm run lint / npm run build → 전부 통과 (오류·경�
 
 - `HeroPanel.tsx`: 장식 원형(primary-bright)을 **모드 1 전용으로 조건 분기** (§11.4 개정 확정 — 모드 2 록업과의 겹침 방지, 디자이너 판정). 실측: 모드 2 원형 부재·록업/부문구 유지, 모드 1(임시 파일 스모크) 원형·배지·CTA 존재, 클린 복원 확인. tsc/lint/build 3종 통과
 
-## 14. 자가 검증 결과 (최초 구현, 2026-08-16)
+## 14. 파비콘 교체 — KFIU CI 마크 (2026-08-16, 리더 지시)
+
+- 소스 `design/kfiu_mark_jpg.jpg`(1066×830) → 정사각 캔버스(흰 배경 §10.3, 마크 중앙, 폭 86%) Pillow 합성
+- 생성(App Router 컨벤션 — 자동 서빙, 링크 태그 불필요): `src/app/icon.png`(512×512, 31.6KB), `src/app/apple-icon.png`(180×180, 9.4KB), `src/app/favicon.ico`(16/32/48 멀티사이즈, 4.3KB — 기존 create-next-app 기본 파일 교체)
+- 이슈: Pillow 기본 RGB ICO를 Next 빌드의 ico 파서가 거부("PNG is not in RGBA format") → RGBA(불투명 알파)로 재생성해 해결
+- 검증: tsc/lint/build 3종 통과, `next start`에서 /icon.png·/apple-icon.png·/favicon.ico 전부 200, head에 자동 링크 3종 확인, 서빙 응답 512×512 PNG 실측. server/ 미접촉
+
+## 15. 자가 검증 결과 (최초 구현, 2026-08-16)
 
 ```
 npx tsc --noEmit   → 통과 (오류 0)
