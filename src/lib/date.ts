@@ -44,3 +44,24 @@ export function toIsoDateString(date: Date): string {
   if (!p) return "";
   return `${p.year}-${p.month}-${p.day}`;
 }
+
+/** 방명록 작성 시각(ISO 8601 UTC 타임스탬프)은 KST 기준 날짜로 표기 */
+const KST_FORMATTER = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/**
+ * 방명록 엔트리 작성일 표기: `YYYY.MM.DD` (Asia/Seoul 기준).
+ * 게시물 날짜(날짜 전용 값, UTC 고정)와 달리 실제 시각이므로 KST로 변환해 표기한다.
+ * 유효하지 않은 입력은 빈 문자열 반환.
+ */
+export function formatEntryDate(isoDateTime: string): string {
+  const date = new Date(isoDateTime);
+  if (Number.isNaN(date.getTime())) return "";
+  const p = partsOf(KST_FORMATTER, date);
+  if (!p) return "";
+  return `${p.year}.${p.month}.${p.day}`;
+}

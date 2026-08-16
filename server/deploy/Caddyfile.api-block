@@ -1,0 +1,13 @@
+# api.koscomlabor.cloud — 방명록 API (koscomlabor-api 컨테이너, deploy_web 네트워크)
+# 기존 Caddyfile(/root/digital_onnuri/backend/deploy/Caddyfile) 말미에 추가되는 블록.
+# 기존 onnuri 블록은 무변경. 반영 절차: caddy validate 통과 후 caddy reload (restart 금지).
+api.koscomlabor.cloud {
+	encode zstd gzip
+	reverse_proxy koscomlabor-api:3001
+	tls {$TLS_EMAIL}
+
+	log {
+		output stdout
+		format console
+	}
+}

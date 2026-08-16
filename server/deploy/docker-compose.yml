@@ -1,0 +1,70 @@
+# 프로덕션 배포 구성 (NCP VM, Docker 기반).
+#
+# 서버 배치: 이 파일은 /root/koscomlabor-api/docker-compose.yml 로 복사되고,
+# server/ 디렉토리는 /root/koscomlabor-api/app/ 으로 rsync 된다.
+# .env 는 /root/koscomlabor-api/.env (chmod 600, 서버에서 생성 — 커밋 금지).
+#
+# 격리 원칙: 기존 onnuri-* 컨테이너·DB와 완전 분리. 공유하는 것은
+# caddy 가 속한 외부 네트워크 deploy_web 뿐이다 (리버스 프록시 경로).
+# DB 는 호스트 포트를 열지 않는다 (internal 네트워크 전용).
+
+name: koscomlabor-api
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: koscomlabor-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: guestbook
+      POSTGRES_USER: guestbook_app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U guestbook_app -d guestbook"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  api:
+    build:
+      context: ./app
+      target: prod
+    image: koscomlabor-api:latest
+    container_name: koscomlabor-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0   # 컨테이너 내부 바인딩 — caddy 가 deploy_web 네트워크로 접근
+      PORT: "3001"
+      DATABASE_URL: postgres://guestbook_app:${POSTGRES_PASSWORD}@db:5432/guestbook
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [internal, deploy_web]
+    # 호스트 포트 미개방 — 외부 노출은 caddy(443) 경유만
+
+  # 마이그레이션 (일회성): docker compose --profile tools run --rm migrate
+  migrate:
+    profiles: ["tools"]
+    build:
+      context: ./app
+      target: build
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://guestbook_app:${POSTGRES_PASSWORD}@db:5432/guestbook
+    command: ["npx", "node-pg-migrate", "up", "-m", "migrations", "--migration-file-language", "sql"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [internal]
+
+networks:
+  internal:
+  deploy_web:
+    external: true
+
+volumes:
+  pgdata:

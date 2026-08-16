@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 백엔드(server/)는 자체 패키지·tsconfig로 검증한다 — 프론트 lint 대상 아님
+    "server/**",
   ]),
 ]);
 

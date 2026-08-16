@@ -1,0 +1,13 @@
+# 시크릿 — 절대 커밋 금지
+.env
+.env.*
+!.env.example
+
+# 빌드 산출물
+dist/
+
+# 의존성
+node_modules/
+
+# 로그
+*.log
