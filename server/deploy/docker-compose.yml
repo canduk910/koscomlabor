@@ -35,7 +35,11 @@ services:
     image: koscomlabor-api:latest
     container_name: koscomlabor-api
     restart: unless-stopped
-    env_file: .env
+    # format: raw — compose 의 $ 보간을 끈다.
+    # argon2 해시($argon2id$v=19$m=65536...)가 변수로 해석돼 훼손되는 문제 방지 (실측 확인)
+    env_file:
+      - path: .env
+        format: raw
     environment:
       HOST: 0.0.0.0   # 컨테이너 내부 바인딩 — caddy 가 deploy_web 네트워크로 접근
       PORT: "3001"
@@ -52,13 +56,17 @@ services:
     # 호스트 포트 미개방 — 외부 노출은 caddy(443) 경유만
     # Part 2 배포 시 .env 에 추가 필요: ADMIN_PASSWORD_HASH (07 문서 절차 참조)
 
-  # 마이그레이션 (일회성): docker compose --profile tools run --rm migrate
+  # 마이그레이션 (일회성):
+  #   docker compose --profile tools build migrate   ← profile 서비스는 일반 build 에서 제외되므로 필수
+  #   docker compose --profile tools run --rm migrate
   migrate:
     profiles: ["tools"]
     build:
       context: ./app
       target: build
-    env_file: .env
+    env_file:
+      - path: .env
+        format: raw
     environment:
       DATABASE_URL: postgres://guestbook_app:${POSTGRES_PASSWORD}@koscomlabor-db:5432/guestbook
     command: ["npx", "node-pg-migrate", "up", "-m", "migrations", "--migration-file-language", "sql"]

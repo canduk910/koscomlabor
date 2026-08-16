@@ -211,9 +211,9 @@ ssh root@101.79.31.30 '/root/koscomlabor-web/deploy.sh'
 
 `NEXT_PUBLIC_API_BASE_URL` 변경 시 compose 의 build args 수정 후 재빌드 필요 (런타임 env 로는 반영 안 됨).
 
-## 7. Part 2 (게시물 DB + Admin) — 구현 완료, 배포 대기 (2026-08-16)
+## 7. Part 2 (게시물 DB + Admin) — **프로덕션 배포 완료 (2026-08-17)**
 
-구현·로컬 실측 완료 (06 명세 §17). **리더 지시로 배포 보류 — 프론트 구현·통합 QA 후 일괄 배포.** 배포 시 절차:
+QA 10회차 통과 후 리더 승인으로 API 배포 완료. 구현·로컬 실측은 06 명세 §17, 프로덕션 스모크는 아래 §7.4.
 
 ### 7.1 배포 절차 (일괄 배포 시)
 
@@ -275,3 +275,37 @@ ssh root@101.79.31.30 '/root/koscomlabor-web/deploy.sh'
 3. 배포 실패 시: GitHub Actions 로그 확인 → 서버측 로그는 `/root/koscomlabor-web/rebuild.log` 및 `docker logs koscomlabor-web`
 4. 서버 호스트키 재설치 등으로 변경되면 `.github/known_hosts` 재생성 필요 (ssh-keyscan)
 5. 일일 00:10 재빌드 크론과 CD 는 독립 — 충돌 없음 (deploy.sh 는 동일 스크립트, docker 가 빌드 직렬화)
+
+### 7.3 배포 중 발견·수정한 문제 (재발 방지 기록)
+
+1. **compose 의 env_file `$` 보간으로 argon2 해시 훼손** — `$argon2id$v=19$m=65536...` 의 `$argon2id`/`$v`/`$m` 을 변수로 치환해 컨테이너가 84자 깨진 값을 받았고 기동이 거부됐다(설정 검증이 조기에 잡아냄). 수정: compose 의 `env_file` 을 **long syntax + `format: raw`** 로 변경. 확인 방법: `docker compose run --rm --entrypoint sh api -c 'echo ${#ADMIN_PASSWORD_HASH}'` → 97
+   - 참고: `docker compose` 실행 시 "The \"argon2id\" variable is not set" 경고가 뜨는 것은 compose 가 프로젝트 `.env` 를 자기 보간용으로도 자동 로드하기 때문이며 **무해하다** (컨테이너 값은 raw 로 온전). 신경 쓰이면 후속 개선: 앱 전용 env 파일 분리
+2. **profile 서비스는 `docker compose build` 대상에서 제외** — `migrate`(profiles: tools)가 구 이미지로 실행돼 신규 마이그레이션이 적용되지 않았다("Migrations complete!" 만 출력). 수정: `docker compose --profile tools build migrate` 를 선행 (compose 주석·아래 절차에 반영)
+3. **uploads 명명 볼륨이 root 소유 → 업로드 EACCES(500)** — 컨테이너는 node(uid 1000)로 실행된다. 수정: Dockerfile prod 스테이지에 `RUN mkdir -p /data/uploads && chown -R node:node /data` 추가(신규 볼륨은 이미지 소유권을 물려받음) + 기존 볼륨은 1회 `docker run --rm -v koscomlabor-api_uploads:/data/uploads alpine chown -R 1000:1000 /data/uploads`
+4. **argon2id musl 검증 결과: 정상** — alpine 이미지에서 로드·해시 성공. **bcrypt 폴백 불필요** (§15-3 조건 해소)
+
+### 7.4 프로덕션 스모크 실측 (2026-08-17)
+
+| 케이스 | 결과 |
+|---|---|
+| `/health` | 200, TLS 유효 |
+| admin 로그인 실패 / 성공 | 401 / 200 + `Set-Cookie: HttpOnly; Secure; SameSite=Lax; Path=/admin` (프로덕션 Secure 확인) |
+| `/admin/me` (세션) | 200 |
+| 게시물 생성 → 공개 목록·상세 | 201 / 200 배열+X-Total-Count / 200 |
+| preview-link 정상 | 200 `{"title":"Example Domain"}` |
+| preview-link 169.254.169.254 (메타데이터) | 422 LINK_FETCH_FAILED (SSRF 차단) |
+| 첨부 업로드 → 서빙 | 201 / 200 + attachment·immutable·nosniff, **바이트 원본 일치** |
+| 잘못된 타입 업로드 | 400 |
+| CORS: koscomlabor.cloud / www | ACAO 정확 반환 + `Allow-Credentials: true` |
+| CORS: evil.example | ACAO 미반환 (차단) |
+| 방명록 회귀 | 200 정상 |
+| soft delete 후 공개 상세·첨부 서빙 | 각 404 |
+| **테스트 데이터 정리** | posts/attachments/uploads 볼륨 전부 0건으로 정리 완료 |
+
+**onnuri 무영향**: 응답 SHA1 동일(`ef2365c4…`), onnuri 컨테이너 uptime 연속(42h/5d/6d), Caddyfile diff = union-api 블록에 4줄(request_body 12MB) 추가만.
+
+### 7.5 운영 반영 사항
+
+- Caddy: `union-api` 블록에만 `request_body { max_size 12MB }` 추가 (업로드용). 기존 블록 무변경, validate → reload
+- 크론 추가: **03:05 KST uploads 볼륨 tar 백업**(`/root/koscomlabor-api/backup-uploads.sh`, 14일 롤링, 1회 실행 검증 완료). 전체 크론: 00:10 웹 재빌드 → 00:30 onnuri → 03:00 DB 백업 → 03:05 uploads 백업 → 03:30 ip_hash 정리
+- admin 초기 비밀번호: `/root/koscomlabor-api/ADMIN_PASSWORD.initial` (600, 안내문 포함). **확인 후 삭제 필요**

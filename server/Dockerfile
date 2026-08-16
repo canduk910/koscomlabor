@@ -19,6 +19,9 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
+# 업로드 볼륨 마운트 지점을 node 소유로 준비 —
+# 신규 명명 볼륨은 이미지의 소유권/권한을 물려받는다 (root 소유 시 EACCES, 실측 확인)
+RUN mkdir -p /data/uploads && chown -R node:node /data
 USER node
 EXPOSE 3001
 CMD ["node", "dist/index.js"]
