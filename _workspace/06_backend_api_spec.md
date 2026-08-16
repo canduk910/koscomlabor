@@ -595,3 +595,71 @@ body `{ "url": "https://..." }` → 응답 `200 { "title": "...", "siteName": ".
 - `content/notices/`, `content/news/` 실사: **.gitkeep만 존재, 게시물 0건 — 이관 대상 없음 확인** (2026-08-16)
 - 따라서 데이터 이관 없이 신규 마이그레이션 파일(`002_create_posts.sql`, `003_create_admin_sessions.sql`)만 추가
 - 파일 기반 로더(content.ts)는 `page` 카테고리용으로 존속 — 프론트 전환 완료 후 notice/news 경로만 제거 (web-developer 영역)
+
+## 17. Part 2 로컬 실측 결과 (2026-08-16, macOS + PostgreSQL 16 + Node 26)
+
+`server/` 확장 구현 후 전 엔드포인트 curl 실측. **핵심 케이스 전부 PASS** (초기 배터리에서 실패로 보인 항목은 테스트 하니스의 zsh `echo` 이스케이프 해석 문제로 판명 — 서버 응답은 JSON 표준 이스케이프 정상, `body repr: '# 본문\n마크다운 개행 포함'` 확인).
+
+### 17.1 인증·세션
+
+| 케이스 | 기대 | 실측 | 판정 |
+|---|---|---|---|
+| 로그인 오답 | 401 단일 메시지 | 401 UNAUTHORIZED | PASS |
+| password 누락 | 400 | 400 VALIDATION_ERROR | PASS |
+| 로그인 정상 | 200 + Set-Cookie(HttpOnly; SameSite=Lax; Path=/admin) | 동일 (Max-Age 43199) | PASS |
+| /admin/me 세션 쿠키 | 200 method=session | 동일 | PASS |
+| /admin/me 무인증 | 401 | 401 | PASS |
+| /admin/me 정적 Bearer | 200 method=bearer (병행 §12.2) | 동일 | PASS |
+| 세션 만료 (DB 강제 만료 후) | 401 | 401 (만료 전 200 → 만료 후 401) | PASS |
+| 로그아웃 → me | 401 | 200 → 401 | PASS |
+| 로그인 rate limit | 분당 5회 초과 → 429 | 6번째 시도(분 창 내)부터 429 | PASS |
+| 세션 인증으로 게시물 생성 | 201 (세션 쓰기 경로) | 201 | PASS |
+
+### 17.2 게시물 CRUD
+
+| 케이스 | 실측 | 판정 |
+|---|---|---|
+| notice+article 생성 | 201, publishedAt/createdAt 자동, deletedAt null | PASS |
+| link형 url 누락 / article형 body 누락 / news+article source 누락 | 각 400 (CHECK 제약 3종의 서버 선행 검증) | PASS |
+| publishedAt 지정 생성·수정 시도 | 400 "서버가 자동 기록" (§15-6 판정 이행) | PASS |
+| news+link 생성 (source 없음) | 201 — 링크형은 URL이 출처 | PASS |
+| GET /posts?category=notice | 200 최상위 배열 + X-Total-Count, 목록에 body 미포함 | PASS |
+| category 누락 | 400 | PASS |
+| GET /posts/:id | 200, body 포함(개행 이스케이프 정상) | PASS |
+| PATCH 부분 수정(urgent=true) → urgent=true 필터 | 200 → 필터 1건 일치 | PASS |
+| PATCH type=link (병합 후 url 없음) | 400 제약 재검증 | PASS |
+| soft delete → 공개 404 / admin 목록 deletedAt 노출 | 전부 일치 | PASS |
+| admin 목록 무인증 | 401 | PASS |
+
+### 17.3 preview-link SSRF
+
+| 케이스 | 실측 | 판정 |
+|---|---|---|
+| 공개 URL(example.com) | 200 `{"title":"Example Domain"}` | PASS |
+| 127.0.0.1 / 10.0.0.1 / 169.254.169.254(메타데이터) | 422 "허용되지 않는 대상" | PASS |
+| localhost:3001 / example.com:8080 | 422 포트 차단 | PASS |
+| ftp:// | 422 스킴 차단 | PASS |
+| 리다이렉트 5회(httpbingo) | 422 "리다이렉트가 너무 많습니다" (3회 제한) | PASS |
+| 지연 10초 응답 | 422 타임아웃 (3초 유휴 소켓 차단) | PASS |
+
+### 17.4 파일 업로드·서빙
+
+| 케이스 | 실측 | 판정 |
+|---|---|---|
+| 정상 PDF 업로드 | 201 attachment shape | PASS |
+| .png 확장자+텍스트 내용 (매직 불일치) | 400 | PASS |
+| MIME 위장 (pdf 내용 + text/plain 선언) | 400 | PASS |
+| 11MB | 413 PAYLOAD_TOO_LARGE | PASS |
+| 게시물당 6번째 첨부 | 400 "5개까지" | PASS |
+| 공개 상세 attachments 배열 / 서빙 | 5건, 200 + application/pdf + Content-Disposition attachment + immutable + nosniff, **서빙 바이트 = 원본 일치** | PASS |
+| 파일명 불일치 URL / 삭제 후 서빙 | 각 404 | PASS |
+
+### 17.5 회귀·품질
+
+- 방명록(Part 1) GET/POST/관리자 삭제 회귀 정상 (계약 shape 불변)
+- `tsc --noEmit` strict 통과, `tsc` 빌드 통과
+- argon2id: macOS 정상 (musl 검증은 배포 시 Docker 빌드에서 — bcrypt 폴백 조건부 승인 §15-3)
+
+### 17.6 구현 중 설계 정교화 (기록)
+
+- **/admin/* rate limit (분당 10회)는 "실패한 인증 시도"만 카운트**하도록 정교화. 사유: 전 요청 카운트 시 정상 관리 작업(글 1건 작성 + 첨부 5개 + 목록 조회 > 10 요청/분)이 즉시 잠김. 무차별 대입 방어 목적에는 실패 카운트로 충분. 로그인 한도(5/분·10/시간)는 성공·실패 전부 카운트 유지

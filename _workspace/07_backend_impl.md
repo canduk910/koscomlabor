@@ -210,3 +210,43 @@ ssh root@101.79.31.30 '/root/koscomlabor-web/deploy.sh'
 ```
 
 `NEXT_PUBLIC_API_BASE_URL` 변경 시 compose 의 build args 수정 후 재빌드 필요 (런타임 env 로는 반영 안 됨).
+
+## 7. Part 2 (게시물 DB + Admin) — 구현 완료, 배포 대기 (2026-08-16)
+
+구현·로컬 실측 완료 (06 명세 §17). **리더 지시로 배포 보류 — 프론트 구현·통합 QA 후 일괄 배포.** 배포 시 절차:
+
+### 7.1 배포 절차 (일괄 배포 시)
+
+1. rsync (기존 2.2절 동일) — 마이그레이션 002·003 포함됨
+2. **ADMIN_PASSWORD 초기 설정** (서버에서, 리더 지시 방식):
+   ```bash
+   # 평문은 화면·채팅·로그에 출력하지 않는다
+   umask 077
+   PW=$(openssl rand -base64 24)
+   printf '%s' "$PW" > /root/koscomlabor-api/ADMIN_PASSWORD.initial
+   cat >> /root/koscomlabor-api/ADMIN_PASSWORD.initial <<'NOTE'
+
+   [안내] 위 첫 줄이 admin 로그인 초기 비밀번호입니다.
+   확인 후 이 파일을 삭제하세요: rm /root/koscomlabor-api/ADMIN_PASSWORD.initial
+   NOTE
+   HASH=$(printf '%s' "$PW" | docker run --rm -i -v /root/koscomlabor-api/app:/app -w /app node:22-alpine sh -c "npm ci --omit=dev >/dev/null 2>&1 && npm i argon2 >/dev/null 2>&1 && node scripts/hash-password.mjs")
+   printf 'ADMIN_PASSWORD_HASH=%s\n' "$HASH" >> /root/koscomlabor-api/.env
+   unset PW HASH
+   ```
+   (간편 대안: 로컬에서 `node scripts/hash-password.mjs` 로 해시만 만들어 .env 에 넣고, 평문은 위 파일 방식으로 서버에 기록)
+   → **사용자 안내: SSH 로 `/root/koscomlabor-api/ADMIN_PASSWORD.initial` 확인 후 파일 삭제**
+3. `docker compose build && docker compose --profile tools run --rm migrate && docker compose up -d api`
+   - compose 에 `uploads` 볼륨(→ /data/uploads)·`UPLOAD_DIR` 반영됨 (deploy/docker-compose.yml)
+   - **argon2 musl 검증**: Docker 빌드에서 argon2 native 모듈이 alpine(musl)에서 로드되는지 확인 — 실패 시 bcryptjs 폴백 (§15-3 조건부 승인, 결과 기록)
+4. 백업 크론 확장: 03:05 KST uploads 볼륨 tar 백업 추가
+   ```
+   5 3 * * * docker run --rm -v koscomlabor-api_uploads:/data:ro -v /root/backups:/backup alpine tar czf /backup/uploads_$(date +\%Y\%m\%d).tar.gz -C /data . && find /root/backups -name 'uploads_*.tar.gz' -mtime +14 -delete
+   ```
+5. caddy: union-api 블록에 요청 크기 상한 확인 (Caddy 기본 무제한 — 앱 계층 10MB 제한이 실효선. nginx 아님so client_max_body_size 불필요)
+6. 스모크: 06 명세 §17 배터리 축약판 (로그인/CRUD/업로드/SSRF 차단 1종)
+
+### 7.2 프론트(web-developer) 계약 참조
+
+- 계약 출처: 06 명세 Part 2 (§10–16). 기존 방명록과 반대 방향 — 프론트가 명세를 따름
+- CORS credentials 활성화됨: fetch 시 `credentials: "include"` 필요 (세션 쿠키)
+- 목록 shape: 최상위 배열 + X-Total-Count 헤더 (방명록과 동일 규약)

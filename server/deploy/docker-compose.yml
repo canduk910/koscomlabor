@@ -42,11 +42,15 @@ services:
       # 호스트명은 반드시 koscomlabor-db (서비스명 "db" 금지 — deploy_web 네트워크의
       # onnuri-db 가 "db" 별칭을 갖고 있어 다중 네트워크에서 오해석된다. 실측 확인됨)
       DATABASE_URL: postgres://guestbook_app:${POSTGRES_PASSWORD}@koscomlabor-db:5432/guestbook
+      UPLOAD_DIR: /data/uploads
+    volumes:
+      - uploads:/data/uploads   # 첨부 파일 (명명 볼륨 — 백업 크론 대상)
     depends_on:
       db:
         condition: service_healthy
     networks: [internal, deploy_web]
     # 호스트 포트 미개방 — 외부 노출은 caddy(443) 경유만
+    # Part 2 배포 시 .env 에 추가 필요: ADMIN_PASSWORD_HASH (07 문서 절차 참조)
 
   # 마이그레이션 (일회성): docker compose --profile tools run --rm migrate
   migrate:
@@ -70,3 +74,4 @@ networks:
 
 volumes:
   pgdata:
+  uploads:
