@@ -9,8 +9,8 @@ import { ROUTES } from "@/lib/routes";
  * - KFIU 마크: 흰 배경 위 직접 배치라 radius 불요(원본 흰 바탕이 배경에 동화).
  * - 명칭 2줄 등폭 록업 (§13.5.2 — 폰트 메트릭 기반, 두 줄 모두 Gmarket Bold 700 /
  *   자간 -0.02em / 행간 1.15 / --color-primary(11.37:1 — 채택 #8) / 줄바꿈 금지):
- *   1줄 "전국금융산업노동조합"  모바일 23.7px / md+ 37.9px (= 2줄 × 1.183)
- *   2줄 "코스콤(한국증권전산)지부" 모바일 20px  / md+ 32px
+ *   1줄 "전국금융산업노동조합"  모바일 17.7px / md+ 18.9px (= 2줄 × 1.183)
+ *   2줄 "코스콤(한국증권전산)지부" 모바일 15px  / md+ 16px (§13.5 8차 — 모바일은 15px 하한 고정)
  *   크기는 스펙 확정 계산값 고정 지정(arbitrary 허용 — 등폭 우선, §13.5.2).
  * - focus-visible: 표준 파랑 링 복원 (§13.2 흰 링 규정 폐기).
  *
@@ -20,7 +20,7 @@ import { ROUTES } from "@/lib/routes";
 export function SiteHeader({ asHeading = true }: { asHeading?: boolean }) {
   const LogoTag = asHeading ? "h1" : "p";
   return (
-    <header className="border-y-[6px] border-primary bg-bg py-3 md:py-4">
+    <header className="border-y-4 border-primary bg-bg py-2 md:py-3">
       <div className="mx-auto w-full max-w-page px-4 md:px-6">
         <LogoTag>
           <Link
@@ -34,13 +34,13 @@ export function SiteHeader({ asHeading = true }: { asHeading?: boolean }) {
               width={247}
               height={192}
               priority
-              className="h-10 w-auto md:h-12"
+              className="h-8 w-auto md:h-9"
             />
             <span className="flex flex-col justify-center">
-              <span className="font-display text-[23.7px]/[1.15] font-bold tracking-[-0.02em] whitespace-nowrap text-primary md:text-[37.9px]/[1.15]">
+              <span className="font-display text-[17.7px]/[1.15] font-bold tracking-[-0.02em] whitespace-nowrap text-primary md:text-[18.9px]/[1.15]">
                 전국금융산업노동조합
               </span>
-              <span className="font-display text-[20px]/[1.15] font-bold tracking-[-0.02em] whitespace-nowrap text-primary md:text-[32px]/[1.15]">
+              <span className="font-display text-[15px]/[1.15] font-bold tracking-[-0.02em] whitespace-nowrap text-primary md:text-[16px]/[1.15]">
                 코스콤(한국증권전산)지부
               </span>
             </span>
