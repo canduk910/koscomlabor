@@ -61,9 +61,10 @@ export function PostList({ posts, kind, emptyMessage }: PostListProps) {
                     </span>
                   </span>
                   <span className="mt-1.5 flex flex-wrap items-center gap-x-1 text-caption text-ink-muted">
+                    {/* §12.2: 모바일 D-n — Gmarket Sans Medium 500, 자간 0 */}
                     {hasDeadline ? (
                       <span
-                        className={`font-bold md:hidden ${
+                        className={`font-display font-medium md:hidden ${
                           imminent ? "text-urgent-strong" : "text-primary"
                         }`}
                       >

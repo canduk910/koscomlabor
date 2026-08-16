@@ -35,8 +35,9 @@ export function DateBadge({
     <span
       className={`rounded-badge flex size-14 shrink-0 flex-col items-center justify-center leading-none ${VARIANT_CLASS[variant]} ${className ?? ""}`}
     >
-      <span className="text-body font-extrabold">{monthDay}</span>
-      <span className="mt-0.5 text-caption font-semibold">{subLabel}</span>
+      {/* §12.2: M/D — Gmarket Sans Bold 700(-0.01em), D-n — Medium 500(자간 0) */}
+      <span className="font-display text-body font-bold tracking-[-0.01em]">{monthDay}</span>
+      <span className="font-display mt-0.5 text-caption font-medium">{subLabel}</span>
     </span>
   );
 }

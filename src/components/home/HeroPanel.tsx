@@ -31,14 +31,15 @@ export function HeroPanel({ post }: { post: PostSummary | null }) {
               {post.dateLabel}
             </time>
           </p>
-          <h2 className="mt-4 line-clamp-3 text-hero text-white md:text-hero-lg">
+          {/* §12.2: 히어로 제목 — Gmarket Sans Bold 700, 자간 -0.03em (hero 토큰의 800은 Bold로 대체) */}
+          <h2 className="font-display mt-4 line-clamp-3 text-hero font-bold tracking-[-0.03em] text-white md:text-hero-lg">
             {post.title}
           </h2>
           <div aria-hidden="true" className="mt-4 h-1 w-16 bg-white" />
           <p className="mt-6">
             <Link
               href={ROUTES.notice(post.slug)}
-              className="inline-flex min-h-touch items-center gap-2 rounded-full bg-white px-6 text-body font-bold text-primary hover:bg-primary-soft focus-visible:outline-3 focus-visible:outline-white focus-visible:outline-offset-2"
+              className="font-display inline-flex min-h-touch items-center gap-2 rounded-full bg-white px-6 text-body font-medium tracking-[-0.01em] text-primary hover:bg-primary-soft focus-visible:outline-3 focus-visible:outline-white focus-visible:outline-offset-2"
             >
               자세히 보기
               <ArrowRightIcon className="size-5" />
@@ -50,7 +51,9 @@ export function HeroPanel({ post }: { post: PostSummary | null }) {
           <p className="text-caption font-semibold text-primary-soft">
             전국금융산업노동조합
           </p>
-          <h2 className="mt-2 text-hero text-white md:text-hero-lg">코스콤지부</h2>
+          <h2 className="font-display mt-2 text-hero font-bold tracking-[-0.03em] text-white md:text-hero-lg">
+            코스콤지부
+          </h2>
           <p className="mt-4 text-body font-normal text-primary-soft">
             코스콤 조합원을 위한 공식 소식 공간
           </p>

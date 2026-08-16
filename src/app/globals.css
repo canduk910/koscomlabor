@@ -1,5 +1,26 @@
 @import "tailwindcss";
 
+/* Tailwind 소스 스캔 제외 — 팀 문서(_workspace)의 클래스 예시 문자열·백엔드(server) 코드가
+   유틸리티로 오생성되는 것을 차단 (예: 스펙 문서의 `tracking-[값]` 표기) */
+@source not "../../_workspace";
+@source not "../../server";
+
+/* 지마켓산스 디스플레이 (스펙 §12.3) — 셀프호스팅 woff2 (KS X 1001 한글 서브셋).
+   Medium(500)·Bold(700)만 서빙 — Light(300)는 판독성 사유로 전면 미사용 (§12.2).
+   자산: scripts/build-gmarket-fonts.sh 산출물(커밋 대상), 라이선스 동봉(LICENSE.txt) */
+@font-face {
+  font-family: "Gmarket Sans";
+  src: url("/fonts/gmarket/GmarketSansMedium.woff2") format("woff2");
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Gmarket Sans";
+  src: url("/fonts/gmarket/GmarketSansBold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+
 /*
  * 디자인 토큰 — _workspace/02_designer_spec.md §1 (2026-08-16 CI 실측 개정) 그대로 적용.
  * 다크 모드는 스펙 범위 제외 (create-next-app 기본 다크모드 미디어쿼리 제거됨).
@@ -28,6 +49,9 @@
   --color-primary-bright: #2e7df7; /* 밝은 블루(레퍼런스 실측) — 장식 도형·아이콘 배경 전용(3.89:1), 텍스트 조합 전면 금지 */
 
   --font-sans: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
+  /* §12.3: 디스플레이 서체 — 짧은 대형 표제·숫자 전용(§12.2 배분표). 폴백은 Pretendard → 시스템 한글 */
+  --font-display: "Gmarket Sans", "Pretendard Variable", Pretendard,
+    -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
 
   --text-hero: 2.5rem;             /* 40px 히어로 대형 타이포 (모바일) */
   --text-hero--line-height: 1.2;

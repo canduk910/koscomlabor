@@ -1,3 +1,89 @@
+# QA 리포트: 폰트 회귀 + 자수 아이덴티티 헤더 (8회차)
+
+- 작성: qa-tester | 작성일: 2026-08-16
+- 검증 기준: A — 7회차 실패 #1 회귀 / B — 스펙 §13(2026-08-16 5차), 구현 §12 (`SiteHeader.tsx` 단일 파일)
+- 검증 방법: 바이너리 시그니처 재실측 + §13 값 대조 + **폰트 메트릭 기반 375px 폭 재계산**(fontTools로 woff2 hmtx advance 실측) + 실빌드 HTML(메인·상세 — 임시 파일 라운드트립·클린 복원) + 실서빙 curl + tsc/lint/build
+
+## 8회차 요약: 통과 8 | 실패 0 | 미검증 2
+
+### A. 7회차 실패 #1 회귀 — **해소**
+
+| 확인 | 결과 |
+|------|------|
+| 시그니처 | 두 파일 모두 `wOF2` 실측 (7회차 `OTTO`에서 수정 — 개발자·리더 확인에 더한 3중 확인) |
+| 수정 코드 | `scripts/build-gmarket-fonts.py:76` — `font.flavor = "woff2"`를 `save()` 전에 설정 (지적한 수정 방법 그대로) |
+| 크기 | 146,040B / 140,404B (255/250KB → 143/137KB — 브로틀리 압축 효과, 스펙 §12.3 예상 하단 인접) |
+| 선언 일치 | `@font-face`의 `format("woff2")` ↔ 실데이터 woff2 일치 |
+| 서빙·빌드 | 2종 모두 200 (크기 일치), tsc/lint/build 무영향 통과 |
+
+### B. 자수 아이덴티티 헤더 — 통과 항목
+
+| # | 분류 | 확인 내용 |
+|---|------|----------|
+| 1 | §13.2 ↔ 구현 교차 | 풀폭 네이비 밴드 `bg-primary`(#093389 — 신규 색 0건)·하단 보더 제거·세로 패딩 0.75/1rem 유지, KFIU 마크 `rounded-lg`(8px)·40/48px·`alt=""`+aria-hidden+priority 유지, 마크-텍스트 gap 0.75rem·홈 링크 1개·`min-h-touch` — 코드·빌드 HTML 실측 전부 일치 |
+| 2 | 명칭 2줄 (문자 단위) | 1줄 "전국금융산업노동조합" 15px/600/흰(Pretendard — `font-display` 미적용, §12.2 소형 원칙), 2줄 **"코스콤(한국증권전산)지부"**(괄호 포함 자수 원문) Gmarket Bold 700·자간 -0.02em·모바일 `text-[1.25rem]/[1.3]`(20px)·md `text-h1`(32px)·`whitespace-nowrap` — 빌드 HTML h1 내부에서 문자 단위 일치 실측. 구 표기 "코스콤지부" 헤더 잔존 0건 (히어로 폴백 h2의 "코스콤지부"는 §11.4 스펙 그대로 유지 — §13은 헤더만 대체) |
+| 3 | 대비 | 신규 색 조합 0건 확인 — 흰 텍스트/#093389 = 채택 #11(11.37:1 AAA) 재사용, 재실측 불요(§13.3 명시와 일치). focus-visible 흰 링 3px offset 2(#11 UI 통과) 적용, **헤더 내 `outline-primary` 잔존 0건** grep |
+| 4 | **375px 경계 재계산 (폰트 메트릭 실측)** | woff2 hmtx advance 실측: 지마켓산스 Bold 한글 **0.96em**(19.2px@20px)·괄호 0.41em(8.2px) → 2줄 실폭 = 228.0 − 자간 5.2 = **222.8px**. 행 합계 = 마크 51.5 + gap 12 + 222.8 = **286.3px vs 가용 343px → 여유 56.7px, 클리핑 위험 없음(통과)**. 스펙 §13.2의 344px 계산은 전각 1.0em 가정의 보수적 상한이었음 — 모바일 크기 조정 불필요 판단 근거로 디자이너에게 전달. 참고: 320px 초소형 뷰포트도 가용 288px로 1.7px 여유(경계 내), md 32px는 430 vs 720px 여유 |
+| 5 | h1 위계 회귀 | 메인: h1 정확히 1개(헤더 로고 — 2줄 명칭 포함). 상세(임시 파일 실빌드): h1 = 게시물 제목 1개, 헤더 로고 `<p>` 강등, 상세에도 네이비 밴드 정상 렌더 — 실측 후 삭제·클린 복원(잔존 0건) |
+| 6 | 기존 기능 무변화 | 히어로 폴백 h2·방명록 준비 카드·탭·상세 ● SSG 유지 (변경이 SiteHeader 단일 파일임을 확인) |
+| 7 | 빌드 3종 | `npx tsc --noEmit` 0·`npm run lint` 0·`npm run build` 통과(/ ○ Static) |
+| 8 | 신규 자산·토큰 0건 | §13.4대로 폰트·토큰·자산 추가 없음 (globals.css diff 없음, 기존 Gmarket `font-display` 유틸 재사용) |
+
+### 미검증
+
+| # | 항목 | 사유 |
+|---|------|------|
+| 1 | 실뷰포트 시각 확인 — 375px 실렌더(계산상 안전하나 육안 확증), 헤더·히어로 네이비 중복의 시각 판정(§13.3 "형태 대비+1.5rem 여백" — 코드 조건 충족 확인까지) | 브라우저/실기기 환경 없음 |
+| 2 | 스크린리더 (기존 회차와 동일) | 환경 제약 |
+
+---
+
+# QA 리포트: 지마켓산스 폰트 페어링 (7회차)
+
+- 작성: qa-tester | 작성일: 2026-08-16
+- 검증 기준: 스펙 §12(2026-08-16 4차), 구현 §11
+- 범위: `globals.css`(@font-face 2·`--font-display`·`@source not` 2), HeroPanel/SiteHeader/DateBadge/PostList 클래스, `public/fonts/gmarket/`(자산 3), `scripts/build-gmarket-fonts.py/.sh`
+- 검증 방법: 배분표 grep 전수 + 실빌드 HTML(모드 1·2 — urgent 임시 파일 라운드트립·클린 복원 실측) + 실서빙 curl + **폰트 파일 바이너리 시그니처 실측** + 빌드 CSS 유틸리티 회귀
+
+## 7회차 요약: 통과 11 | 실패 1 | 미검증 2 | 스펙 확인 필요 1
+
+### 실패 항목
+
+| # | 분류 | 위치 | 내용 | 수정 방법 |
+|---|------|------|------|----------|
+| 1 | 폰트 자산 (변환 스크립트 결함) | `scripts/build-gmarket-fonts.py:65,75` → 산출물 `public/fonts/gmarket/GmarketSansMedium.woff2`·`GmarketSansBold.woff2` | **`.woff2` 확장자이지만 실데이터는 비압축 OTF.** 바이너리 시그니처 실측: 두 파일 모두 `OTTO`(OpenType CFF) — 정상 woff2는 `wOF2`(Pretendard 서브셋으로 대조 확인), `file` 판정도 "OpenType font data". 원인: `options.flavor = "woff2"`(65행)는 **Subsetter 옵션이라 `font.save()`(75행)가 무시** — flavor는 `TTFont.flavor` 속성 또는 `subset.save_font()` 경유로만 적용됨. 영향: ① `format("woff2")` 선언 ↔ 실데이터 불일치(콘텐츠 스니핑 없는 환경에서 로드 실패 위험) ② 전송량 낭비(브로틀리 압축 시 통상 40~60% 추가 절감 — 현 255/250KB가 스펙 예상 150~250KB 상단을 벗어난 이유) ③ 스펙 §12.3 "woff2로 변환" 미이행. 개발자 자가 검증은 크기·200 응답만 확인해 미탐지 | `font.save(str(dest))` 전에 `font.flavor = "woff2"` 설정(1줄) 또는 `subset.save_font(font, str(dest), options)` 사용 → 스크립트 재실행 → **시그니처 `wOF2` 확인** 후 재커밋(산출물 커밋 방식이므로 필수). 구현 문서의 크기 수치도 갱신 |
+
+### 스펙 확인 필요 (frontend-designer 몫 — 스펙 내부 충돌)
+
+| # | 내용 | 요청 |
+|---|------|------|
+| S1 | §11.4 "CTA 18px/**700**"·§11.5 "M/D 18px/**800**, D-n 15px/**600**" ↔ §12.2 배분표 "CTA **Medium 500**, M/D **Bold 700**, D-n **Medium 500**" — 4차 개정이 §12만 추가하고 §11 잔존 수치를 미갱신 | 구현은 최신 §12.2를 따름(타당 판단 — 실패 아님). §11.4/§11.5의 웨이트 수치를 §12.2 기준으로 갱신 요청 |
+
+### 통과 항목
+
+| # | 분류 | 확인 내용 |
+|---|------|----------|
+| 1 | 배분표 5곳 정확 적용 (최우선) | grep 전수: `font-display` 사용처 = 정확히 4파일 7개소 — 히어로 제목 모드 1·2(`font-bold tracking-[-0.03em]`), 헤더 로고타입(`font-bold tracking-[-0.02em]`, 상위 조직명 행 미적용), CTA(`font-medium tracking-[-0.01em]`), 배지 M/D(`font-bold tracking-[-0.01em]`)·D-n(`font-medium` 자간 0), 모바일 D-n(`font-medium` 자간 0) — §12.2 배분표와 1:1, **배분표 외 사용 0건** |
+| 2 | 모드 1·2 실빌드 실측 | 모드 2(기본): 헤더 로고타입·히어로 폴백 제목 클래스 렌더 확인. 모드 1(urgent+deadline 임시 파일): 히어로 제목·CTA·배지 M/D·D-n·모바일 D-n 클래스 전부 DOM 실측 → 삭제·클린 재빌드 복원(잔존 0건) |
+| 3 | Pretendard 유지 | 탭 레이블(`role="tab"` 병존 grep 0)·본문·목록 제목·방명록 폼·긴급 배지·마감 스트립·히어로 아이브로우/부문구/게시일·푸터 — `font-display` 미적용, `--font-sans` 불변 |
+| 4 | 웨이트 대체 경계면 | hero 토큰 800 → `font-bold`(700) 명시 오버라이드: Gmarket 미보유 웨이트(800) 요청으로 인한 faux-bold 합성 방지. 폴백 시 Pretendard가 동일 700으로 렌더 — §12.3 "로드 실패 시 동일 웨이트의 Pretendard" 문구와 정확히 부합(모호성 없음 판단) |
+| 5 | @font-face ↔ §12.3 | 빌드 CSS 실측: 2종(500/700)·`font-display:swap`·상대경로 src·`--font-display` 폴백 체인(Gmarket→Pretendard Variable→시스템) 스펙 블록과 일치. unicode-range 부재 — 스펙 §12.3에도 없음(일치). Light(300) @font-face 미선언 |
+| 6 | 서빙 | Medium/Bold/LICENSE.txt 실서빙 200(260,692/255,900/4,872B), **Light 404**(미서빙 규정 §12.2 준수). 단 서빙 파일의 포맷은 실패 #1 |
+| 7 | 라이선스 (§12.1) | `LICENSE.txt` 동봉(OFL 전문+출처+변환 고지) 실서빙 확인, OTF 원본 3종 `design/` 보존, name 레코드 보존 로직 스크립트 확인 |
+| 8 | 외부 CDN 0건 유지 | 빌드 HTML·CSS의 http(s) URL 전수 = 온누리 콘텐츠 링크뿐. 폰트 요청 전부 셀프호스팅 상대경로 |
+| 9 | `@source not` 회귀 | `_workspace`·`server` 스캔 제외 후에도 실사용 유틸리티 9종(rounded-full/bg-primary/min-h-touch/line-clamp-2/overflow-x-auto/rounded-2xl/shadow-card/font-medium/font-bold) 빌드 CSS 존재, tracking 3값 존재, 전 페이지 렌더 무변화 |
+| 10 | 회귀 3종 | `npx tsc --noEmit` 0·`npm run lint` 0·`npm run build` 통과(/ ○ Static·상세 ● SSG 유지), 방명록 준비 카드 유지 |
+| 11 | 기존 값 정정 확인 | PostList 모바일 D-n `font-bold`→`font-medium` — 6회차 개발자 해석 #5의 임의값이 §12.2 스펙 값으로 정정됨 |
+
+### 미검증
+
+| # | 항목 | 사유 |
+|---|------|------|
+| 1 | 실브라우저 렌더 (지마켓산스 적용 품질, OTF 데이터의 실렌더 여부 — 실패 #1과 연동, Pretendard 폴백 스왑 시 레이아웃 이동) | 브라우저 환경 없음. 실패 #1 수정 후 재확인 권장 |
+| 2 | 스크린리더 (기존 회차와 동일) | 환경 제약 |
+
+---
+
 # QA 리포트: 디자인 v2 모던 전면 개편 + Pretendard (6회차)
 
 - 작성: qa-tester | 작성일: 2026-08-16
