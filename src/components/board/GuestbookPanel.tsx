@@ -21,7 +21,7 @@ const BODY_MAX_LENGTH = 500;
  */
 function PreparingCard() {
   return (
-    <div className="rounded-xl border border-border-strong bg-surface px-4 py-8 text-center">
+    <div className="rounded-card border border-border-strong bg-surface px-4 py-8 text-center">
       <ConstructionIcon className="mx-auto size-10 text-border-strong" />
       <h2 className="mt-4 text-h2 text-ink">방명록 준비 중입니다</h2>
       <p className="mt-2 text-body font-normal text-ink-muted">
@@ -42,11 +42,12 @@ interface Feedback {
   message: string;
 }
 
+/* v2 (§11.6): 입력 필드 radius 12px(rounded-badge), 버튼 radius 9999px(rounded-full) */
 const FIELD_CLASS =
-  "w-full rounded-lg border border-border-strong bg-bg text-body text-ink focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2";
+  "rounded-badge w-full border border-border-strong bg-bg text-body text-ink focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2";
 
 const BUTTON_CLASS =
-  "min-h-touch rounded-lg bg-primary-strong px-6 text-body font-bold text-white hover:outline-2 hover:outline-primary-strong hover:outline-offset-2 focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2";
+  "min-h-touch rounded-full bg-primary-strong px-6 text-body font-bold text-white hover:outline-2 hover:outline-primary-strong hover:outline-offset-2 focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2";
 
 /** 작성 폼 + 글 목록 (스펙 §7.2 — 백엔드 연결 시) */
 function GuestbookBoard() {

@@ -65,3 +65,38 @@ export function formatEntryDate(isoDateTime: string): string {
   if (!p) return "";
   return `${p.year}.${p.month}.${p.day}`;
 }
+
+/* ---- v2 (§11.5): 마감 스트립·날짜 배지용 ---- */
+
+/** 마감일(날짜 전용 ISO 값) `M/D` 표기 — 선행 0 없는 숫자 (예: 8/30) */
+export function formatMonthDaySlash(isoDate: string): string {
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) return "";
+  const p = partsOf(ISO_FORMATTER, date);
+  if (!p) return "";
+  return `${Number(p.month)}/${Number(p.day)}`;
+}
+
+/** 오늘(KST 달력 날짜)의 ISO 표현용 포매터 */
+const KST_ISO_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Seoul",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/**
+ * D-n 계산: 대상 날짜(날짜 전용 ISO, UTC 자정)까지 오늘(KST 달력 기준)부터 남은 일수.
+ * 오늘=0, 내일=1, 지난 날짜=음수. 달력 날짜를 Intl로 추출한 뒤 UTC 자정끼리 차분 —
+ * 타임존·서머타임에 의한 오차 없음. 유효하지 않은 입력은 null.
+ */
+export function daysUntilKst(isoDate: string, now: Date = new Date()): number | null {
+  const target = new Date(isoDate);
+  if (Number.isNaN(target.getTime())) return null;
+  const tp = partsOf(ISO_FORMATTER, target);
+  const np = partsOf(KST_ISO_FORMATTER, now);
+  if (!tp || !np) return null;
+  const targetUtc = Date.UTC(Number(tp.year), Number(tp.month) - 1, Number(tp.day));
+  const todayUtc = Date.UTC(Number(np.year), Number(np.month) - 1, Number(np.day));
+  return Math.round((targetUtc - todayUtc) / 86_400_000);
+}

@@ -92,7 +92,7 @@ export function BoardTabs({ notices, news }: BoardTabsProps) {
         role="tablist"
         aria-label="게시판"
         onKeyDown={handleKeyDown}
-        className="flex w-full gap-1 rounded-xl bg-surface p-1 md:inline-flex md:w-auto"
+        className="flex w-full gap-1 rounded-full bg-surface p-1 md:inline-flex md:w-auto"
       >
         {TABS.map((tab, index) => {
           const selected = tab.id === activeTab;
@@ -109,7 +109,7 @@ export function BoardTabs({ notices, news }: BoardTabsProps) {
                 tabRefs.current[index] = el;
               }}
               onClick={() => selectTab(tab.id)}
-              className={`min-h-touch flex-1 rounded-lg px-1 text-[1rem]/[1.5] whitespace-nowrap transition-colors focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2 md:min-w-32 md:flex-none md:px-4 md:text-body ${
+              className={`min-h-touch flex-1 rounded-full px-1 text-[1rem]/[1.5] whitespace-nowrap transition-colors focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2 md:min-w-32 md:flex-none md:px-4 md:text-body ${
                 selected
                   ? "bg-primary-strong font-bold text-white"
                   : "font-medium text-ink-muted hover:bg-primary-tint hover:text-primary-strong"

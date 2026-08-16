@@ -32,16 +32,42 @@
   --color-border-strong: #6b7280;  /* 의미 있는 UI 경계(입력 필드 등)·보조 아이콘 */
   --color-border-soft: #e5e7eb;    /* 장식용 구분선 전용 — 의미 전달 UI에 사용 금지 */
 
+  /* ---- v2 모던 개편 추가 (2026-08-16 3차 — §11) ---- */
+  --color-primary-soft: #d9e9ff;   /* 라이트블루 서피스(레퍼런스 실측) — 날짜 배지 기본형·마감 스트립 배경 */
+  --color-primary-bright: #2e7df7; /* 밝은 블루(레퍼런스 실측) — 장식 도형·아이콘 배경 전용(3.89:1), 텍스트 조합 전면 금지 */
+
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
+
+  --text-hero: 2.5rem;             /* 40px 히어로 대형 타이포 (모바일) */
+  --text-hero--line-height: 1.2;
+  --text-hero--font-weight: 800;
+  --text-hero--letter-spacing: -0.02em;
+  --text-hero-lg: 3.5rem;          /* 56px 히어로 (md+, md:text-hero-lg) */
+  --text-hero-lg--line-height: 1.15;
+  --text-hero-lg--font-weight: 800;
+  --text-hero-lg--letter-spacing: -0.02em;
+  --tracking-heading: -0.01em;     /* display·h1·h2 한글 자간 보정 — 위 --text-*--letter-spacing 모디파이어로 내장됨. 이 토큰은 스케일 밖 커스텀 대형 텍스트용 보조 (본문·caption은 0 유지) */
+
+  --radius-card: 1.5rem;           /* 24px 카드·히어로(모바일)·온누리 카드 */
+  --radius-panel: 2rem;            /* 32px 히어로 패널 (md+) */
+  --radius-badge: 0.75rem;         /* 12px 날짜 배지·입력 필드(v2) */
+
+  --shadow-card: 0 4px 20px rgb(9 51 137 / 0.08);
+  --shadow-card-hover: 0 8px 28px rgb(9 51 137 / 0.12);
+
   /* ---- 타이포그래피 스케일 (5단계) ---- */
   --text-display: 2.5rem;                 /* 40px 페이지 대제목 */
   --text-display--line-height: 1.3;
   --text-display--font-weight: 700;
+  --text-display--letter-spacing: -0.01em; /* v2: heading 자간 토큰 내장 (2026-08-16 확정) */
   --text-h1: 2rem;                        /* 32px 섹션 제목 */
   --text-h1--line-height: 1.3;
   --text-h1--font-weight: 700;
+  --text-h1--letter-spacing: -0.01em;     /* v2 */
   --text-h2: 1.5rem;                      /* 24px 소제목·카드 제목 */
   --text-h2--line-height: 1.3;
   --text-h2--font-weight: 600;
+  --text-h2--letter-spacing: -0.01em;     /* v2 */
   --text-body: 1.125rem;                  /* 18px 본문 기본 */
   --text-body--line-height: 1.7;
   --text-caption: 0.9375rem;              /* 15px 보조 정보 — 이보다 작은 텍스트 금지 */
@@ -62,6 +88,7 @@ html {
 
 - 2차 개정(2026-08-16): 값 변경 4건(`primary`, `primary-strong`, `urgent`, `urgent-strong`), 신규 3건(`accent`, `accent-strong`, `accent-tint`), 나머지 8건 유지. **토큰 이름은 전부 유지 — 개발자는 globals.css의 값 교체 + accent 3줄 추가만 하면 된다.**
 - 사용 규칙: KFIU 파랑 원색(#093389)은 AAA 통과로 텍스트·UI 겸용 — `primary`/`primary-strong` 구분은 소멸했으나 토큰명 유지를 위해 동일 값을 둔다. **`--color-urgent`(#d0101b)와 `--color-accent`(#ec6d1e)는 텍스트 사용 금지** — 긴급 텍스트·배지는 `--color-urgent-strong`(#9c0d14), 오렌지 텍스트·아이콘은 `--color-accent-strong`(#7a3806)을 쓴다.
+- 3차 개정(v2 모던 개편, 2026-08-16): **기존 토큰 값 변경 0건**, 추가만 — 색 2(`primary-soft`·`primary-bright`), 폰트 1(`font-sans` — Pretendard, §11.2), 타이포 2단계(hero·hero-lg, 자간 포함), tracking 1, radius 3, shadow 2. `--color-primary-bright`(3.89:1)는 장식 도형·아이콘 배경 전용으로 텍스트 조합 전면 금지(§2 v2 표).
 
 ## 2. 대비 검증 결과
 
@@ -93,6 +120,16 @@ html {
 | 20 | `#6b7280` | `#ffffff` | 4.83 | UI 3:1 통과 | 입력 필드 보더·빈 상태 아이콘 |
 | 21 | `#6b7280` | `#f9fafb` | 4.63 | UI 3:1 통과 | surface 위 보더·아이콘 |
 
+### v2 추가 조합 (2026-08-16 3차) — 전체 통과
+
+| # | 전경 | 배경 | 비율 | 판정 | 용도 |
+|---|------|------|------|------|------|
+| 22 | `#093389` | `#d9e9ff` | 9.23 | AAA(본문) | 날짜 배지(기본형) 텍스트·마감 스트립 텍스트 |
+| 23 | `#d9e9ff` | `#093389` | 9.23 | AAA(본문) | 히어로 아이브로우·게시일·푸터 저작권 |
+| 24 | `#1a1a1a` | `#d9e9ff` | 14.13 | AAA(본문) | soft 서피스 위 본문(예비) |
+| 25 | `#ffffff` | `#2e7df7` | 3.89 | UI·큰텍스트 AA | 장식 도형 위 아이콘 전용 (텍스트 금지) |
+| 26 | `#2e7df7` | `#ffffff` | 3.89 | UI·큰텍스트 AA | 흰 배경 위 장식 도형·아이콘 (텍스트 금지) |
+
 ### 검증 후 탈락·제한 조합 — 스펙에 텍스트로 사용 금지
 
 | 전경 | 배경 | 비율 | 처리 |
@@ -106,6 +143,11 @@ html {
 | `#e5e7eb` | `#ffffff` | 1.24 | 장식용 구분선 전용 허용. 의미 전달 UI(선택 표시·필드 경계) 사용 금지 |
 | `#4b5563` | `#eff6ff` | 6.94 | AAA 미달 — tint 배경 위 caption 금지, `#093389` 또는 `#1a1a1a` 사용 |
 | `#595959` | `#f9fafb` | 6.70 | (1차 검증분) 보조 텍스트는 `#4b5563`으로 통일 |
+| `#9c0d14` | `#d9e9ff` | 6.87 | (v2) AAA 미달 — 마감 스트립 임박 항목은 red 칩(흰 텍스트 on #9c0d14, 8.46) 방식 사용 |
+| `#d0101b` | `#d9e9ff` | 4.52 | (v2) 레퍼런스의 "라이트블루 위 빨강 텍스트" 스타일 — AAA 미달로 미채택 |
+| `#4b5563` | `#d9e9ff` | 6.14 | (v2) soft 서피스 위 muted 금지 — `#093389` 또는 `#1a1a1a` 사용 |
+| `#7fb0f0` | `#093389` | 5.08 | (v2) 히어로 위 장식 도형 전용(UI 3:1 통과) — 텍스트 금지 |
+| `#d9e9ff` | `#9c0d14` | 6.87 | (v2) 미채택 — red 칩 위 텍스트는 `#ffffff`(8.46) |
 
 ## 3. 페이지 레이아웃 스펙
 
@@ -134,7 +176,9 @@ html {
   - 2행 — "코스콤지부": 모바일 `--text-h2`(24px) / 700 / `--color-ink`, md+ `--text-h1`(32px) / 700
 - 로고 (2026-08-16 CI 확보로 추가): 지부명 텍스트 좌측에 KFIU 깃발 마크(`/brand/kfiu-mark.png` — 자산 스펙 §10.3). 높이 모바일 `40px` / md+ `48px`(원본비 1.284:1 → 폭 ≈51/62px), 텍스트와 gap `0.75rem`, `alt=""` + `aria-hidden="true"`(인접 지부명 텍스트가 의미 전달), 홈 링크 블록에 포함. 헤더 배경이 `#ffffff`이므로 흰 배경 JPG 유래 자산 배치 조건 충족(§10.3). 로딩: 첫 화면 고정 요소이므로 지연 로딩 금지(next/image `priority` — lazy 플래시 방지, 구현 확인 후 공식화).
 
-### 3.2 긴급 공지 배너 (조건부)
+### 3.2 긴급 공지 배너 (조건부) — ※ v2에서 히어로 패널(§11.4)로 대체
+
+> **v2 개정(2026-08-16 3차)**: 아래 배너는 §11.4 히어로 패널이 역할을 승계하며 v2 적용과 동시에 제거한다(중복 노출 금지). 본 절은 v2 이전 상태의 기록으로 유지.
 
 - 노출 조건: verified 공지 중 frontmatter `urgent: true`인 게시물이 1건 이상일 때만 렌더. 없으면 DOM에서 제외(빈 자리 없음). 여러 건이면 최신 1건만 배너, 나머지는 목록 상단 정렬.
 - 구조: `<section role="region" aria-label="긴급 공지">`, 헤더 바로 아래 전폭. 내부 콘텐츠는 공통 컨테이너 정렬.
@@ -277,7 +321,7 @@ API 추상화 계층이 미연결을 반환하면 **폼을 렌더하지 않는�
 
 | 순위 | 정보 | 시각적 구분 |
 |------|------|-------------|
-| 1 | 긴급 공지 (행동 필요·기한 있음) | 최상단 전폭 배너 — urgent-tint 배경 + 4px 적색 보더 + 아이콘 + "긴급" 배지 + 18px/700 제목. **콘텐츠 위계에서 유일한** 적색 사용 영역 |
+| 1 | 긴급 공지 (행동 필요·기한 있음) | (v2) 히어로 패널 §11.4 — 딥블루 패널 + "긴급" 배지 + 히어로 대형 타이포. 마감 임박은 스트립의 red 칩(§11.5). 적색은 **콘텐츠 위계에서 긴급 표시에만** 사용 |
 | 2 | 공지사항 (알아야 할 변화) | 기본 선택 탭 — 첫 진입 시 즉시 노출. urgent 게시물은 목록 최상단 + 배지 |
 | 3 | 금융노조 소식·방명록 (일반 소식·참여) | 탭 전환으로 접근. 목록 아이템 동일 패턴, 강조색 미사용 |
 | 4 | 상시 정보 (지부명·연락처·저작권) | 헤더 텍스트 로고, 푸터 caption(15px) — 항상 접근 가능하되 시각적 후순위 |
@@ -369,6 +413,90 @@ API 추상화 계층이 미연결을 반환하면 **폼을 렌더하지 않는�
 | 헤더(§3.1) | KFIU 마크 `<img>` 추가 | 신규 |
 | 푸터(§3.4) | 흰 칩 로고 행 추가 | 신규 |
 | `public/brand/` | `kfiu-mark.png`·`koscom-logo.png` 2종 생성 (§10.3 크롭·리샘플 값) | 신규 자산 |
+
+## 11. 디자인 v2 — 모던 전면 개편 (2026-08-16 3차, 사용자 피드백 반영)
+
+사용자 피드백 "구식·촌스러운 폰트"에 대한 개편. 레퍼런스 홍보물 2종(`~/.claude/uploads/.../99ad6e52-IMG_6270.png` 히어로형, `84a788e4-IMG_6269.png` 카드형)의 디자인 언어를 실측·추출했다. **§3~§9의 구조·접근성 규칙(ARIA·터치 44px·빈 상태·정보 위계)은 전부 유지**하고, 시각 레이어(폰트·라운드·색 운용·히어로)만 개편한다.
+
+### 11.1 디자인 언어 추출 (레퍼런스 픽셀 실측)
+
+- **레퍼런스 실측 색이 CI 토큰과 정확히 일치**: 딥블루 `(9,51,137)`=`#093389`, 레드 `(208,16,27)`=`#d0101b` — 기존 팔레트 그대로 연속. 신규 실측 2색만 추가: 라이트블루 서피스 `#d9e9ff`(타임라인 바), 밝은 블루 `#2e7df7`(날짜 배지).
+- 채택 요소: ① 딥블루 대형 라운드 패널 + 초대형 볼드 타이포(히어로) ② 라운드 카드 + 부드러운 그림자 ③ 날짜 배지(라운드 사각, 색 변형) ④ 하단 날짜|이벤트 타임라인 바 ⑤ 딥블루 푸터 밴드
+- 미채택 요소와 사유: ① 빨강 아웃라인 타이포(웹 text-stroke는 소형·저해상도에서 가독 저하 — 흰 타이포+배지로 대체) ② 우측 원형 아이콘 사이드바(탭리스트와 기능 중복, 모바일 공간 부족) ③ 사선 밴드+번호(연속 홍보물 넘버링 맥락 전용) ④ 라이트블루 배지 위 흰 텍스트(3.89:1 — AAA 위반, §2 v2 표) ⑤ 라이트블루 바 위 빨강 텍스트(4.52:1 — 미달, red 칩으로 대체)
+- **레퍼런스 이미지의 투쟁 문구·일정(교섭·투표·대회·파업 날짜 등)은 디자인 목업의 미검증 콘텐츠다. 어떤 형태로도 실제 페이지에 복사 금지.**
+
+### 11.2 폰트 스펙 — Pretendard Variable (촌스러움의 주범 교체)
+
+- 채택: **Pretendard Variable** (SIL OFL 무료, 셀프호스팅 — 외부 CDN 미사용).
+- 도입 방식 (권장 A): `npm i pretendard` 후 패키지의 다이나믹 서브셋을 정적 서빙 —
+  `node_modules/pretendard/dist/web/variable/` 의 `pretendardvariable-dynamic-subset.css` + `woff2-dynamic-subset/` 디렉토리를 `public/fonts/pretendard/` 로 복사(빌드 스크립트 또는 postinstall), `layout.tsx`에서 `<link rel="stylesheet" href="/fonts/pretendard/pretendardvariable-dynamic-subset.css">`. 사용 글리프의 서브셋만 로드되어 초기 전송량이 작다. `font-display: swap` 내장.
+- 대안 B: `next/font/local`로 단일 `PretendardVariable.woff2`(약 2MB)를 `src/fonts/`에 복사해 로드 — 설정은 단순하나 초기 전송량 큼. A 우선, A가 빌드 파이프라인상 곤란하면 B.
+- `--font-sans` 토큰은 §1에 정의(Pretendard → 시스템 한글 폰트 폴백 스택). Tailwind v4에서 `font-sans`가 자동 적용되므로 **컴포넌트 클래스 변경 없이 전면 교체**된다.
+- 웨이트 운용 (Variable 1파일로 전부): 400 본문 / 600 소제목·레이블·비선택 탭 / 700 제목·선택 탭·버튼 / **800 히어로·날짜 배지 숫자** (기존 스펙의 500 지정 위치는 600으로 승격 — Pretendard 500은 한글에서 400과 구분이 약함).
+- 자간: 히어로 `-0.02em`(§1 hero 토큰 내장), display·h1·h2 `-0.01em` — **§1 `--text-*--letter-spacing` 토큰 모디파이어로 내장** (2026-08-16 구현 확인 후 공식화: 컴포넌트 클래스 무변경 전면 적용, `--tracking-heading`은 스케일 밖 커스텀 요소용 보조), 본문·caption `0`(음수 자간은 대형 타이포 전용 — 소형 한글에 적용 금지).
+
+### 11.3 토큰 v2
+
+- 정의는 §1 `@theme`의 "v2 모던 개편 추가" 블록에 통합했다(단일 소스 유지). 요약: 색 2(soft/bright), 폰트 스택 1, hero 타이포 2단계(자간 내장), tracking 1, radius 3단계(12/24/32px), shadow 2. **기존 토큰 값 변경 0건** — 1·2차 대비 검증 전부 유효.
+- 그림자는 딥블루 기반 저투명(8%/12%) — 회색 그림자보다 팔레트와 일관되고, 대비 요건과 무관한 순수 장식.
+
+### 11.4 히어로 패널 (§3.2 긴급 배너 대체)
+
+- 위치: 헤더 아래, 공통 컨테이너(48rem) 내 첫 요소. 상단 여백 `1.5rem`, 아래 요소와 `2rem`(마감 스트립 존재 시 스트립과 `0.75rem`).
+- 컨테이너: 배경 `--color-primary`(#093389), radius 모바일 `--radius-card`(24px) / md+ `--radius-panel`(32px), 패딩 모바일 `1.5rem` / md+ `2.5rem`, `--shadow-card`.
+- 장식(선택): 우하단 `--color-primary-bright` 원형 도형(`aria-hidden`, 텍스트 겹침 금지 — #25 장식 허용). `#7fb0f0` 도형도 허용(제한표 — 장식 전용).
+- **모드 1 — urgent 공지 바인딩** (verified+urgent 최신 1건 존재 시):
+  1. 상단 행: "긴급" 배지(배경 `--color-urgent-strong` / 흰 텍스트 15px/700 / 경고 아이콘 — §3.2와 동일 3중 병행, 8.46:1) + 게시일 `--text-caption`/`--color-primary-soft`(9.23:1 — #23)
+  2. 제목: `text-hero` / md+ `text-hero-lg`, `#ffffff`(11.37:1 — #11), 최대 3줄 말줄임, 아래 흰색 액센트 바 `4rem×4px`(장식 — 레퍼런스의 빨강 언더바는 딥블루 위 시인성 부족으로 흰색 변경)
+  3. CTA: "자세히 보기" 필 버튼 — 배경 `#ffffff`/텍스트 `#093389` 18px/700(11.37:1), radius `9999px`, `min-height: var(--spacing-touch)`, 좌우 패딩 `1.5rem`, 우측 → 아이콘(currentColor). hover: 배경 `--color-primary-soft`(텍스트 그대로 9.23:1). focus-visible: `outline 3px solid #ffffff, offset 2px`(패널 위 11.37 ≥3:1). 상세 페이지 링크
+  - 여러 urgent 시 최신 1건만 히어로, 나머지는 목록 상단(§5 규칙 유지)
+- **모드 2 — 폴백** (urgent 0건, 현재 기본): 아이브로우 "전국금융산업노동조합" caption/600/`--color-primary-soft` → 제목 "코스콤지부" hero 스케일/`#ffffff` → 부문구 "코스콤 조합원을 위한 공식 소식 공간"(사이트의 사실 서술 — 안전) 18px/400/`--color-primary-soft`(9.23:1). CTA·배지·액센트 바 없음(모드 1 전용 요소 — 2026-08-16 확정). **레퍼런스의 투쟁 문구·일정 복사 금지(§11.1). 지부 고유 슬로건으로 교체하려면 리더·fact-verifier 승인 필수.**
+- 마크업: `<section aria-label="주요 소식">`, 제목은 `<h2>`(페이지 h1은 헤더 지부명 유지 — 폴백 모드의 "코스콤지부" 중복은 h 위계상 문제없으나 `aria-label`로 구분).
+
+### 11.5 마감 스트립 + 날짜 배지 컴포넌트
+
+**마감 스트립** (레퍼런스1 하단 타임라인 바)
+- 노출 조건: verified 게시물 중 `deadline`(frontmatter)이 오늘 이후인 것 1건 이상. 0건이면 미렌더.
+- 히어로 바로 아래, 배경 `--color-primary-soft`, radius `--radius-badge`(12px), 패딩 `0.75rem 1rem`, 모바일 가로 스크롤(`overflow-x: auto`, 페이지 가로 스크롤 금지).
+- 항목(각각 해당 게시물 링크, `min-height: var(--spacing-touch)`): "M/D 제목" 15px/700/`#093389`(9.23:1 — #22), 항목 간 세로 구분선 `1×16px` `--color-primary`(장식, `aria-hidden` — 2026-08-16 확정. soft 배경 위 9.23:1로 시인 충분).
+- **마감 D-7 이내 항목**: 항목 전체를 red 칩으로 — 배경 `--color-urgent-strong`, 텍스트 `#ffffff`(8.46:1 — #14), radius `8px`, 패딩 `4px 12px`, 텍스트 앞 "D-n" 표기(색+텍스트 병행 — 색만으로 임박을 전달하지 않음). ※ soft 배경 위 빨강 텍스트는 4.52~6.87로 미달이라 금지(§2 제한표).
+- focus-visible: `outline 3px solid #093389, offset 2px`(soft 위 9.23 ≥3:1).
+
+**날짜 배지** (deadline 있는 게시물의 목록 아이템 좌측, md+에서만 — 모바일은 제목 아래 D-n 텍스트로 대체)
+- 크기 `56×56px`, radius `--radius-badge`, 세로 스택: "M/D" 18px/800 + 아래 **"D-n" 15px/600** (요일 대신 D-n 확정 — 마감 맥락에서 행동 유도 정보가 요일보다 우선, 2026-08-16).
+- 모바일 D-n 텍스트(제목 아래 메타 행 선두): 15px/700, 기본 `--color-primary`(흰 카드 위 11.37:1 — #8) / 임박(D-7 이내) `--color-urgent-strong`(8.46:1 — #12) — 배지 변형과 동일 의미론. D-n 숫자 자체가 임박도를 전달하므로 색은 보조(색 단독 의존 아님).
+- **경과 마감(D-n 음수)은 배지·모바일 D-n·마감 스트립 모두 미표시** (경과 정보는 행동 유도 가치 없음, 2026-08-16 확정). D-0(당일)은 임박 취급.
+- 운영 전제: D-n과 스트립 노출 조건은 **빌드 시점(KST) 기준** — 정적 사이트 특성상 날짜 경과를 반영하려면 일일 재빌드(또는 콘텐츠 갱신 시 재빌드) 운영이 필요하다. 재빌드 주기는 리더 확정 사항.
+- 변형: **기본** 배경 `--color-primary-soft`/텍스트 `#093389`(9.23:1) · **임박(D-7 이내)** 배경 `--color-urgent-strong`/`#ffffff`(8.46:1) · **강조** 배경 `--color-primary`/`#ffffff`(11.37:1 — 예약, 현 범위 미사용). 레퍼런스의 밝은 블루 배지(#2e7df7+흰 텍스트)는 3.89:1로 미채택.
+
+### 11.6 기존 컴포넌트 라운드 카드화
+
+| 컴포넌트 | v2 변경 (색·구조·ARIA는 기존 § 그대로) |
+|----------|------------------------------------------|
+| 탭리스트(§4.2) | 컨테이너·탭 radius `9999px`(필 형태). 크기·상태·색·키보드 규칙 불변 |
+| 목록 아이템(§5) | 구분선 리스트 → **카드 리스트**: 각 아이템 배경 `#ffffff`, radius `1rem`(16px), `--shadow-card`, 패딩 `1rem 1.25rem`, 아이템 간 gap `0.75rem`. hover: `--shadow-card-hover` + 제목 색 기존 규칙. urgent 좌측 보더 4px `--color-urgent` 유지(카드 좌변). focus 내향 아웃라인 유지. §5의 `divide` 구분선 규정은 v2에서 대체됨 |
+| 온누리 카드(§9) | radius `--radius-card`(24px) + `--shadow-card`. 색 체계(accent) 불변 |
+| 방명록(§7) | 입력 필드 radius `--radius-badge`(12px), 등록·재시도 버튼 radius `9999px`, 준비 중 카드 radius `--radius-card`. 그 외 불변 |
+| 헤더(§3.1) | 구조 불변 — Pretendard 적용과 `--tracking-heading`만 반영 |
+| 푸터(§3.4) | **딥블루 밴드**(레퍼런스2 하단): 배경 `--color-primary`, 상단 보더 제거. 지부명 `#ffffff`/700(11.37:1 — #11), 저작권 `--color-primary-soft`(9.23:1 — #23). 로고 흰 칩(`--color-bg` 배경)은 그대로 — 딥블루 위에서도 "흰 배경 위 로고" 규정 계속 충족. 칩 보더는 제거(딥블루 대비로 불필요) |
+
+### 11.7 개발자 변경 목록 (v2)
+
+| 대상 | 변경 | 구분 |
+|------|------|------|
+| `globals.css` `@theme` | v2 토큰 추가(§1 — 기존 값 변경 0건) | 필수 |
+| 폰트 | `npm i pretendard` + 서브셋 정적 서빙(§11.2 방식 A) — 클래스 변경 없이 전면 적용 | 필수 |
+| `HeroPanel` | 신규 — `UrgentBanner` 제거·대체(§11.4). urgent 바인딩+폴백 2모드 | 신규 |
+| `DeadlineStrip` | 신규 — 조건부(§11.5) | 신규 |
+| `DateBadge` | 신규 — 3변형(§11.5) | 신규 |
+| `PostList` | 카드화(§11.6) | 수정 |
+| `BoardTabs` | radius 필 형태(§11.6) | 수정 |
+| `OnnuriGuideCard` | radius·shadow(§11.6) | 수정 |
+| `GuestbookPanel` | 필드·버튼 radius(§11.6) | 수정 |
+| `SiteFooter` | 딥블루 밴드(§11.6) | 수정 |
+| `SiteHeader` | 변경 없음(폰트 자동 적용) | — |
+
+규모: 신규 컴포넌트 3, 수정 5, 제거 1(UrgentBanner), 토큰 추가 약 20줄, 폰트 도입 1식. 색 토큰 값 변경이 없으므로 기존 대비 검증은 전부 유효하고, v2 신규 조합은 §2 v2 표로 검증 완료.
 
 ---
 

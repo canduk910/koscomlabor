@@ -88,6 +88,25 @@ export function ExternalLinkIcon({ className }: IconProps) {
   );
 }
 
+/** 우향 화살표 아이콘 (히어로 CTA — 스펙 §11.4) */
+export function ArrowRightIcon({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M5 12h14" />
+      <path d="m12 5 7 7-7 7" />
+    </svg>
+  );
+}
+
 /** 공사(준비 중) 아이콘 (방명록 준비 중 카드 40px) */
 export function ConstructionIcon({ className }: IconProps) {
   return (

@@ -20,7 +20,7 @@ export function OnnuriGuideCard() {
       href={EXTERNAL_LINKS.onnuriGuide}
       target="_blank"
       rel="noopener noreferrer"
-      className="group flex min-h-touch items-center gap-3 rounded-xl border-l-4 border-accent bg-accent-tint p-4 hover:outline-2 hover:outline-accent-strong focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2 md:px-6"
+      className="rounded-card shadow-card group flex min-h-touch items-center gap-3 border-l-4 border-accent bg-accent-tint p-4 hover:outline-2 hover:outline-accent-strong focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2 md:px-6"
     >
       <BookIcon className="size-6 shrink-0 text-accent-strong" />
       <span className="min-w-0 flex-1">

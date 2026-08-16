@@ -3,7 +3,7 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
-import { formatPostDate, toIsoDateString } from "@/lib/date";
+import { daysUntilKst, formatPostDate, toIsoDateString } from "@/lib/date";
 
 /**
  * 콘텐츠 로더 — content/ 하위 markdown + frontmatter 파싱.
@@ -178,6 +178,21 @@ export function getVerifiedNews(): PostSummary[] {
 export function getLatestUrgentNotice(): PostSummary | null {
   const urgent = getVerifiedNotices().filter((post) => post.urgent);
   return urgent[0] ?? null;
+}
+
+/**
+ * 마감 스트립·날짜 배지용 (스펙 §11.5): verified 게시물 중 deadline이
+ * 오늘(KST) 이후(오늘 포함)인 것 — 마감일 오름차순.
+ * ※ 정적 프리렌더 특성상 "오늘"은 빌드 시점 기준 (impl 문서 §10 참조).
+ */
+export function getUpcomingDeadlinePosts(): PostSummary[] {
+  return [...getVerifiedNotices(), ...getVerifiedNews()]
+    .filter((post) => {
+      if (post.deadline === null) return false;
+      const days = daysUntilKst(post.deadline);
+      return days !== null && days >= 0;
+    })
+    .sort((a, b) => (a.deadline ?? "").localeCompare(b.deadline ?? ""));
 }
 
 /**

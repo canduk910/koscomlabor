@@ -11,3 +11,4 @@
 |------|----------|------|------|
 | 2026-08-16 | 초기 구성 (에이전트 4종 + 스킬 5종) | 전체 | - |
 | 2026-08-16 | backend-developer 에이전트 + union-backend-dev 스킬 추가, 오케스트레이터에 백엔드 경로 반영 | agents/backend-developer.md, skills/union-backend-dev, skills/union-page-orchestrator | NCP 백엔드(방명록 서버) 로드맵 확정, 프론트와 전문성 축 분리 |
+| 2026-08-16 | 모던 스타일 기준(§0) 추가 — Pretendard 필수, 라운드·히어로 패널 언어 | skills/union-design-system | 사용자 피드백: "디자인 구식, 폰트 촌스러움" |

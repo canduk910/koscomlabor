@@ -1,3 +1,52 @@
+# QA 리포트: 디자인 v2 모던 전면 개편 + Pretendard (6회차)
+
+- 작성: qa-tester | 작성일: 2026-08-16
+- **검증 기준 시점**: 스펙 §1(v2 토큰 통합)·§2(채택 21+v2 5조합)·§11(2026-08-16 3차 신설)·§3.2(히어로 대체 주석)·구현 §10 — frontend-designer가 해석 지점 7건을 병렬 판정 중이므로 판정 결과에 따라 본 회차 해당 항목 재대조 필요
+- 범위: 신규 HeroPanel/DeadlineStrip/DateBadge/sync-pretendard.mjs, 수정 11(globals.css·layout·page·PostList·BoardTabs·OnnuriGuideCard·GuestbookPanel·SiteFooter·content.ts·date.ts·package.json), 제거 UrgentBanner
+- 검증 방법: 스펙 값 대조 + 대비 스크립트 재실측 + 금지 사항 grep 전수 + **히어로 양 모드 실빌드**(urgent+deadline 임시 파일 라운드트립 — 삭제·클린 복원 실측) + **D-n 경계값 실행 테스트**(고정 now 주입) + 폰트 실서빙 curl + tsc/lint/build
+
+## 6회차 요약: 통과 13 | 실패 1 | 미검증 4
+
+### 실패 항목
+
+| # | 분류 | 위치 | 내용 | 수정 방법 |
+|---|------|------|------|----------|
+| 1 | 디자인 값 (경미) | `src/components/layout/SiteFooter.tsx:19` (`rounded-badge` = 12px) ↔ 스펙 §10.3 "흰색 칩 radius `8px`" · §11.6 "로고 흰 칩은 **그대로** — 칩 보더는 제거" | v2 변경 규정은 보더 제거뿐인데 칩 radius가 8px→12px로 무규정 변경됨. 구현 문서 §10에도 radius 변경 언급 없음(조용한 이탈) | `rounded-badge`→`rounded-lg`(8px) 복원. 또는 v2 radius 체계 통일 의도라면 frontend-designer 판정(마침 병렬 판정 중 — 판정 목록에 추가 요청) 후 스펙 §10.3 개정으로 정합화 |
+
+### 통과 항목
+
+| # | 분류 | 확인 내용 |
+|---|------|----------|
+| 1 | 토큰 v2 (최우선) | 기존 15색 **값 변경 0건** 재확인(grep 15건 전부 5회차 값 유지) + v2 추가분(색 2·`--font-sans`·hero/hero-lg 자간 내장·tracking·radius 12/24/32·shadow 2) 스펙 §1과 값 일치. 빌드 CSS에 v2 토큰 전부 존재. display/h1/h2 자간은 토큰 모디파이어로 내장(구현 방식 차이, 값 동일 — 개발자 해석 #1) |
+| 2 | 대비 재실측 | v2 채택 #22~#26(9.23/9.23/14.13/3.89/3.89) + 제한 3조합(#9c0d14·#d0101b·#4b5563 on soft = 6.87/4.52/6.14 미달 확인) 스크립트 재실행 — 스펙 §2 수치 완전 일치. 기존 조합은 값 무변경으로 1~5회차 실측 유효 |
+| 3 | 히어로 모드 2 (폴백, 현재 기본) | 실빌드: 지정 문구 3종("전국금융산업노동조합"/"코스콤지부"/"코스콤 조합원을 위한 공식 소식 공간") **문자 단위 일치**, CTA·배지·스트립 부재, `aria-label="주요 소식"`·제목 h2·hero 스케일/색 스펙 일치 |
+| 4 | 히어로 모드 1 (urgent 바인딩) | urgent 임시 파일 실빌드: 배지+게시일(primary-soft #23) → hero h2 제목(`line-clamp-3`) → 흰 액센트 바 4rem×4px(aria-hidden) → "자세히 보기" 필 CTA(`min-h-touch`·상세 href·hover `bg-primary-soft`·흰 포커스 링) — §11.4 구성 순서·값 전부 실측. 폴백 문구 부재 확인. 장식 원형 primary-bright aria-hidden·pointer-events-none·코너 밖 배치 |
+| 5 | 마감 스트립 | 실빌드: D-4 항목 red 칩(`bg-urgent-strong`+흰 텍스트+**"D-4" 텍스트 병행** — 색 단독 아님)·D-45 기본형(#093389 on soft), M/D 표기(8/20·9/30 — 선행 0 없음), `nav aria-label="마감 예정 일정"`, `overflow-x-auto`(ul 내부 스크롤), 항목 `min-h-touch`·상세 링크, 구분선 aria-hidden. 0건 시 미렌더(모드 2 빌드에서 부재 실측) |
+| 6 | 날짜 배지 | 56×56(`size-14`)·radius 12px·"M/D" 18px/800·"D-n" 15px/600·3변형 클래스, md+ 전용(`hidden md:flex`)·모바일 제목행 D-n 텍스트(default `text-primary` 11.37/임박 `text-urgent-strong` 8.46 — 흰 카드 위). **#2e7df7 밝은 블루 배지 미도입** 확인 |
+| 7 | D-n 로직 (경계값 실행) | `daysUntilKst` 고정 now 주입 테스트: 오늘 마감 D-0 — KST 밤·**KST 자정 직후(UTC로는 전날)** 모두 0(타임존 오차 없음), 내일 1, 지난 마감 -1(로더 `days >= 0` 필터로 스트립·배지 미표시), D-7/D-8 임박 경계, 잘못된 입력 null. `getUpcomingDeadlinePosts` 마감 오름차순 정렬 코드 확인 |
+| 8 | 금지 사항 감사 (grep 전수) | 레퍼런스 홍보물 문구·일정: 소스·content·빌드 HTML 잔존 **0건**(소스 내 "투쟁" 1건은 복사 금지 규정을 안내하는 주석 — 렌더 출력 0). `text-stroke` 0건, 원형 아이콘 사이드바 미도입, `primary-bright`(#2e7df7) 사용처 = 히어로 장식 원형 1곳뿐(텍스트 조합 0), soft 배경 위 빨강 텍스트 조합 0건, **UrgentBanner 파일 삭제·참조 0건**·`aria-label="긴급 공지"` DOM 부재 |
+| 9 | 폰트 (셀프호스팅) | 빌드 HTML의 http(s) URL 전수 = onnuri 외부 링크뿐(CDN 0건), 빌드 CSS `url()` 외부 0건, 폰트 CSS src 전부 상대경로(http 2건은 라이선스 주석). **실서빙**: CSS 200(55.8KB)·woff2 서브셋 200(34.6KB), `font-display: swap` 92건, `--font-sans` 폴백 스택 정의·빌드 CSS 반영, head에 stylesheet 링크(precedence). `sync-pretendard.mjs` postinstall 코드 확인(node_modules→public 복사) |
+| 10 | 카드화·필형 (§11.6) | PostList: 흰 카드 radius 16px(`rounded-2xl`)+`shadow-card`(hover 변형)+패딩 1rem/1.25rem+gap 0.75rem, divide 제거, urgent 좌보더·내향 포커스 유지. 탭: 컨테이너·탭 `rounded-full`만 변경(크기·상태·색·로빙 탭인덱스·키보드 코드 불변 diff 확인). 온누리: `rounded-card`+`shadow-card`, accent 불변. 방명록: 필드 12px·버튼 full·준비 카드 24px(로직 무변경 — 클래스만 diff 확인). 푸터: 딥블루 밴드(`bg-primary`·상단 보더 제거·지부명 흰/700·저작권 primary-soft #23) |
+| 11 | 접근성 회귀 | h 레벨: h1×1(헤더)→h2×2(히어로·방명록 카드) 건너뜀 없음(폴백 h2 "코스콤지부"의 h1 중복은 §11.4 명시 허용). 탭 ARIA 실측 유지(true×1/false×2). CTA 접근성 이름 "자세히 보기"(화살표 아이콘 aria-hidden)·스트립 항목 이름에 D-n+날짜+제목. 터치: CTA·스트립 항목 `min-h-touch` |
+| 12 | 간격 (§11.4·§9.1) | 헤더↓히어로 1.5rem(`mt-6`), 히어로↓스트립 0.75rem(`mt-3`), ↓온누리 카드 2rem(`mt-8`), 카드↓탭 2rem(`mt-8`) — 스펙 값 일치 |
+| 13 | 빌드·복원 | `npx tsc --noEmit` 0·`npm run lint` 0(no-css-tags 라인 예외는 사유 주석 확인)·`npm run build` 통과(/ ○ Static·상세 ● SSG 유지). 임시 파일 2건 삭제·클린 재빌드·모드 2 복귀 실측(content/ .gitkeep만) |
+
+### 비고
+
+- `src/components/notice/` 빈 디렉토리 잔존(UrgentBanner 삭제 후) — 기능 영향 없음, 정리 권고.
+- 개발자 해석 7건(자간 구현 방식·D-n 정적 한계·구분선 색·배지 D-n 채택·모바일 D-n 색·지난 마감 미표시·모드 2 액센트 바 미포함)은 코드가 문서 기재와 일치함을 확인 — frontend-designer 판정 대기 항목으로 유지. 특히 **해석 #2(D-n은 빌드 시점 고정 — 일일 재빌드 없으면 날짜 경과 시 D-n·스트립이 갱신되지 않음)는 운영 정책 결정 필요(리더)**.
+
+### 미검증
+
+| # | 항목 | 사유 |
+|---|------|------|
+| 1 | 실브라우저 폰트 렌더 품질 (Pretendard 적용 시각 확인, 폴백 전환) | 브라우저 환경 없음 — 서빙·선언·스택은 실측 완료 |
+| 2 | 375px 히어로 타이포(40px) 줄바꿈·말줄임 실측, 마감 스트립 가로 스크롤 실조작 | 실뷰포트 환경 없음 |
+| 3 | 방명록 실통신 회귀 | 이번 변경이 radius 클래스뿐(로직 diff 무변경 확인)이라 4회차 실통신 결과 유효 — 재실행은 생략 (통신 계약 재검증 아님을 명시) |
+| 4 | 스크린리더 실낭독 (기존 회차와 동일) | 환경 제약 |
+
+---
+
 # QA 리포트: 실제 CI(금융노조+코스콤) 반영 (5회차)
 
 - 작성: qa-tester | 작성일: 2026-08-16
