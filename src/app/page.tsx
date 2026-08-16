@@ -6,6 +6,7 @@ import {
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { UrgentBanner } from "@/components/notice/UrgentBanner";
+import { OnnuriGuideCard } from "@/components/home/OnnuriGuideCard";
 import { BoardTabs } from "@/components/board/BoardTabs";
 
 /**
@@ -23,7 +24,11 @@ export default function Home() {
       {urgentNotice !== null ? <UrgentBanner post={urgentNotice} /> : null}
       <main className="flex-1">
         <div className="mx-auto mt-8 w-full max-w-page px-4 md:px-6">
-          <BoardTabs notices={notices} news={news} />
+          {/* 가이드 링크 카드 — 긴급 배너 아래·탭리스트 위, 카드-탭 간격 2rem (스펙 §9.1) */}
+          <OnnuriGuideCard />
+          <div className="mt-8">
+            <BoardTabs notices={notices} news={news} />
+          </div>
         </div>
       </main>
       <SiteFooter />
