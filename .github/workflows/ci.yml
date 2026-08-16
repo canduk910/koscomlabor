@@ -23,6 +23,9 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
+      # 라우트 타입(LayoutProps/PageProps)은 Next가 생성한다 — tsc 전에 생성해야
+      # 로컬(.next 존재)과 CI(클린 체크아웃)의 검사 결과가 일치한다.
+      - run: npx next typegen
       - run: npx tsc --noEmit
       - run: npm run lint
       - name: Build (NEXT_PUBLIC_API_BASE_URL 은 CI 더미 값 — 실배포 값은 서버 compose 가 주입)
