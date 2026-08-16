@@ -399,3 +399,199 @@ T02/T14/T27 실응답 모두: 필드 정확히 `id`, `author`, `body`, `createdA
 
 - DB: `ip_hash` 64자 hex(HMAC-SHA-256)만 저장, 원문 IP 컬럼 없음 (psql 확인)
 - 서버 로그: 요청 ID·메서드·경로·상태코드·소요시간만 기록. 본문·닉네임·클라이언트 IP 미기록 (grep 확인 — 127.0.0.1 은 기동 시 자체 바인드 주소 1건뿐)
+
+---
+---
+
+# Part 2 — 게시물(공지·소식) DB 전환 + Admin 명세 (2026-08-16, 승인 대기 — 구현 금지 상태)
+
+**계약 방향 주의 (방명록과 반대)**: Part 1(방명록)은 프론트 `guestbook.ts`가 계약의 출처였다. **Part 2는 이 명세가 계약의 단일 출처이고 프론트가 명세를 따라온다** (파일 기반 `content.ts`의 `PostSummary`/`PostDetail`은 파일 시대의 타입으로, 이번 전환에서 프론트가 API 계약에 맞춰 재작성됨). 기존 프론트 타입과의 매핑은 §11.4.
+
+## 10. 데이터 모델
+
+### 10.1 `posts` 테이블
+
+```sql
+CREATE TABLE posts (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  category      text NOT NULL CHECK (category IN ('notice','news')),
+  type          text NOT NULL CHECK (type IN ('link','article')),
+  title         varchar(300)  NOT NULL,          -- 링크형: 메타데이터 자동 추출 후 admin이 수정 가능
+  body          text,                            -- 작성형: markdown 필수 / 링크형: 선택(한줄 코멘트)
+  url           text,                            -- 링크형 필수 (http/https)
+  source        varchar(200),                    -- 작성형 출처. news+article은 필수(기존 원칙 계승), notice는 선택
+  urgent        boolean NOT NULL DEFAULT false,
+  deadline      date,                            -- KST 마감일 (마감 스트립·D-n 배지용). NULL = 마감 없음
+  published_at  timestamptz NOT NULL DEFAULT now(),  -- 표시·정렬 기준 게시일. 자동 기록·수정 불가 (리더 판정 §15-6: 게시 시점 투명성 — 원문서 발행일은 본문·출처로 표기)
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now(),
+  deleted_at    timestamptz,                     -- soft delete
+  CONSTRAINT posts_link_needs_url     CHECK (type <> 'link'    OR url  IS NOT NULL),
+  CONSTRAINT posts_article_needs_body CHECK (type <> 'article' OR body IS NOT NULL),
+  CONSTRAINT posts_news_article_needs_source
+    CHECK (NOT (category = 'news' AND type = 'article') OR source IS NOT NULL)
+);
+
+CREATE INDEX idx_posts_list ON posts (category, urgent DESC, published_at DESC, id DESC)
+  WHERE deleted_at IS NULL;
+```
+
+- 링크형의 출처 = URL 자체 (§14 게시 정책). `source` 컬럼은 링크형에서 사용하지 않음(NULL)
+- 정렬 규약: **urgent 우선 → published_at 내림차순** (기존 디자인 스펙 §5 계승, 서버가 정렬 책임)
+
+### 10.2 `post_attachments` 테이블
+
+```sql
+CREATE TABLE post_attachments (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id      uuid NOT NULL REFERENCES posts(id),
+  filename     varchar(255) NOT NULL,   -- 원본 파일명 (표시·다운로드명)
+  storage_key  varchar(255) NOT NULL,   -- 저장 키 (uuid.<ext>). 로컬 볼륨 → Object Storage 이전 시에도 키 유지
+  mime_type    varchar(100) NOT NULL,
+  size_bytes   bigint NOT NULL,
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  deleted_at   timestamptz
+);
+CREATE INDEX idx_attachments_post ON post_attachments (post_id) WHERE deleted_at IS NULL;
+```
+
+### 10.3 `admin_sessions` 테이블
+
+```sql
+CREATE TABLE admin_sessions (
+  token_hash   char(64) PRIMARY KEY,    -- 세션 토큰의 SHA-256 hex (원문 토큰 비저장)
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  expires_at   timestamptz NOT NULL,
+  last_used_at timestamptz NOT NULL DEFAULT now()
+);
+```
+
+## 11. 공개 API (인증 없음)
+
+공통: camelCase, ISO 8601 UTC, 에러 형식 `{ error: { code, message } }` (§2.4 코드 체계 공유).
+
+### 11.1 `GET /posts?category=&urgent=&limit=&offset=`
+
+| 파라미터 | 규칙 |
+|---|---|
+| `category` | 필수. `notice` \| `news` |
+| `urgent` | 선택. `true`면 urgent 글만 (히어로/긴급 배너 바인딩: `?category=notice&urgent=true&limit=1`) |
+| `limit`/`offset` | 방명록과 동일 (limit 1–100 기본 50, offset ≥ 0) |
+
+응답 `200`: **최상위 배열** (방명록과 shape 규약 통일 — 승인 항목 §15-1) + `X-Total-Count` 헤더. 원소 = PostSummary:
+
+```json
+{
+  "id": "uuid", "category": "notice", "type": "link",
+  "title": "...", "url": "https://... | null", "source": "... | null",
+  "urgent": false, "deadline": "2026-09-01 | null",
+  "publishedAt": "2026-08-16T02:00:00.000Z",
+  "attachments": [ { "id": "uuid", "filename": "공문.pdf", "mimeType": "application/pdf",
+                     "sizeBytes": 123456, "url": "/files/<attachmentId>/공문.pdf" } ]
+}
+```
+
+`body`는 목록에서 제외 (상세에서만). `attachments[].url`은 API 도메인 상대 경로 — 프론트가 base URL을 붙임.
+
+### 11.2 `GET /posts/:id`
+
+응답 `200`: PostSummary + `"body": "markdown 원문 | null"`. 없는 id/삭제된 글: `404 NOT_FOUND`.
+
+### 11.3 첨부 공개 서빙 `GET /files/:attachmentId/:filename`
+
+- DB 조회로만 storage_key 해석 (경로 조작 원천 차단 — 사용자 입력이 파일시스템 경로에 닿지 않음)
+- `:filename`은 다운로드 표시명 용도 (DB의 filename과 불일치 시 404)
+- `Content-Disposition: inline`(이미지)/`attachment`(pdf), `Cache-Control: public, max-age=31536000, immutable` (storage_key가 내용 불변이므로)
+
+### 11.4 기존 프론트 타입과의 매핑 (프론트 재작성 가이드)
+
+| 기존 content.ts (파일 기반) | 신규 API | 비고 |
+|---|---|---|
+| `slug: string` | `id: string` (uuid) | 상세 라우트 `/notices/[slug]` → `/notices/[id]` |
+| `dateIso`/`dateLabel`/`dateValue` | `publishedAt` 하나 | 표시 포맷·정렬값은 프론트 파생 계층(date.ts) 책임 — API는 정본만 제공 |
+| `category: "notice"\|"news"\|"page"` | `"notice"\|"news"` | `page`는 DB 전환 대상 아님 (파일 유지) |
+| `urgent`, `deadline`, `source`, `title`, `body` | 동명 필드 | deadline은 `YYYY-MM-DD` 문자열 유지 |
+| (없음) | `type`, `url`, `attachments` | 신규 — 링크 카드/첨부 UI 필요 |
+| `verified` frontmatter | (없음) | §14 게시 정책으로 대체 |
+
+## 12. Admin 인증
+
+### 12.1 방식: 비밀번호 → 서버 세션 (httpOnly 쿠키)
+
+- **비밀번호 저장**: 환경변수 `ADMIN_PASSWORD_HASH` = **argon2id** 해시 (생성 스크립트 제공 예정). argon2id 선택 사유: 메모리 하드 — GPU 대입에 강함. alpine(musl) prebuilt 확인 후 빌드 이슈 시 bcrypt로 대체 (승인 항목 §15-3)
+- `POST /admin/login` body `{ "password": "..." }` → 검증 성공 시:
+  - 토큰: 32바이트 무작위 → **SHA-256 해시만 DB 저장** (DB 유출 시에도 세션 탈취 불가)
+  - 만료: 발급 후 **12시간** + 사용 시 `last_used_at` 갱신, 만료분은 로그인 시 배치 삭제
+  - 쿠키: `Set-Cookie: admin_session=<토큰>; HttpOnly; Secure; SameSite=Lax; Path=/admin; Max-Age=43200` — **host-only** (union-api 도메인, Domain 속성 미설정)
+  - 응답 `200 { "ok": true, "expiresAt": "..." }` / 실패 `401 UNAUTHORIZED` (계정 존재 여부 힌트 없는 단일 메시지)
+- `POST /admin/logout` → 세션 삭제 + 쿠키 만료. `GET /admin/me` → 세션 유효성 확인 (admin UI 초기 로드용)
+- **CORS 변경 필요**: admin UI는 www.koscomlabor.cloud(프론트)에서 union-api로 fetch — 같은 사이트(eTLD+1 동일)이므로 SameSite=Lax 쿠키가 전송되지만, **CORS에 `Access-Control-Allow-Credentials: true` 추가 필요** (허용 Origin은 기존 명시 목록 유지, `*` 불가 — 승인 항목 §15-2)
+- 로그인 rate limit: **IP당 1분 5회, 1시간 10회** (429). 실패도 카운트 (대입 방어)
+- 감사 로그: 로그인 성공/실패(IP 해시), 세션 발급·만료 — 비밀번호·토큰 원문 미로깅
+
+### 12.2 기존 방명록 정적 토큰과의 관계 (판단)
+
+**병행 운영을 제안**한다: ① 기존 `Authorization: Bearer ADMIN_API_TOKEN` (curl 운영 경로 — 유지) ② 신규 세션 쿠키 (admin UI 경로). 방명록 `DELETE /admin/guestbook/:id` 및 신규 admin 엔드포인트 전부 **둘 중 하나면 인증 통과**. 사유: 장애 시 UI 없이도 curl 복구 경로 확보, 마이그레이션 리스크 0. UI 정착 후 정적 토큰 폐기는 별도 결정 (승인 항목 §15-4).
+
+## 13. Admin CRUD + 링크 메타데이터 + 파일 업로드 (전부 세션/토큰 인증 + `/admin/*` rate limit)
+
+### 13.1 게시물 CRUD
+
+| 메서드/경로 | 동작 | 성공 |
+|---|---|---|
+| `POST /admin/posts` | 생성. body = `{ category, type, title, body?, url?, source?, urgent?, deadline? }` — publishedAt 은 서버 자동 기록(수정 불가, §15-6 판정). 10.1 제약을 서버 검증(길이·필수 조합·URL 형식)으로 선행 | `201` Post 상세 shape |
+| `PATCH /admin/posts/:id` | 부분 수정 (전달된 필드만). type 변경 시 제약 재검증 | `200` Post 상세 |
+| `DELETE /admin/posts/:id` | soft delete (`deleted_at`) — 첨부도 목록에서 숨김(파일은 보존) | `200 { deleted, id }` |
+| `GET /admin/posts?category=&limit=&offset=` | 삭제 포함 전체 목록 (`deletedAt` 필드 노출) — 관리 화면용 | `200` 배열 |
+
+검증 수치(안): title 1–300자, body ≤ 50,000자, source ≤ 200자, url ≤ 2,000자·http/https만.
+
+### 13.2 링크 메타데이터 추출 `POST /admin/posts/preview-link`
+
+body `{ "url": "https://..." }` → 응답 `200 { "title": "...", "siteName": "... | null" }` (og:title → `<title>` 순). 실패 시 `422 { error: { code: "LINK_FETCH_FAILED" } }` — admin이 제목 수동 입력으로 진행 (자동 추출은 편의 기능, 실패가 게시를 막지 않음).
+
+**SSRF 방어 (필수 설계)**:
+
+1. 스킴 `http:`/`https:`만, 포트 80/443만
+2. **DNS 해석 결과 IP 검증**: 사설·예약 대역 전면 차단 — 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16(메타데이터 서비스), 0.0.0.0/8, 100.64.0.0/10, ::1, fc00::/7, fe80::/10, IPv4-mapped IPv6
+3. **DNS 리바인딩 차단**: 검증한 IP로 직접 연결 (커스텀 lookup 고정 — 검증과 연결 사이 재해석 금지)
+4. 리다이렉트 최대 3회, **각 홉마다 1–3 재검증**
+5. 타임아웃: 연결 3초/전체 8초. 응답 본문 최대 1MB, `Content-Type: text/html`만 파싱
+6. 결과는 서버가 저장하지 않음 (admin 확인 후 POST /admin/posts로 확정) — 추출 실패·변조 리스크를 admin 육안 확인이 최종 방어
+
+### 13.3 파일 업로드
+
+| 항목 | 설계 |
+|---|---|
+| 엔드포인트 | `POST /admin/posts/:id/attachments` (multipart/form-data, 필드명 `file`) → `201` attachment shape / `DELETE /admin/attachments/:id` (soft) |
+| 화이트리스트 | **확장자+MIME 이중 검사**: pdf, png, jpg/jpeg, webp. MIME 스니핑(매직 바이트) 검증 — 확장자 위장 차단 |
+| 크기 제한 | 파일당 **10MB**, 게시물당 **5개** (승인 항목 §15-5) |
+| 저장 | Docker 명명 볼륨 `uploads` → 컨테이너 `/data/uploads/<storage_key>` (storage_key = uuid.ext — 원본 파일명은 DB에만, 파일시스템에 사용자 입력 미반영) |
+| Object Storage 이전 여지 | 저장 계층을 `storage_key` 기반 인터페이스로 추상화 — 이전 시 서빙 경로만 교체, DB 무변경 |
+| 백업 | 기존 pg_dump 크론에 uploads 볼륨 tar 백업 추가 (03:05 KST, 동일 14일 롤링) — 07 문서 갱신 예정 |
+| nginx/caddy | 요청 크기 상한을 caddy 블록에서 12MB로 상향 필요 (현재 방명록 기준) |
+
+## 14. 게시 정책 (명문화 — 리더 지시 반영)
+
+1. **admin 인증자가 게시한 글 = 지부 공식 게시.** 내용 검증 책임은 인증된 담당자(사람)에게 있다. 백엔드는 인증·형식 검증만 수행하고 내용의 사실성을 판단하지 않는다
+2. **링크형은 URL 자체가 출처다.** 별도 source 불요. 작성형은 기존 원칙 계승 — news는 출처 필수
+3. **기존 verified 파일 게이트는 AI 경유 게시(파일 기반 content/)에만 존속한다.** DB 게시물에는 verified 개념이 없다 (1의 원칙으로 대체)
+
+## 15. 리더 승인 결정 목록 (Part 2) — 판정 완료 (2026-08-16)
+
+판정: 1 승인 / 2 승인(조건: origin 정확 매칭 allowlist 유지·와일드카드 금지, credentials 는 프로덕션 도메인+localhost:3000 만) / 3 승인(musl 이슈 시 bcrypt 폴백, 선택 결과 기록) / 4 승인(정적 토큰 = 복구용으로 용도 명시) / 5 승인 / **6 불허 — publishedAt 자동 기록·수정 불가** / 7 승인 / 8 승인. 원문 목록은 아래 보존.
+
+1. 목록 응답 shape: 최상위 배열 + X-Total-Count (방명록과 통일) — 프론트가 따라올 기준
+2. **CORS `Access-Control-Allow-Credentials: true` 추가** (세션 쿠키 전송용 — 보안 영향 있는 변경)
+3. 비밀번호 해시 argon2id (musl 빌드 이슈 시 bcrypt 대체)
+4. 인증 병행 운영: 세션 쿠키 + 기존 정적 Bearer 유지 (§12.2)
+5. 업로드 한도: pdf/png/jpg/webp, 파일당 10MB, 게시물당 5개
+6. `publishedAt` admin 수정 허용 (게시일 소급 표기 가능 — 운영 편의 vs 기록 정확성)
+7. 상세 라우트 슬러그 → uuid 전환 (`/notices/[id]`) — web-developer 합의 필요
+8. 검증 수치(§13.1)와 정렬 규약(urgent 우선 → publishedAt DESC)
+
+## 16. 마이그레이션 전략
+
+- `content/notices/`, `content/news/` 실사: **.gitkeep만 존재, 게시물 0건 — 이관 대상 없음 확인** (2026-08-16)
+- 따라서 데이터 이관 없이 신규 마이그레이션 파일(`002_create_posts.sql`, `003_create_admin_sessions.sql`)만 추가
+- 파일 기반 로더(content.ts)는 `page` 카테고리용으로 존속 — 프론트 전환 완료 후 notice/news 경로만 제거 (web-developer 영역)

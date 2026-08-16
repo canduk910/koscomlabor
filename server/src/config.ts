@@ -7,10 +7,14 @@ export interface AppConfig {
   port: number;
   databaseUrl: string;
   adminApiToken: string;
+  adminPasswordHash: string;
   ipHashSecret: string;
   corsOrigins: string[];
   trustProxy: boolean;
   logLevel: string;
+  uploadDir: string;
+  /** 세션 쿠키 Secure 속성 — 프로덕션 true 고정, 로컬 http 테스트 시에만 false */
+  cookieSecure: boolean;
 }
 
 function required(name: string): string {
@@ -47,14 +51,22 @@ export function loadConfig(): AppConfig {
     throw new Error("CORS_ORIGINS 는 명시적 Origin 목록이어야 합니다 ('*' 금지).");
   }
 
+  const adminPasswordHash = required("ADMIN_PASSWORD_HASH");
+  if (!adminPasswordHash.startsWith("$argon2") && !adminPasswordHash.startsWith("$2")) {
+    throw new Error("ADMIN_PASSWORD_HASH 는 argon2/bcrypt 해시여야 합니다 (scripts/hash-password.mjs 로 생성).");
+  }
+
   return {
     host: process.env.HOST ?? "127.0.0.1",
     port,
     databaseUrl: required("DATABASE_URL"),
     adminApiToken,
+    adminPasswordHash,
     ipHashSecret,
     corsOrigins,
     trustProxy: (process.env.TRUST_PROXY ?? "true") === "true",
     logLevel: process.env.LOG_LEVEL ?? "info",
+    uploadDir: process.env.UPLOAD_DIR ?? "./uploads",
+    cookieSecure: (process.env.COOKIE_SECURE ?? "true") === "true",
   };
 }

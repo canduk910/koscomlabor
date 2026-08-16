@@ -9,6 +9,7 @@ export type ErrorCode =
   | "NOT_FOUND"
   | "PAYLOAD_TOO_LARGE"
   | "RATE_LIMITED"
+  | "LINK_FETCH_FAILED"
   | "INTERNAL_ERROR";
 
 export interface ErrorBody {

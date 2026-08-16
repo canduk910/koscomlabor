@@ -19,10 +19,13 @@ export function HeroPanel({ post }: { post: PostSummary | null }) {
       aria-label="주요 소식"
       className="rounded-card bg-primary shadow-card relative overflow-hidden p-6 md:rounded-panel md:p-10"
     >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-12 -bottom-12 size-36 rounded-full bg-primary-bright"
-      />
+      {/* 장식 원형은 모드 1 전용 (§11.4 개정 — QA 9회차 디자이너 판정: 모드 2 록업과의 겹침 방지) */}
+      {post !== null ? (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-12 -bottom-12 size-36 rounded-full bg-primary-bright"
+        />
+      ) : null}
       {post !== null ? (
         <div className="relative z-10">
           <p className="flex flex-wrap items-center gap-3">
@@ -48,14 +51,19 @@ export function HeroPanel({ post }: { post: PostSummary | null }) {
         </div>
       ) : (
         <div className="relative z-10">
-          <p className="text-caption font-semibold text-primary-soft">
-            전국금융산업노동조합
-          </p>
-          <h2 className="font-display mt-2 text-hero font-bold tracking-[-0.03em] text-white md:text-hero-lg">
-            코스콤지부
+          {/* §11.4 6차 개정: 명칭 2줄 등폭 록업 (§13.5.2 방식·비율 1.183 — 두 줄 모두
+              Gmarket Bold 700 / -0.02em / 행간 1.15 / #ffffff. 크기는 스펙 확정 계산값:
+              모바일 30.8/26px, md+ 66.2/56px) */}
+          <h2 className="flex flex-col">
+            <span className="font-display text-[30.8px]/[1.15] font-bold tracking-[-0.02em] whitespace-nowrap text-white md:text-[66.2px]/[1.15]">
+              전국금융산업노동조합
+            </span>
+            <span className="font-display text-[26px]/[1.15] font-bold tracking-[-0.02em] whitespace-nowrap text-white md:text-[3.5rem]/[1.15]">
+              코스콤(한국증권전산)지부
+            </span>
           </h2>
           <p className="mt-4 text-body font-normal text-primary-soft">
-            코스콤 조합원을 위한 공식 소식 공간
+            코스콤 조합원을 위한 정보 공유
           </p>
         </div>
       )}
