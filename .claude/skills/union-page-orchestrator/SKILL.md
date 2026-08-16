@@ -1,6 +1,6 @@
 ---
 name: union-page-orchestrator
-description: "코스콤지부 노조 공식페이지 에이전트 팀(정밀검증·디자이너·개발자·QA)을 조율하는 오케스트레이터. 공지/소식/콘텐츠 게시, 페이지·기능 추가, 디자인 변경, 버그 수정 등 노조 페이지 관련 작업 요청 시 반드시 사용할 것. 후속 작업(다시 실행, 재실행, 업데이트, 수정, 보완, 개선, '공지만 다시', '디자인만 바꿔줘', 이전 결과 기반 작업)에도 반드시 이 스킬을 사용. 단순 질문/조회는 직접 응답 가능."
+description: "코스콤지부 노조 공식페이지 에이전트 팀(정밀검증·디자이너·프론트/백엔드 개발자·QA)을 조율하는 오케스트레이터. 공지/소식/콘텐츠 게시, 페이지·기능 추가, 디자인 변경, 버그 수정, 백엔드/API/NCP/방명록 서버 작업 등 노조 페이지 관련 작업 요청 시 반드시 사용할 것. 후속 작업(다시 실행, 재실행, 업데이트, 수정, 보완, 개선, '공지만 다시', '디자인만 바꿔줘', 이전 결과 기반 작업)에도 반드시 이 스킬을 사용. 단순 질문/조회는 직접 응답 가능."
 ---
 
 # Union Page Orchestrator
@@ -21,6 +21,7 @@ description: "코스콤지부 노조 공식페이지 에이전트 팀(정밀검�
 | frontend-designer | `frontend-designer` | 디자인 토큰·스펙 설계 | union-design-system | `_workspace/02_designer_spec.md` |
 | web-developer | `web-developer` | Next.js 구현 | union-webapp-dev | 소스 코드 + `_workspace/03_developer_impl.md` |
 | qa-tester | `qa-tester` | 통합 정합성·접근성 검증 | union-qa-testing | `_workspace/04_qa_report.md` |
+| backend-developer | `backend-developer` | NCP 백엔드 설계·구현 | union-backend-dev | `_workspace/06_backend_api_spec.md`, `07_backend_impl.md` |
 
 모든 Agent 호출에 `model: "opus"`를 명시한다 (세션 모델이 더 상위 티어면 생략하여 상속해도 된다).
 
@@ -44,6 +45,7 @@ description: "코스콤지부 노조 공식페이지 에이전트 팀(정밀검�
 | 신규 기능/페이지 | (콘텐츠 있으면 verifier) → designer → developer → qa | 전체 파이프라인 |
 | 디자인 변경 | designer → developer → qa | 검증 게이트 생략 가능 |
 | 버그 수정 | developer → qa | 콘텐츠 무관 시 |
+| 백엔드/API 작업 | backend-developer → (프론트 연동 시 web-developer) → qa | 아키텍처 미확정 사항은 사용자 확인 후 진행. QA는 API 명세 ↔ 프론트 타입 교차 검증 필수 |
 
 2. `_workspace/` 생성, 사용자 입력(콘텐츠 원문, 요구사항)을 `_workspace/00_input/`에 저장
 3. `TaskCreate`로 이번 실행의 작업 목록을 등록한다 (의존 관계 포함)
