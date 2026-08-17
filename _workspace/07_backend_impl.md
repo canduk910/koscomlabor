@@ -853,3 +853,34 @@ docker compose --profile tools run --rm migrate \
   admin `PostForm` 분류 선택지, 메인 노동교육 섹션)은 web-developer 영역. **프론트가
   `education` 을 파서에 등록하지 않으면 목록 응답 전체가 `invalidResponse` 로 떨어진다** —
   QA 는 `src/lib/api/posts.ts` 의 `parsePostSummary` 조건절을 반드시 교차 확인할 것
+
+### 10.8 프로덕션 적용 기록 (2026-08-17, 리더 수행)
+
+커밋 `b9795cc`. §10.5 절차를 그대로 따랐고 편차 없음.
+
+| 단계 | 결과 |
+|------|------|
+| **②-1 사전 관문** | 프로덕션 `pg_constraint` 조회 → `posts_category_check` **이름 일치 확인**. 불일치면 중단할 지점이었다 |
+| ① rsync `server/` → `app/` | 완료 |
+| ② DB 백업 | `/root/backups/pre_education_20260817_1704.dump` (11,969 bytes) |
+| ③④ migrate 재빌드 → 적용 | `1755300000004_add-education-category` 적용 |
+| ⑤ 제약 반영 확인 | `CHECK (category = ANY (ARRAY['notice','news','education']))` |
+| ⑥ API 재빌드 + 재기동 | Recreated → Started (db healthy 대기 후) |
+| ⑦ 기동 확인 | Server listening, `/health` 200, 오류 로그 없음 |
+
+**⑧ 스모크 실측 (`https://union-api.koscomlabor.cloud`):**
+
+```
+GET /posts?category=education → 200, X-Total-Count: 0   ← 적용 전에는 400 이었다
+GET /posts?category=edu       → 400 "category 는 notice, news, education 중 하나여야 합니다 (필수)."
+GET /posts?category=notice    → 200, X-Total-Count: 0   (회귀 없음)
+GET /posts?category=news      → 200, X-Total-Count: 1   (회귀 없음)
+GET /guestbook                → 200                     (회귀 없음)
+GET https://koscomlabor.cloud/ → 200                     (구버전 프론트 정상)
+```
+
+**API 를 프론트보다 먼저 배포한 근거가 실측으로 확인됐다** — 구버전 프론트는 `notice|news`
+만 요청하므로 education 이 그 파서에 도달할 경로가 없다(§10.7 리스크는 신버전 프론트에만 적용).
+
+**초기 데이터 5건은 아직 등록하지 않았다.** 프론트(노동교육 섹션) 배포 후 등록한다 —
+등록 데이터·근거는 `_workspace/00_input/decision-education-content.md`.
