@@ -107,6 +107,25 @@ export function ArrowRightIcon({ className }: IconProps) {
   );
 }
 
+/** 하향 화살표 아이콘 (섹션 바로가기 칩 16px — 스펙 §15.4: "아래로 이동" 행동 예고) */
+export function ArrowDownIcon({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 5v14" />
+      <path d="m19 12-7 7-7-7" />
+    </svg>
+  );
+}
+
 /** 공사(준비 중) 아이콘 (방명록 준비 중 카드 40px) */
 export function ConstructionIcon({ className }: IconProps) {
   return (

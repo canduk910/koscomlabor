@@ -11,6 +11,7 @@ import {
 } from "@/lib/api/admin";
 import { getApiConnection } from "@/lib/api/http";
 import { formatEntryDate } from "@/lib/date";
+import { POST_CATEGORY_LABELS } from "@/lib/postCategories";
 import { UrgentBadge } from "@/components/ui/UrgentBadge";
 import { DocumentIcon, ConstructionIcon, WarningIcon } from "@/components/ui/icons";
 import { EmptyState } from "@/components/board/EmptyState";
@@ -317,7 +318,8 @@ export function AdminApp() {
           </h3>
           <PostForm
             initial={editing === "new" ? null : editing}
-            onSaved={() => {
+            onSaved={(savedNotice) => {
+              setNotice(savedNotice); // 폼이 사라지므로 결과 문구는 여기서 표시한다
               setEditing(null);
               reload();
             }}
@@ -356,7 +358,7 @@ export function AdminApp() {
                     </span>
                     <span className="mt-1 flex flex-wrap items-center gap-x-2 text-caption text-ink-muted">
                       <span>{post.type === "link" ? "링크형" : "작성형"}</span>
-                      <span>{post.category === "notice" ? "공지사항" : "금융노조 소식"}</span>
+                      <span>{POST_CATEGORY_LABELS[post.category]}</span>
                       <time dateTime={post.publishedAt}>{formatEntryDate(post.publishedAt)}</time>
                       {post.urgent ? <UrgentBadge /> : null}
                       {post.attachments.length > 0 ? (

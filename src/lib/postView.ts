@@ -1,4 +1,9 @@
-import type { ApiAttachment, ApiPostDetail, ApiPostSummary } from "@/lib/api/posts";
+import type {
+  ApiAttachment,
+  ApiPostDetail,
+  ApiPostSummary,
+  PostCategory,
+} from "@/lib/api/posts";
 import { resolveApiUrl } from "@/lib/api/http";
 import { daysUntilKst, formatEntryDate } from "@/lib/date";
 
@@ -10,7 +15,8 @@ import { daysUntilKst, formatEntryDate } from "@/lib/date";
 
 export interface PostListItem {
   id: string;
-  category: "notice" | "news";
+  /** 분류는 API 정본 타입을 재사용한다 — 리터럴 재기술 금지 (§15.6R-H #3) */
+  category: PostCategory;
   type: "link" | "article";
   title: string;
   urgent: boolean;

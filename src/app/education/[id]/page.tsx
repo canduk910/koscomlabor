@@ -7,27 +7,29 @@ import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { PostArticle } from "@/components/board/PostArticle";
 
-interface NewsPageProps {
+interface EducationPageProps {
   params: Promise<{ id: string }>;
 }
 
 /**
- * 금융노조 소식 상세 — DB(API) 기반, id는 uuid (§15-7 슬러그→id 전환 승인).
- * ISR revalidate 60초. 미존재·삭제된 id는 404.
+ * 노동교육 상세 (§15.6R-G) — `notices/[id]`·`news/[id]` 와 동일 구조.
+ * 링크형 교육 게시물은 카드에서 외부로 직행하므로 이 라우트는 **작성형 교육 게시물과
+ * 직접 URL 접근·공유를 위한 경로**다. 미존재·삭제·분류 불일치 id는 404.
+ * ISR revalidate 60초.
  */
 export const revalidate = 60;
 
-export async function generateMetadata({ params }: NewsPageProps): Promise<Metadata> {
+export async function generateMetadata({ params }: EducationPageProps): Promise<Metadata> {
   const { id } = await params;
   const result = await getPost(id);
-  if (!result.ok || result.data.category !== "news") return {};
+  if (!result.ok || result.data.category !== "education") return {};
   return { title: `${result.data.title} — 전국금융산업노동조합 코스콤(한국증권전산)지부` };
 }
 
-export default async function NewsDetailPage({ params }: NewsPageProps) {
+export default async function EducationDetailPage({ params }: EducationPageProps) {
   const { id } = await params;
   const result = await getPost(id);
-  if (!result.ok || result.data.category !== "news") notFound();
+  if (!result.ok || result.data.category !== "education") notFound();
 
   return (
     <>
@@ -35,7 +37,7 @@ export default async function NewsDetailPage({ params }: NewsPageProps) {
       <main className="flex-1">
         <PostArticle
           post={toPostDetailView(result.data)}
-          backHref={ROUTES.homeSection("news")}
+          backHref={ROUTES.homeSection("education")}
         />
       </main>
       <SiteFooter />

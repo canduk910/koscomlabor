@@ -23,7 +23,8 @@ function PreparingCard() {
   return (
     <div className="rounded-card border border-border-strong bg-surface px-4 py-8 text-center">
       <ConstructionIcon className="mx-auto size-10 text-border-strong" />
-      <h2 className="mt-4 text-h2 text-ink">방명록 준비 중입니다</h2>
+      {/* §15.9.1: 방명록 섹션 h2 아래에 놓이므로 h3 (text-h2 토큰 유지 — 시각 변화 0) */}
+      <h3 className="mt-4 text-h2 text-ink">방명록 준비 중입니다</h3>
       <p className="mt-2 text-body font-normal text-ink-muted">
         방명록 기능을 준비하고 있습니다. 준비가 끝나면 이곳에서 글을 남길 수
         있습니다.

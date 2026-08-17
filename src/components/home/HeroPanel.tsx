@@ -11,7 +11,9 @@ import { ArrowRightIcon } from "@/components/ui/icons";
  *   투쟁 문구·일정은 미검증 콘텐츠이므로 어떤 형태로도 복사 금지 (§11.1).
  * - 우하단 장식 원형(--color-primary-bright)은 aria-hidden 장식 — 텍스트 겹침 금지 규정에
  *   따라 코너 밖으로 3/4을 내보내고 콘텐츠(z-10) 아래에 둔다.
- * - 제목은 h2 (페이지 h1은 헤더 지부명 유지 — §11.4 마크업 규정).
+ * - 제목 요소: 모드 1은 h2 유지(실제 콘텐츠 제목·페이지 1순위 정보), 모드 2 록업은
+ *   <p>(§15.9.1 — h1 지부명과 문자열이 완전 중복돼 스크린리더가 같은 이름을 두 제목으로 읽는다).
+ *   페이지 h1은 헤더 지부명 유지 (§11.4 마크업 규정).
  */
 export function HeroPanel({ post }: { post: PostListItem | null }) {
   return (
@@ -54,14 +56,17 @@ export function HeroPanel({ post }: { post: PostListItem | null }) {
           {/* §11.4 6차 개정: 명칭 2줄 등폭 록업 (§13.5.2 방식·비율 1.183 — 두 줄 모두
               Gmarket Bold 700 / -0.02em / 행간 1.15 / #ffffff. 크기는 스펙 확정 계산값:
               모바일 30.8/26px, md+ 66.2/56px) */}
-          <h2 className="flex flex-col">
+          {/* §15.9.1: 록업 문자열이 헤더 h1(지부명)과 완전 중복이라 제목 요소가 아니다 —
+              <h2> → <p> (내부 span 이 크기·굵기·자간을 전담하므로 시각 변화 0).
+              내리면 페이지 헤딩 아웃라인이 `h1 지부명 → h2×4 섹션`으로 정확히 목차가 된다 */}
+          <p className="flex flex-col">
             <span className="font-display text-[30.8px]/[1.15] font-bold tracking-[-0.02em] whitespace-nowrap text-white md:text-[66.2px]/[1.15]">
               전국금융산업노동조합
             </span>
             <span className="font-display text-[26px]/[1.15] font-bold tracking-[-0.02em] whitespace-nowrap text-white md:text-[3.5rem]/[1.15]">
               코스콤(한국증권전산)지부
             </span>
-          </h2>
+          </p>
           <p className="mt-4 text-body font-normal text-primary-soft">
             코스콤 조합원을 위한 정보 공유
           </p>

@@ -24,8 +24,9 @@ export function DeadlineStrip({ posts }: { posts: PostListItem[] }) {
           const days = daysUntilKst(post.deadline);
           const imminent = days !== null && days <= 7;
           const monthDay = formatMonthDaySlash(post.deadline);
-          const href =
-            post.category === "news" ? ROUTES.news(post.id) : ROUTES.notice(post.id);
+          // 분류→상세 경로는 ROUTES.post 매핑 (§15.6R-G) — 삼항 분기를 늘리면 새 분류가
+          // 조용히 잘못된 경로(404)로 간다. 항목은 게시물 상세 링크이며 시각·동작 변화 0
+          const href = ROUTES.post(post.category, post.id);
           return (
             <li key={post.id} className="flex shrink-0 items-center gap-1">
               {index > 0 ? (

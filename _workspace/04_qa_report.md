@@ -1,3 +1,252 @@
+# QA 리포트: 메인페이지 탭 → 섹션 나열 전환 + 노동교육(education) 분류 (12회차)
+
+- 작성: qa-tester | 작성일: 2026-08-17
+- 판정 기준: **02 스펙 §15.1(은폐 금지 7개 조항)** 과 **§15.12(QA 수용 체크리스트 14항)**. 노동교육은 **§15.6R 이 유효 스펙**(§15.6.1~15.6.5 폐기분은 검증 대상에서 제외), **§15.6R-D4**·**§14.4 개정 블록**(리더 추가분) 포함. 부수 기준: `requirements-home-sections.md`, `decision-education-content.md`, `01_verifier_factcheck.md` §10, `06_backend_api_spec.md` §19, `07_backend_impl.md` §10, `03_developer_impl.md` §18(§18.7 포함)
+- 검증 대상(git 미커밋, 커밋 `b9795cc`·`a9f7e82` 이후): 신규 5파일(`src/lib/homeSections.ts`·`src/lib/postCategories.ts`·`src/components/home/HomeSection.tsx`·`src/components/home/SectionNav.tsx`·`src/app/education/[id]/page.tsx`) + `ArrowDownIcon` + 수정 13 + 삭제 1(`BoardTabs.tsx`)
+- **환경 격리**: 전용 QA DB **`qa_sections`** 신규 생성 + 스크래치패드 전용 env(`PORT=3101`, `DATABASE_URL`=qa_sections, `COOKIE_SECURE=false`, `CORS_ORIGINS`=localhost:3100, QA 전용 `ADMIN_PASSWORD_HASH`/`ADMIN_API_TOKEN`/`IP_HASH_SECRET`, `UPLOAD_DIR`=스크래치패드). **`server/.env` 무수정(md5 `bb9eab…`, mtime 09:32 KST = 세션 시작 전), 개발 DB `guestbook` 무접촉(양 테이블 0행 유지), 프로덕션(101.79.31.30) 쓰기 0건 — 읽기 2건만**
+- 검증 방법: ① 분류 리터럴 **전수 grep + 건별 판정** ② 계약 §19 ↔ 서버 실응답 ↔ 프론트 파서 **필드 단위 대조** ③ **로컬 풀스택 실왕복**(API 3101 + `next start` 3100 + Postgres `qa_sections`) ④ **실브라우저 실조작 195 어서션**(격리 프로필 headless Chrome + Node 내장 WebSocket CDP 자체 드라이버 — `claude-in-chrome` MCP 는 localhost 도달 불가, 아래 비고 1) ⑤ 프리렌더 HTML 문자열 전수 감사 ⑥ 대비 스크립트 재현 11조합 ⑦ DB 값 직접 확인(psql) ⑧ 빌드 6종 ⑨ 360/340/320/300/280/260px 반응형 실측 ⑩ 스크린샷 4장
+- 정리: `qa_sections` **drop 완료**, API·next·Chrome 프로세스 **전건 종료(잔여 0, 포트 3100/3101 해제)**, Chrome 임시 프로필 삭제, QA API URL 이 인라인된 `.next` 삭제, **프로덕션 코드 수정 0건**(`git status` 세션 시작 시점과 동일)
+
+## 12회차 요약: 통과 251 | **실패 0** | 권고 3(전건 기존 결함·문서 정합) | 미검증 6
+
+> **이번 QA 의 존재 이유에 대한 답**: `admin` 화면에서 **실제로 타이핑해 노동교육 링크형 게시물을 등록**했고, 그 게시물이 **메인페이지 노동교육 섹션에 실제로 렌더되는 것을 실브라우저·스크린샷으로 확인**했다(§15.12-12). 채널명(`source`)도 5장 전부 카드 1행에 보인다. **은폐 재발 0.**
+
+### A. 은폐 회귀 검증 (§15.1 / §15.12) — 전건 PASS
+
+| # | 항목 | 결과 | 근거 |
+|---|------|------|------|
+| A1 | 프리렌더 HTML `hidden` 문자열 전수 감사 | **PASS** | `hidden` 72회 출현을 **전건 문맥 확인**: 맨 `hidden` 속성은 **정확히 1건**(`<div hidden=""><!--$--><!--/$--></div>`), 나머지는 `aria-hidden="true"`(장식 아이콘·액센트 바·구분점)·`overflow-hidden`·`hidden md:flex`(DateBadge)·`md:hidden`(모바일 D-n) 유틸리티 |
+| A1-a | **개발자 주장 검증** — 그 1건이 Next 셸의 빈 서스펜스 경계인가 | **PASS(주장 사실)** | 내부 raw 문자열 `'<!--$--><!--/$-->'` → **텍스트 길이 0 · 자식 요소 0**. `/does-not-exist-xyz`(404 페이지)에도 **동일하게 1건** 존재 → 우리 코드 아님. DOM 검사에서도 `[hidden]` 요소의 `textContent.length === 0` |
+| A1-b | `role="tab"` / `role="tabpanel"` / `role="tablist"` / `aria-selected` | **PASS 전부 0건** | 프리렌더 HTML 문자열 0/0/0/0 + 라이브 DOM 0/0/0/0. 메인·`/education/<id>` 상세·0건 상태·미연결 상태 **4개 렌더 상태 전부** |
+| A1-c | `display:none`·`visibility:hidden` 으로 감춰진 UI 텍스트 | **PASS** | md+ 에서 1건(`md:hidden` 모바일 D-n) — **같은 정보를 `DateBadge`(`hidden md:flex`)가 표시**함을 실측(`8/25 D-8`). 360px 에서 1건(`DateBadge`) — **D-n 이 텍스트로 표시**됨을 실측. 양방향 정보 손실 0 |
+| A2 | 4개 섹션이 최초 렌더에 모두 보인다 | **PASS** | 4섹션 전부 `display:block` · `offsetParent≠null` · 높이 272/294/568/583px. 게시물 제목 9건 전부 실렌더 박스 보유(`invisible=[]`) |
+| A2-a | **특정 섹션이 0건이어도 나머지가 가려지지 않는다** | **PASS** | 전 게시물 soft delete → 3분류 `ok+0건` 상태에서 섹션·h2·액센트 바·칩 4개 전부 정상 렌더, `hidden` 콘텐츠 0 |
+| A3 | 섹션 바로가기 칩에 활성/선택 하이라이트 없음 (§15.4) | **PASS** | 칩 4개 계산 스타일 **완전 동일**(`#ffffff` / `#093389` / border `#6b7280` / 600 / 18px) — 스크롤 전·후 동일, `aria-current` 0건, `nav` `position: static`(비sticky), `href` = `#notices,#news,#education,#guestbook` 순수 프래그먼트, `SectionNav.tsx` 에 `"use client"` 없음 |
+| A4 | 히어로 urgent 공지가 공지 목록에도 남는다 (§15.1-6) | **PASS** | 히어로 CTA `href=/notices/1a8872ed…` 가 **공지 섹션 목록·마감 스트립·히어로 3곳**에 동시 존재(스크린샷 확인) |
+| A5 | 탭 인프라 잔존 0 | **PASS** | `grep -rn 'BoardTabs\|TAB_IDS\|TabId\|isTabId\|TAB_QUERY_PARAM\|homeTab\|role="tab\|aria-selected\|tabpanel\|tablist' src/ server/src/` → **주석 내 이력 언급 2건만**(`page.tsx:26`, `routes.ts:8`), 실행 코드 0건. `BoardTabs.tsx` 파일 삭제 확인 |
+| A5-a | `/?tab=news` 하위호환 | **PASS** | `200 · num_redirects=0` (리다이렉트 미작성 = §15.9.2 판정대로). 그 응답에 **4섹션 제목 + 소식 게시물 + 노동교육 게시물 전부 렌더**, `hidden` 속성 1건(프레임워크) |
+| A6 | JS 비활성 렌더 (§15.12-3) | **PASS** | `Emulation.setScriptExecutionDisabled` 로 스크립트 차단 후 4섹션 제목 + 공지·소식·노동교육 전 게시물 제목 렌더 확인(누락 0) |
+
+### B. 경계면 3자 교차 대조 (정적) — 전건 PASS
+
+**`"notice"`/`"news"` 리터럴 전수 조사 + 건별 판정** (`grep -rn '"notice"' src/` 외 `'notice'`·`"news"`·`"education"`·`category ===`·`kind ===`·`switch`·`? ROUTES.` 6패턴 추가)
+
+| 위치 | 리터럴 | 판정 |
+|------|--------|------|
+| `src/lib/api/posts.ts:23` | `POST_CATEGORIES = ["notice","news","education"]` | **단일 출처** — 서버 `postValidate.ts:14` 와 **값·순서 문자 단위 동일** |
+| `src/lib/api/posts.ts:97-106` | 런타임 파서 가드 `!isPostCategory(category)` | **PASS — education 허용 확인.** `POST_CATEGORIES` 파생이므로 좁힘 불가. **실왕복으로 실증**: education 5건이 목록에 렌더됨(가드 누락이면 API 200 + 목록 0건) |
+| `src/lib/postCategories.ts:22-25` | `POST_CATEGORY_ORDER` | 단일 출처(라벨·순서). `satisfies readonly PostCategory[]` |
+| `src/app/page.tsx:57-59, 84-87` | `loadCategory("notice"/"news"/"education")` + `kind` 3회 | **의도적** — 섹션별 데이터 소스가 다르다. 누락은 `Record<HomeSectionId, ReactNode>` 가 컴파일 타임 차단 |
+| `src/app/{notices,news,education}/[id]/page.tsx` ×2씩 | `category !== "<자기 분류>"` | **의도적** — 교차 접근 404. **실측 6조합 전부 404** |
+| `src/components/admin/PostForm.tsx:89` | `useState<PostCategory>(… ?? "notice")` | 기본 선택값 — 분류를 좁히지 않는다 |
+| `src/components/admin/PostForm.tsx:113` | `category === "news" && type === "article"` | **의도적 비대칭**(06 §19.2). **실측**: 소식+작성형 출처 없음 → `400 VALIDATION_ERROR "금융노조 소식(작성형)은 출처(source)가 필수입니다."` / 노동교육+링크형 출처 없음 → 통과 |
+| `src/lib/homeSections.ts:15-18` | `POST_CATEGORY_LABELS.*` 참조 | 라벨 중복 0 — 칩 라벨 == 섹션 h2 라벨 **실측 일치**(`공지사항\|금융노조 소식\|노동교육\|방명록`) |
+| `"notice" \| "news"` 리터럴 유니온 잔존 | — | **0건**(`src/` `server/src/` 양쪽) |
+| 분류 삼항 분기 | — | **0건**. 매핑 강제 4곳: `EMPTY_MESSAGES`·`POST_CATEGORY_LABELS`·`POST_DETAIL_PATHS`·`sectionContent` 전부 `Record<…>` |
+
+**개발자가 리더 목록 밖에서 찾아 고쳤다고 보고한 2건 — 실제 수정 확인**
+
+| 보고 | 검증 결과 |
+|------|-----------|
+| `DeadlineStrip.tsx:28` 삼항 → 404 위험 | **PASS.** 현재 `const href = ROUTES.post(post.category, post.id)`(L29). **실왕복 실증**: 마감일 `2026-08-19` 인 education 게시물이 스트립에 `D-2 8/19 …` 로 뜨고 링크가 `/education/<uuid>` → **실제 200**(`/notices/<uuid>` 였다면 404) |
+| `AdminApp.tsx:359` education 이 "금융노조 소식"으로 오표기 | **PASS.** 현재 `POST_CATEGORY_LABELS[post.category]`(L360). admin 목록에서 education 행이 **`링크형 노동교육 2026.08.17`** 로 표기됨을 실브라우저 확인 |
+| 유사 누락 추가 탐색 | **추가 0건.** 위 6패턴 전수 sweep 결과 남은 리터럴 전부 의도적 |
+
+**계약(06 §19) ↔ 서버 실응답 ↔ 프론트 타입 필드 단위 대조** — `GET /posts?category=education` 실응답
+
+| 필드 | 계약 §11.1/§19.1 | 서버 실응답 | 프론트 `ApiPostSummary` | 파서 검사 |
+|---|---|---|---|---|
+| `id` | string | `"371706f0-…"` str | `string` | `typeof === "string"` |
+| `category` | 3값 | `"education"` str | `PostCategory` | `isPostCategory()` ✔ |
+| `type` | `link\|article` | `"link"` str | `PostType` | 2분기 |
+| `title` | string | str | `string` | `typeof` |
+| `url` | `string\|null` | str | `string \| null` | `readNullableString` |
+| `source` | `string\|null` | `"채널"` str | `string \| null` | `readNullableString` |
+| `urgent` | boolean | `false` bool | `boolean` | `typeof` |
+| `deadline` | `string\|null` | `null` | `string \| null` | `readNullableString` |
+| `publishedAt` | ISO string | `"2026-08-17T09:12:55.160Z"` | `string` | `typeof` |
+| `attachments` | array | `[]` list | `ApiAttachment[]` | `Array.isArray` + 항목 파싱 |
+| **차집합** | — | **서버에만 0 / 프론트에만 0** | — | — |
+
+- 응답 shape **변경 없음** 계약 준수 확인(§19.1 마지막 행). `X-Total-Count: 1` + `access-control-expose-headers` 정상.
+- 에러 문구 §19.1 **문자 단위 일치 5경로**: `GET /posts?category=bogus`·`category` 생략 → `"category 는 notice, news, education 중 하나여야 합니다 (필수)."` / `GET /admin/posts?category=bogus`·`POST category=bogus`·`POST category=EDUCATION`(대문자) → `"category 는 notice, news, education 중 하나여야 합니다."`
+- **프로덕션 API 읽기 확인(쓰기 0)**: `https://union-api.koscomlabor.cloud/posts?category=education` → **200 `[]`**, `?category=notice` → 200, `?category=bogus` → **400 + 3값 문구**. 백엔드 배포 반영 확인.
+- 마이그레이션 `1755300000004` 로컬 적용 후 제약 실측: `posts_category_check | CHECK ((category = ANY (ARRAY['notice','news','education'])))`, `posts_news_article_needs_source` 는 `category='news'` 한정 유지(§19.2 비대칭).
+- **타입 우회 신규 0건**: 변경분에 `as any`/`as unknown`/`@ts-ignore`/`@ts-expect-error`/`: any` **0건**(`admin.ts:113` 의 `as unknown` 은 기존 코드, 이번 diff 밖).
+
+### C. 실동작 검증 (로컬 풀스택 + 실브라우저)
+
+**C1. 핵심 왕복 (§15.12-12) — PASS**
+
+admin 로그인 → `새 게시물` → 유형 `링크형` → 분류 `노동교육` → URL/제목/출처를 **CDP 키 이벤트로 실타이핑** → 저장 → 메인 확인.
+
+| 단계 | 실측 |
+|------|------|
+| 폼 입력값 | `{url:"https://www.youtube.com/watch?v=ATbGKR-Agmk", title:"노동조합이란", source:"금융노조 교육문화본부", cat:"education", type:"link"}` |
+| admin 목록 | `노동조합이란` 행 추가 + 메타 `링크형 노동교육 2026.08.17` |
+| DB | `psql`: `education \| link \| 노동조합이란 \| 금융노조 교육문화본부` |
+| **메인 노동교육 섹션** | **카드 렌더 확인** — 제목 + ↗ + 1행 `2026.08.17 · 금융노조 교육문화본부` + 2행 `외부 링크(새 창) · www.youtube.com`, `visible=true`, `target=_blank rel="noopener noreferrer"`, `iframe 0` |
+
+**C2. 링크형 출처(`source`) 편집 (§14.4 개정) — PASS 13/13**
+
+| 항목 | 실측 |
+|------|------|
+| 링크형 폼에 출처 칸 노출 | **PASS** — 링크형: URL O · 본문 X · **출처 O**(라벨 `출처`, 필수 표기 없음, `maxLength=200`, 높이 48px) |
+| 링크형 힌트 문구 | **PASS 문자 단위 일치** — `채널명·발행처를 적습니다. 목록 카드에 표시되어 조합원이 자료의 출처를 구분할 수 있습니다.` / 클래스 `mt-1 text-caption text-ink-muted`(=`ADMIN_HINT_CLASS`) / `#4b5563` 15px |
+| **작성형 폼에는 힌트 없음** | **PASS** — 기본(작성형) 상태에서 출처 칸 O · 힌트 `null` |
+| 값 입력·저장 → 카드 1행 채널명 | **PASS**(위 C1) |
+| **재수정 → 반영** | **PASS** — `금융노조 교육문화본부(수정)` 저장 → DB 반영 → 카드 1행 `2026.08.17 · 금융노조 교육문화본부(수정)` |
+| **출처 비우고 저장 → 실제 삭제** | **PASS(조용한 실패 없음)** — 폼 비움 → 저장 → **`psql` 실측 `source` = NULL**. 카드 1행이 `2026.08.17` 단독(구분점 0), **2행은 유지**(정보 손실 0) |
+| 다시 확정값 복원 | **PASS** — `금융노조 교육문화본부` 재입력 → DB·카드 반영 |
+| 소식+작성형 출처 필수(400) 유지 | **PASS** — `400 VALIDATION_ERROR` 확인(문구 위 B) |
+
+**C3. 메타 블록 2행 (§15.6R-D) — PASS**
+
+| 항목 | 실측 |
+|------|------|
+| 링크형 1행 / 2행 구조 | **PASS** — 1행 `[게시일, 출처]`, 2행 `[외부 링크(새 창), 도메인]`. 5건 전부 |
+| **작성형 카드 시각 회귀 0** | **PASS** — 작성형은 2행 미렌더(행 1개). 구분점 좌우 여백 **13개 구분점 전건 4px/4px**(개발자 주장 실화면 확인). 래퍼 `display: inline-flex → flex`(부모가 flex 컨테이너라 blockify — 정상), **`flex-wrap: nowrap`** 이므로 구분점+뒤 토큰이 분리 불가. 메타 색 `#4b5563` 15px 전건 동일 |
+| **빈 토큰 안전(전 조합)** | **PASS** — 9카드 × 전 행에서 `· ·` / 행 선두 `·` / 행 말미 `·` **0건**. 검증한 조합: 출처有/無 × 도메인有/無 × 첨부0 × 마감有/無 × urgent有/無 × 링크형/작성형. 대표값: urgent+마감+출처 → `D-8 2026.08.17 · 지부 사무국` / 작성형+출처無 → `2026.08.17` / 링크형+출처無(kfiu) → `2026.08.17` + `외부 링크(새 창) · www.kfiu.org` |
+| D-n 구분점 미부착 | **PASS** — `md:hidden` D-n 이 행 선두에 구분점 없이 옴 → md+ 에서 숨겨져도 행이 `·` 로 시작하지 않음 |
+| 360px 두 행 각각 1줄 | **PASS** — 5카드 × 2행 = 10행 전부 높이 **22.5px = line-height 22.5px(1줄)** |
+| **260~360px 구분점 매달림 0 · 가로 스크롤 0** | **PASS** — 360/340/320/300/280/260px 6구간 전부 dangling 0, `scrollWidth == clientWidth` |
+| `·` `aria-hidden` | **PASS** — 전 구분점 `aria-hidden="true"`, 스크린리더에는 토큰 텍스트만 |
+| `영상` 토큰·`isVideo` 미도입 | **PASS** — 코드·렌더 양쪽 0건(§15.6R-D 판정 1) |
+
+**C4. 라우팅 — PASS**
+
+| 케이스 | 실측 |
+|--------|------|
+| `/education/<eduId>` | **200** · `backHref="/#education"` · `<title>노동조합이란 — 전국금융산업노동조합 코스콤(한국증권전산)지부</title>` · h1 = 게시물 제목(`asHeading={false}`) |
+| 교차 분류 6조합 | `/notices/<eduId>` **404** · `/news/<eduId>` **404** · `/education/<noticeId>` **404** · `/education/<newsId>` **404** · `/notices/<newsId>` **404** · `/news/<noticeId>` **404** |
+| 미존재 id | `/education/00000000-…` **404** |
+| `notices`/`news` backHref | `href="/#notices"` · `href="/#news"` 확인 |
+| 돌아가기 실클릭 | `/#education` 이동 후 **액센트 바 상단 여백 32px**(§15.12-6) |
+| **§15.6R-D4 마감 스트립 + education** | 마감 education 이 스트립에 `D-2 8/19 조합원 노동법 기초과정 수강 신청` 으로 표시, `href=/education/<uuid>` **실제 200**, **동시에 노동교육 섹션 목록에도 잔존**(§15.1-6), 작성형이라 카드 링크도 `/education/<uuid>`, md+ DateBadge `8/19 D-2` 표시 |
+
+**C5. 회귀 — PASS**
+
+| 항목 | 실측 |
+|------|------|
+| 공지·소식 목록 | 공지 2건(urgent+마감·일반) / 소식 2건(작성형+출처·링크형 출처無) 정상 렌더·링크 경로 정상 |
+| 상세 페이지 | `/notices/<id>` `/news/<id>` `/education/<id>` 전부 200, `role=tab` 0 |
+| 빈 상태 3분류(`ok+0건`) | `등록된 공지사항이 없습니다` / `등록된 소식이 없습니다` / **`등록된 교육 자료가 없습니다`** + 공통 보조 `새 글이 등록되면 이곳에 표시됩니다` |
+| 빈 상태(`unconfigured`) | 3분류 동일 `게시판을 준비 중입니다 / 서비스가 연결되면 게시물이 표시됩니다`(§15.6R-B) |
+| 방명록 등록·조회 | 폼 실타이핑 등록 → **DB 행 0→1** → 목록에 `12회차 QA 방명록 회귀 테스트` + `QA검증 · 2026.08.17` 표시 |
+| 방명록 미연결 | 폼 미렌더 + 준비 중 카드(§7.1 유지) |
+| admin 로그인/세션/로그아웃 | 로그인 200 → 재방문 세션 유지 → 로그아웃 후 로그인 화면 복귀 |
+| admin 삭제 다이얼로그 | `role="alertdialog"` `aria-modal="true"` `aria-labelledby=delete-dialog-title` `aria-describedby=delete-dialog-body`, **초기 포커스 = 취소**, 삭제 실행 → `deleted_at` 기록(soft delete) |
+| **비밀번호 변경(11회차 산출물)** | 3필드(`current-password`/`new-password`×2) → 변경 성공 `비밀번호를 변경했습니다. 다른 기기의 로그인 3건이 해제되었습니다.` → **구 비밀번호 로그인 거부**(`비밀번호가 일치하지 않습니다.`) → **신 비밀번호 로그인 성공** → 초기 비밀번호 경고 배너 소멸 |
+| 콘솔 에러 | 메인·admin·상세 전 경로 **JS 에러·예외 0건** |
+
+### D. 접근성 — PASS
+
+| 항목 | 실측 |
+|------|------|
+| 헤딩 계층 | **`h1` 지부명 → `h2`×4(공지사항·금융노조 소식·노동교육·방명록)** 실측. urgent 有 상태에서는 히어로 모드 1 `h2`(실제 콘텐츠 제목)가 앞에 온다 — §15.9.1 규정대로. **h2 에 지부명 0건** |
+| 히어로 모드 2 `<p>` | **PASS** — urgent 해제 후 록업 요소 `P`, 히어로 내 `h2` **0개**. **시각 변화 0 실측**: md+ `66.2px/56px` · `700` · `-1.324px/-1.12px`(=-0.02em) · `#ffffff` · line-height `76.13px/64.4px`(=1.15) · `Gmarket Sans` |
+| 방명록 준비 중 `<h3>` | **PASS** — 클래스 `mt-4 text-h2 text-ink` 동일. **동일 클래스 `h2` 프로브를 DOM 에 주입해 픽셀 비교**: 24px/600/-0.24px/`#1a1a1a`/31.2px/mt 16px/높이 31px **전 항목 동일 = 시각 변화 0** |
+| 헤딩 아웃라인(미연결) | `h1 지부명 → h2×4 → h3 방명록 준비 중입니다`(§15.12-4 완전 충족) |
+| 앵커 이동 여백 | 4앵커 실클릭 — `#notices/#news/#education` **액센트 바 상단 32px**(md+ `scroll-mt-8`), 제목 잘림 0. `#guestbook` 은 문서 끝 스크롤 클램프로 80px(요구값 이상). 360px 에서 `scroll-margin-top: 24px` 확인 |
+| 칩 터치 대상 | md+ 118/154/118/103 × **44px** · 360px 110/146/110/95 × **44px** — 전건 ≥44 |
+| 칩 hover | `bg #eff6ff` + `border #093389` + **밑줄** 실측(§15.4 표와 일치) |
+| 칩 focus-visible | **`outline: 3px solid rgb(9,51,137)`** 실측 |
+| **키보드 Tab 순서** | 실측 `헤더 지부명 → 히어로 CTA(자세히 보기) → 마감 스트립 → 온누리 카드 → 칩 4개(#notices→#news→#education→#guestbook) → 섹션 ①…④ 내부 카드` — §15.12-9 순서와 일치 |
+| 카드·링크 포커스 링 | 목록 카드·상세 링크·방명록 필드·admin 버튼 전부 `3px rgb(9,51,137)`. 히어로 CTA 만 흰색 링(딥블루 면 위 — 기존 §11.4 구현, 권고 3 참조) |
+| 순수 `<a>` 여부 | `SectionNav.tsx` 에 `"use client"` 없음 + `next/link` 미사용 + `data-prefetch` 0 → JS 0 확인 |
+| `·` 스크린리더 | 전 구분점 `aria-hidden="true"` |
+| 섹션 이름 | 4섹션 `aria-labelledby="<id>-heading"` ↔ `h2 id` 실측 일치(표기 드리프트 원천 차단) |
+| 랜드마크 | `banner → main → region(주요 소식) → navigation(마감 예정 일정) → navigation(페이지 섹션 바로가기) → region×4 → contentinfo` |
+| 360px 반응형 | 가로 스크롤 0, **칩 2행 래핑**(1행 공지사항+금융노조 소식 / 2행 노동교육+방명록, nav 높이 96px), h2 24px, admin 분류 선택지 3개 컨테이너 `inline-flex flex-wrap gap-1 rounded-full bg-surface p-1` |
+| **대비 재현 검증(§15.10)** | `check-contrast.mjs` 11조합 **전건 스펙 값과 일치**: 17.40 / 7.56 / 11.37 / 10.45 / 4.83 / 4.44 / 3.93 / 6.94 / 1.24 / 10.88 / 16.65. 실화면 계산색도 일치(칩 `#093389` on `#ffffff`, hover `#eff6ff`, border `#6b7280`, 메타 `#4b5563` on `#ffffff`, 액센트 바 `#093389`, h2 `#1a1a1a`) |
+| 신규 색·토큰 | **0건** — 신규 파일 색 클래스가 전부 기존 토큰(`bg-bg`·`bg-primary`·`border-border-strong`·`hover:bg-primary-tint`·`hover:border-primary`·`text-primary`·`text-ink`·`text-body`·`text-h1`·`text-h2`·`outline-primary`), 하드코딩 hex **0건**(주석 1건 제외), `globals.css` **diff 0** |
+| `CHIP_CLASS` | 스펙 §15.4 문자열과 **문자 단위 일치**(스크립트 대조) |
+| §15.2 간격 실측 | md+ 내비 `mt-12`=48px · 섹션① 40px · 섹션 간 80px · 바→제목 12px · 제목→콘텐츠 20px · 푸터 64px · 컨테이너 768px/패딩 24px / 360px 48-32-64-12-20-64px, 패딩 16px — **전건 스펙 표와 일치** |
+
+### E. 2차 검증 게이트 (콘텐츠) — PASS
+
+로컬에 확정 5건을 **표시순 역순으로 등록**(5→4→3→2→1, #1 은 admin UI 실타이핑)해 실화면 대조.
+
+| 표시순 | 카드 제목(실측) | 1행 채널명(실측) | 2행(실측) | href(실측) |
+|---|---|---|---|---|
+| 1 | `노동조합이란` | `금융노조 교육문화본부` | `외부 링크(새 창) · www.youtube.com` | `…/watch?v=ATbGKR-Agmk` |
+| 2 | `산별노동조합이란` | `금융노조 교육문화본부` | 동일 | `…/watch?v=-WrzgLtvuPU` |
+| 3 | `산별중앙교섭과 쟁의절차` | `금융노조` | 동일 | `…/watch?v=jeK7W_SADUs` |
+| 4 | `오바마 대통령이 말하는 노조` | `하종강의 노동과 꿈` | 동일 | `…/watch?v=Vj3lQ7Y71PU` |
+| 5 | `노조가 필요한 이유` | `마이크임팩트` | 동일 | `…/watch?v=OFfbgB5dOIA` |
+
+- **제목 5건 `decision-education-content.md` 표와 문자 단위 일치.** 사용자 축약 라벨(`오바마`·`진중권`) **0건**.
+- **`source`(채널명) 5건 전부 카드 1행에 표시** — fact-verifier 게이트 조건 이행 확인. `하종강의 노동과 꿈`·`마이크임팩트` 화면 노출 스크린샷 확보(`edu-360.png`).
+- **금지 사항 위반 0**: 섹션 innerText 전문에 `교수` 0건 · 강연 연도(`201x/202x년`) 0건 · `금속노조` 오기 0건 · 창작 설명 문구 0건. **설명 줄(`body`) 미노출** 구조 확인(카드 행 = 제목 + 메타 2행뿐, §15.6R-C).
+- URL 5건 전부 `https://www.youtube.com/watch?v=` 정규형, **`?si=` 0건**, videoId 11자 정확(#2 선두 하이픈 `-WrzgLtvuPU` 포함). **도메인 표기 5건 전부 `www.youtube.com` 동일**.
+- `<iframe>` 임베드 **0건**(§15.6R-F). `target="_blank" rel="noopener noreferrer"` 5건.
+- **링크 생존 확인**: 5건 전부 `200`(리다이렉트 추적).
+- **표시 순서**: 역순 등록으로 학습 순서(개념→산별→중앙교섭→외부 2건)가 화면에 정확히 재현됨을 실측. 정렬은 `publishedAt DESC` 이므로 §15.6R-D3 의 한계(새 글 추가 시 순서 붕괴)는 구조적으로 유효 — 운영 안내 필요(리더 담당).
+
+### F. 빌드·정적 검사 — 전건 PASS
+
+| 명령 | 결과 |
+|------|------|
+| `npx next typegen` | 통과 |
+| `npx tsc --noEmit` | **exit 0, 출력 0** |
+| `npm run lint` | **exit 0, 출력 0** |
+| `npm run build` (API 설정) | 통과 — `/` `○ Static · Revalidate 1m`, `/education/[id]` `ƒ Dynamic` 신규, `/admin` `○` |
+| `npm run build` (API 미설정) | 통과 — 미연결 상태 프리렌더 정상 |
+| `cd server && npm run typecheck` | **exit 0** |
+| `cd server && npm run build` | **exit 0** |
+| 신규 `any`/`as`/`@ts-ignore` | **0건** |
+
+### 권고 3건 (전건 **이번 변경이 만든 것이 아님** — 기존 결함 또는 문서 정합)
+
+| # | 분류 | 위치 | 내용 | 권고 |
+|---|------|------|------|------|
+| 1 | 기존 결함(UX) | `src/components/admin/PostForm.tsx:226-228` + `src/components/admin/AdminApp.tsx:320-323` | `setFeedback({kind:"success", message:"게시물을 저장했습니다."})` **직후 `onSaved()` 가 `setEditing(null)`** 로 폼을 언마운트해 **성공 문구가 화면에 남지 않는다.** 스펙 §14.4 "저장 결과 … `role="status"` 상시 렌더" 미충족. **`git show HEAD:` 대조 결과 코드가 HEAD 와 동일 = 기존 결함**(사용자는 목록 갱신으로 간접 확인 중) | `AdminApp` 의 `notice` 상태(`role="status"` 상시 렌더 존재)에 `"게시물을 저장했습니다."` 를 세팅하도록 `onSaved` 시그니처를 넓히는 것이 최소 수정. **이번 회차 범위 밖 — 리더 판단 요청** |
+| 2 | 문서 정합 | `_workspace/01_verifier_factcheck.md` §10 기준값 표 | §10 표가 **최신 확정판과 어긋난다**: ① URL 형식 `https://youtu.be/…` (확정은 `www.youtube.com/watch?v=`) ② #1·#2 채널 `금융노조` (확정은 `금융노조 교육문화본부`) ③ 항목 번호 순서 상이(§10 #3=오바마 / decision #4=오바마). 구현은 상위 확정 문서(`decision-education-content.md`)를 정확히 따르므로 **결함 아님**이나, 5차 최종 게이트에서 §10 표를 그대로 대조하면 **오탐 3건**이 난다 | 리더가 §10 을 갱신하거나, `05_verifier_final.md` 작성 시 **기준은 `decision-education-content.md`** 임을 명시할 것 |
+| 3 | 스펙 문구 | `02_designer_spec.md` §15.12-9 | "모든 포커스 링이 3px `#093389`"라 했으나 **히어로 CTA 는 흰색 링**(`3px #ffffff`)이다. 딥블루 면 위이므로 흰 링이 대비상 옳고, `HeroPanel` 은 §15.11 "변경 금지" 대상 | 체크리스트 문구에 "(히어로 CTA 는 딥블루 면 위이므로 흰 링)" 예외를 명기하면 이후 회차의 오판을 막는다 |
+
+### §15.12 QA 수용 체크리스트 대조 (14항)
+
+| # | 항목 | 판정 |
+|---|------|------|
+| 1 | `role="tab"`·`role="tabpanel"`·`hidden` 0건 | **PASS**(맨 `hidden` 1건은 Next 셸 빈 서스펜스 경계 — 콘텐츠 0, 404 페이지에도 동일) |
+| 2 | `?tab=news` 없이 홈에서 소식 게시물 제목이 보인다 | **PASS** |
+| 3 | JS 끈 상태에서 4섹션 + 전 게시물 제목 렌더 | **PASS** |
+| 4 | 헤딩 아웃라인 `h1 → h2×4`, h2 에 지부명 없음, 준비 중 `h3` | **PASS** |
+| 5 | 4앵커 이동 시 24/32px 여백 | **PASS** |
+| 6 | 상세 "← 목록으로 돌아가기" → 해당 섹션 위치 | **PASS** |
+| 7 | 칩 4개 외형이 스크롤 위치와 무관하게 동일 | **PASS** |
+| 8 | 360px 가로 스크롤 0 · 칩 2행 · 터치 ≥44px | **PASS** |
+| 9 | Tab 순서 + 포커스 링 3px `#093389` | **PASS**(히어로 CTA 흰 링 — 권고 3) |
+| 10 | 문자열이 `decision-education-content.md` 와 문자 단위 일치 · 창작 0 · iframe 0 | **PASS** |
+| 11 | 채널명 5장 전부 표시 · 메타 2행 · 도메인 동일 · `?si=` 없음 | **PASS** |
+| 12 | **education 1건 등록 후 메인에서 실제로 보인다** | **PASS**(admin UI 실타이핑 왕복) |
+| 13 | `source` 없는 링크형에서 `· ·`·선두·말미 `·` 없음 · 작성형 픽셀 동일 | **PASS**(구분점 여백 4/4px 실측) |
+| 14 | 360px 메타 2행 각각 1줄 · 가로 스크롤 0 | **PASS**(260px 까지 확장 검증) |
+
+### §15.1 은폐 금지 7개 조항 대조
+
+1 조작 없이 전부 보인다 **PASS** / 2 `hidden`·`display:none` 콘텐츠 컨테이너 0 **PASS** / 3 "기본 선택" 개념 부재 **PASS**(`aria-current` 0·칩 동일 외형) / 4 아코디언·접기·캐러셀·더보기 0 **PASS**(전 게시물 노출, 제한 코드 0) / 5 JS 없이 성립 **PASS** / 6 히어로·스트립 게시물이 목록에 잔존 **PASS**(urgent 공지·마감 education 양쪽 실증) / 7 바로가기 내비가 콘텐츠를 감추지 않는다 **PASS**(0건 상태에서도 칩·섹션 정상)
+
+### 미검증 6건
+
+| # | 항목 | 사유 |
+|---|------|------|
+| 1 | 사용자 실제 Chrome 프로필·확장 환경에서의 동작 | `claude-in-chrome` MCP 가 localhost(`127.0.0.1:3100`)에 도달하지 못한다(외부 사이트는 정상 — 확장 사이트 권한 문제로 추정, 11회차·개발자 회차와 동일 증상). **격리 프로필 headless Chrome + CDP 자체 드라이버**로 대체 검증했다(설치 패키지 0건, 사용자 프로필 무접촉) |
+| 2 | **프로덕션 실서버 education 왕복 + 실데이터 5건 렌더** | 프론트 미배포 + 프로덕션 쓰기 금지 지시. 프로덕션 API 는 **읽기만** 확인(`?category=education` 200 `[]` — **게시물 0건**). 배포 후 실데이터 등록·렌더 대조는 **5차 최종 게이트(`05_verifier_final.md`) 몫으로 남는다** |
+| 3 | YouTube 5건의 **자막(캡션) 제공 여부** | `decision-education-content.md` QA 인계 항목. 영상 재생·캡션 트랙 조회 미수행(링크 생존 200×5 만 확인) |
+| 4 | 스크린리더 실청취(VoiceOver/NVDA)·실기기 터치 | DOM·ARIA·계산 스타일·터치 박스 크기 정적 검증까지만 |
+| 5 | **첨부파일이 붙은 게시물의 `첨부 n` 토큰 조합** | 이번 회차에서 첨부 업로드 경로를 실행하지 않았다. 메타 토큰 배열에 첨부 분기가 있으므로(`PostList.tsx:120-130`) 첨부有 × 출처無 조합의 구분점은 **코드상 안전하나 실측 미수행** |
+| 6 | `next dev` 모드의 클라이언트 동작 | headless Chrome 에서 dev 모드 앱 루트가 하이드레이션되지 않아(React 컨테이너가 `NEXTJS-PORTAL` 에만 부착) **프로덕션 빌드(`next start`)로 전환해 전건 검증**했다. 프로덕션 경로는 완전 검증됐고 배포 대상도 프로덕션 빌드이므로 실질 위험은 없다 |
+
+### 비고
+
+1. **브라우저 도구 대체 경위**: `claude-in-chrome` MCP 는 localhost 개발 서버에 도달하지 못한다(11회차와 동일). 추측으로 넘기지 않기 위해 별도 `--user-data-dir` 의 headless Chrome 을 띄우고 Node 내장 `WebSocket` 만으로 CDP 드라이버를 작성해 **실제 마우스·키보드 이벤트 + `getComputedStyle`·`getBoundingClientRect`·`document.activeElement` 실측**으로 검증했다.
+2. **초기 3+2+4 FAIL 은 전부 어서션 코드 버그였고 재검증으로 PASS 전환**했다: ① `display:none` 필터가 `HEAD/TITLE/STYLE/SCRIPT` 를 포함 ② `#guestbook` 앵커 여백 상한을 40px 로 잡았으나 문서 끝 스크롤 클램프로 80px(요구값 이상) ③ Tab 루프 시작 포커스가 직전 클릭 위치 ④ 링크형 필드를 라디오 전환 전에 검사 ⑤ 메타 텍스트 비교에 `·` 좌우 공백 가정 ⑥ 비밀번호 필드 미클리어 후 재입력. **제품 결함은 0건.**
+3. **ISR(`revalidate 60`) 영향**: 프로덕션 빌드의 `/` 는 정적 프리렌더 + 백그라운드 재생성이므로 admin 등록 직후 메인 반영에 최대 62초 관측(실측 1s/6s/56s/62s). 조합원 체감상 정상 동작이며, 검증에서는 반영 폴링 후 판정했다.
+4. **스크린샷 4장**(스크래치패드): `home-desktop.png`(1280px 도입 블록+칩+공지 섹션) · `edu-360.png`(360px 노동교육 5카드 2행 메타) · `notices-360.png`(360px 작성형·링크형 카드 회귀) · `chips-360.png`(칩 2행). 스크래치패드는 세션 종료 시 소멸하므로 필요하면 리포지토리로 옮길 것.
+
+---
+
 # QA 리포트: 관리자 비밀번호 변경 (11회차)
 
 > **배치 위치 안내**: 리더 지시는 "말미에 이어서"였으나, 이 파일은 **최신 회차가 최상단**인 내림차순(10→1) 관례로 관리되고 있다. 말미에 넣으면 1회차 아래에 묻히므로 관례를 따라 최상단에 추가했다(기존 내용 삭제·수정 0건). 위치 이동이 필요하면 알려주면 옮긴다.

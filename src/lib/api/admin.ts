@@ -38,7 +38,8 @@ export interface AdminPostInput {
   title: string;
   body?: string;
   url?: string;
-  source?: string;
+  /** 출처 — 수정 시 `null` 은 "기존 출처 삭제", 키 생략은 "변경 없음"(§13.1 PATCH 병합 규칙) */
+  source?: string | null;
   urgent?: boolean;
   /** YYYY-MM-DD */
   deadline?: string | null;

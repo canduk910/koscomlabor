@@ -33,7 +33,10 @@ export default async function NoticeDetailPage({ params }: NoticePageProps) {
     <>
       <SiteHeader asHeading={false} />
       <main className="flex-1">
-        <PostArticle post={toPostDetailView(result.data)} backHref={ROUTES.homeTab("notices")} />
+        <PostArticle
+          post={toPostDetailView(result.data)}
+          backHref={ROUTES.homeSection("notices")}
+        />
       </main>
       <SiteFooter />
     </>

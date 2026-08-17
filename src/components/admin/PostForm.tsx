@@ -15,11 +15,13 @@ import {
   adminUploadAttachment,
 } from "@/lib/api/admin";
 import type { PostCategory, PostType } from "@/lib/api/posts";
+import { POST_CATEGORY_LABELS, POST_CATEGORY_ORDER } from "@/lib/postCategories";
 import { formatFileSize } from "@/lib/postView";
 import { DocumentIcon } from "@/components/ui/icons";
 import {
   ADMIN_DANGER_BUTTON_CLASS,
   ADMIN_FIELD_CLASS,
+  ADMIN_HINT_CLASS,
   ADMIN_LABEL_CLASS,
   ADMIN_PRIMARY_BUTTON_CLASS,
   ADMIN_SECONDARY_BUTTON_CLASS,
@@ -36,7 +38,13 @@ interface ExistingAttachment {
 interface PostFormProps {
   /** 수정 모드면 대상 게시물, 신규면 null */
   initial: ApiAdminPost | null;
-  onSaved: () => void;
+  /**
+   * 저장 성공 시 호출. 인자로 저장 결과 문구를 넘긴다 —
+   * 이 콜백이 폼을 언마운트하므로 폼 내부 피드백 노드는 화면에 남지 않는다.
+   * 부모의 상시 렌더 `role="status"` 영역에 표시해야 사용자가 결과를 읽을 수 있다
+   * (특히 "첨부 일부 실패" 경고가 사라지면 부분 실패를 모르게 된다 — QA 12회차 권고 1).
+   */
+  onSaved: (notice: string) => void;
   onCancel: () => void;
 }
 
@@ -186,7 +194,11 @@ export function PostForm({ initial, onSaved, onCancel }: PostFormProps) {
       title: title.trim(),
       body: body.trim().length > 0 ? body.trim() : undefined,
       url: type === "link" ? url.trim() : undefined,
-      source: source.trim().length > 0 ? source.trim() : undefined,
+      // 빈 입력 정규화: 수정 모드는 명시적 null(= 기존 출처 삭제), 신규는 키 생략.
+      // undefined 로만 보내면 PATCH 병합(`key in patch`)에서 키가 빠져 기존 값이 남는다 —
+      // 사용자가 출처를 비우고 저장했는데 카드에 그대로 표시되는 조용한 실패가 된다.
+      // 빈 문자열을 그대로 보내지 않는다(서버는 "" 도 null 로 정규화하지만, 의도를 값으로 표현한다).
+      source: source.trim().length > 0 ? source.trim() : initial !== null ? null : undefined,
       urgent,
       deadline: deadline.length > 0 ? deadline : initial !== null ? null : undefined,
     };
@@ -211,15 +223,12 @@ export function PostForm({ initial, onSaved, onCancel }: PostFormProps) {
     }
 
     setSaving(false);
-    if (uploadErrors.length > 0) {
-      setFeedback({
-        kind: "error",
-        message: `게시물은 저장했지만 일부 첨부 업로드에 실패했습니다: ${uploadErrors.join(" ")}`,
-      });
-    } else {
-      setFeedback({ kind: "success", message: "게시물을 저장했습니다." });
-    }
-    onSaved();
+    // 문구는 폼이 아니라 부모의 상시 status 영역에 남긴다 (onSaved 가 폼을 언마운트한다)
+    const notice =
+      uploadErrors.length > 0
+        ? `게시물은 저장했지만 일부 첨부 업로드에 실패했습니다: ${uploadErrors.join(" ")}`
+        : "게시물을 저장했습니다.";
+    onSaved(notice);
   }
 
   return (
@@ -246,21 +255,20 @@ export function PostForm({ initial, onSaved, onCancel }: PostFormProps) {
 
       <fieldset className="mt-4">
         <legend className={ADMIN_LABEL_CLASS}>카테고리</legend>
-        <div className="inline-flex gap-1 rounded-full bg-surface p-1">
-          <RadioPill
-            name="post-category"
-            value="notice"
-            checked={category === "notice"}
-            label="공지사항"
-            onChange={() => setCategory("notice")}
-          />
-          <RadioPill
-            name="post-category"
-            value="news"
-            checked={category === "news"}
-            label="금융노조 소식"
-            onChange={() => setCategory("news")}
-          />
+        {/* 분류 선택지는 POST_CATEGORY_ORDER 파생 — 분류가 늘면 여기에 자동으로 나타난다.
+            선택지를 하드코딩하면 새 분류를 사용자가 등록할 수 없다(노동교육 추가 시 실제 사례).
+            flex-wrap: 3선택지 합(≈353px)이 360px 화면의 콘텐츠 폭(328px)을 넘는다 */}
+        <div className="inline-flex flex-wrap gap-1 rounded-full bg-surface p-1">
+          {POST_CATEGORY_ORDER.map((option) => (
+            <RadioPill
+              key={option}
+              name="post-category"
+              value={option}
+              checked={category === option}
+              label={POST_CATEGORY_LABELS[option]}
+              onChange={() => setCategory(option)}
+            />
+          ))}
         </div>
       </fieldset>
 
@@ -316,36 +324,46 @@ export function PostForm({ initial, onSaved, onCancel }: PostFormProps) {
       </div>
 
       {type === "article" ? (
-        <>
-          <div className="mt-4">
-            <label htmlFor="post-body" className={ADMIN_LABEL_CLASS}>
-              본문 (필수)
-            </label>
-            <textarea
-              id="post-body"
-              value={body}
-              onChange={(event) => setBody(event.target.value)}
-              className={`${ADMIN_FIELD_CLASS} min-h-60 px-3 py-2`}
-            />
-            <p className="mt-1 text-caption text-ink-muted">
-              마크다운 형식으로 작성할 수 있습니다 (제목 ##, 목록 -, 링크 등)
-            </p>
-          </div>
-          <div className="mt-4">
-            <label htmlFor="post-source" className={ADMIN_LABEL_CLASS}>
-              출처{sourceRequired ? " (필수)" : ""}
-            </label>
-            <input
-              id="post-source"
-              type="text"
-              value={source}
-              onChange={(event) => setSource(event.target.value)}
-              maxLength={200}
-              className={`${ADMIN_FIELD_CLASS} h-12 px-3`}
-            />
-          </div>
-        </>
+        <div className="mt-4">
+          <label htmlFor="post-body" className={ADMIN_LABEL_CLASS}>
+            본문 (필수)
+          </label>
+          <textarea
+            id="post-body"
+            value={body}
+            onChange={(event) => setBody(event.target.value)}
+            className={`${ADMIN_FIELD_CLASS} min-h-60 px-3 py-2`}
+          />
+          <p className={ADMIN_HINT_CLASS}>
+            마크다운 형식으로 작성할 수 있습니다 (제목 ##, 목록 -, 링크 등)
+          </p>
+        </div>
       ) : null}
+
+      {/* 출처는 유형 공통 필드다 (리더 판정 2026-08-17 — §14.4 개정).
+          §15.6R-D 로 링크형 카드도 source(채널명)를 렌더하며 그 표기가 fact-verifier 게이트
+          조건("금융노조 제작물이 아님을 카드 표면에서 구분")의 이행 수단이다. 입력 수단이 없으면
+          사용자가 그 값을 유지·수정할 수 없다. 필수 여부는 확장하지 않는다 —
+          출처 필수는 소식+작성형만(06 명세 §19.2 의 의도적 비대칭). */}
+      <div className="mt-4">
+        <label htmlFor="post-source" className={ADMIN_LABEL_CLASS}>
+          출처{sourceRequired ? " (필수)" : ""}
+        </label>
+        <input
+          id="post-source"
+          type="text"
+          value={source}
+          onChange={(event) => setSource(event.target.value)}
+          maxLength={200}
+          className={`${ADMIN_FIELD_CLASS} h-12 px-3`}
+        />
+        {type === "link" ? (
+          <p className={ADMIN_HINT_CLASS}>
+            채널명·발행처를 적습니다. 목록 카드에 표시되어 조합원이 자료의 출처를 구분할 수
+            있습니다.
+          </p>
+        ) : null}
+      </div>
 
       <div className="mt-4">
         <label className="flex min-h-touch cursor-pointer items-center gap-3 text-body text-ink">

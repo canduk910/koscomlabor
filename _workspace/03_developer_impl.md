@@ -510,3 +510,240 @@ NEXT_PUBLIC_API_BASE_URL=<더미> npm run build → 통과 (/admin ○ 정적, �
 - **서버 실통신 0건** — 백엔드가 병렬 구현 중이라 `POST /admin/password` 라운드트립을 못 돌렸다. `invalid-credentials`/`unauthorized`/`validation`/`rate-limited` 4분기, `sessionsRevoked` 0 vs n 문구, 배너 소멸은 통합 QA에서 실응답으로 확인 필요.
 - 브라우저 실조작: 포커스 이동(첫 오류 필드·성공/취소 후 헤더 버튼 복귀), 스크린리더의 `role="alert"` 발화, 비밀번호 관리자 자동완성(`current-password`/`new-password`) 동작.
 - 360px 실측: 배너 2줄 제목·`w-full` CTA, 헤더 3버튼 줄바꿈.
+
+---
+
+## 18. 메인페이지 탭 → 섹션 나열 전환 + 노동교육(education) 분류 (2026-08-17, 리더 지시 — 스펙 §15 / §15.6R)
+
+근거 입력: `02_designer_spec.md` §15 전문(§15.6R 최신 확정판, **§15.6.1~15.6.5 는 폐기분으로 미구현**),
+`00_input/requirements-home-sections.md`, `00_input/decision-education-content.md`,
+`06_backend_api_spec.md` §19(프로덕션 배포 완료). 이 작업의 판정 기준은 §15.1 **은폐 금지**다.
+
+### 18.1 파일 단위 변경
+
+**신규 (6)**
+
+| 파일 | 내용 |
+|------|------|
+| `src/lib/homeSections.ts` | `HOME_SECTIONS` 단일 배열(§15.11 불변식) + `HomeSectionId`. 칩 라벨과 섹션 `h2` 제목이 **모두 이 배열에서 파생**된다 |
+| `src/lib/postCategories.ts` | `POST_CATEGORY_LABELS`(Record<PostCategory,string>) + `POST_CATEGORY_ORDER`. 분류 라벨의 전 화면 단일 출처(메인 섹션 + admin 폼/목록) |
+| `src/components/home/HomeSection.tsx` | 섹션 프레임(§15.3): 액센트 바 + `h2` + `aria-labelledby` + `scroll-mt-6 md:scroll-mt-8`. 서버 컴포넌트. **상단 여백 기본값 없음**(`className` 필수 prop) |
+| `src/components/home/SectionNav.tsx` | 섹션 바로가기 내비(§15.4). `"use client"` 없음·JS 0·순수 `<a href="#id">`·활성 상태 없음·비sticky. `CHIP_CLASS` 문자열은 스펙 그대로 |
+| `src/app/education/[id]/page.tsx` | 노동교육 상세(§15.6R-G). `notices/[id]` 와 동일 구조, `backHref = ROUTES.homeSection("education")` |
+| `ArrowDownIcon` (`src/components/ui/icons.tsx` 내 함수) | §15.11 규격 그대로(path `M12 5v14` / `m19 12-7 7-7-7`) |
+
+**수정 (13)**
+
+| 파일 | 내용 |
+|------|------|
+| `src/lib/api/posts.ts` | `POST_CATEGORIES = ["notice","news","education"]` 단일 출처 + `PostCategory` 파생 + `isPostCategory()`. **런타임 파서 가드(구 L85)를 `!isPostCategory(category)` 로 교체** — §15.6R-H #2 |
+| `src/lib/postView.ts` | `PostListItem.category: PostCategory` 재사용(리터럴 재기술 제거). `isVideo` 파생 **미도입**(§15.6R-D 판정 1) |
+| `src/lib/routes.ts` | `TAB_IDS`·`TabId`·`isTabId`·`TAB_QUERY_PARAM`·`homeTab` **제거**. `homeSection(id)`·`education(id)`·`post(category,id)` 추가. `?tab=` 리다이렉트·하위호환 코드 **미작성**(§15.9.2) |
+| `src/components/board/PostList.tsx` | `kind: PostCategory` / `EMPTY_MESSAGES.education = "등록된 교육 자료가 없습니다"` / 상세 링크 = `ROUTES.post(...)` / **메타 블록 2행 재설계 + 링크형 `source` 렌더**(§15.6R-D) |
+| `src/app/page.tsx` | `BoardTabs` 제거 → `SectionNav` + `HomeSection` 4개. `loadCategory("education")` 추가, unconfigured 폴백 2→3 |
+| `src/app/notices/[id]/page.tsx` · `src/app/news/[id]/page.tsx` | `backHref` → `ROUTES.homeSection("notices")` / `ROUTES.homeSection("news")` |
+| `src/components/home/HeroPanel.tsx` | 모드 2 록업 `<h2>` → `<p>` (§15.9.1) — 클래스 동일, 시각 변화 0 |
+| `src/components/board/GuestbookPanel.tsx` | `PreparingCard` `<h2>` → `<h3>` (§15.9.1) — `text-h2` 유지, 시각 변화 0 |
+| `src/components/home/DeadlineStrip.tsx` | 분류→경로 삼항 → `ROUTES.post(post.category, post.id)` (아래 18.4-1 참조) |
+| `src/components/admin/PostForm.tsx` | 분류 라디오를 `POST_CATEGORY_ORDER` 파생으로 교체(**노동교육 선택지 추가**) + 컨테이너 `flex-wrap` |
+| `src/components/admin/AdminApp.tsx` | 목록 분류 라벨 `POST_CATEGORY_LABELS[post.category]` (education 이 "금융노조 소식"으로 오표기되던 것 수정) |
+
+**삭제 (1)**: `src/components/board/BoardTabs.tsx` — 이 사이트에서 ARIA tabs 패턴이 전면 소멸했다.
+
+**미작성(지시대로 만들지 않은 것)**: `EducationLinkList`, `src/lib/educationLinks.ts`, `영상` 토큰·`isVideo`
+파생·호스트 판정식, `description` 필드, `?tab=` 리다이렉트, `<section tabindex="-1">`, 노동교육 게시물 데이터.
+`globals.css`·신규 색·신규 토큰 **변경 0건**.
+
+### 18.2 `"notice"` 하드코딩 전수 조사 (`grep -rn '"notice"' src/` 외 4패턴)
+
+| 위치 | 판정 |
+|------|------|
+| `page.tsx` `loadCategory` 호출 3회(notice·news·education) · `kind` 3회 | **의도적** — 섹션마다 데이터 소스가 다르다. 누락은 `Record<HomeSectionId, ReactNode>` 가 컴파일 타임에 막는다 |
+| `notices/[id]`·`news/[id]`·`education/[id]` 의 `category !== "..."` | **의도적** — 교차 분류 접근은 404 여야 한다(실측 확인) |
+| `PostForm.tsx:88` `useState<PostCategory>(initial?.category ?? "notice")` | 기본 선택값 — 분류를 좁히는 코드가 아니다 |
+| `PostForm.tsx:112` `category === "news" && type === "article"` (출처 필수) | **의도적 비대칭** — 06 명세 §19.2: 출처 강제는 news 에만 남는다. education 에 확대하면 자체 제작 자료를 올릴 수 없다 |
+| `homeSections.ts`·`postCategories.ts`·`api/posts.ts` | 단일 출처 정의 지점(각 1곳) |
+| **`DeadlineStrip.tsx:28`(발견·수정)** | 리더 지시 목록에 없던 5번째 지점. 아래 18.4-1 |
+| **`AdminApp.tsx:359`(발견·수정)** | 리더 지시 목록에 없던 6번째 지점. education 을 "금융노조 소식"으로 표시 |
+| 탭 인프라 잔존(`homeTab`/`TAB_`/`isTabId`/`BoardTabs`/`role="tab"`) | **0건** (주석 내 언급 2건만) |
+
+### 18.3 기술적 결정
+
+1. **분류 리터럴 단일 출처 (`POST_CATEGORIES`)** — 스펙은 "`| "education"` 추가"만 요구했으나,
+   같은 리터럴이 4파일에 흩어져 이번 사고를 만든 구조 자체를 없앴다. 06 명세 §19.4(서버측 단일 출처화)의
+   프론트 대응이며, 다음 분류 추가 시 프론트에서 고칠 곳은 이 배열 하나다. 파서 가드는 이 배열에서 파생한다.
+2. **경로 매핑 `ROUTES.post`** — `Record<PostCategory, (id)=>string>` 이므로 분류 추가 시 **컴파일 에러**로
+   누락이 잡힌다. 삼항 분기는 새 분류를 조용히 잘못된 경로(404)로 보낸다.
+3. **`Record<...>` 강제 3곳** (`EMPTY_MESSAGES`·`POST_CATEGORY_LABELS`·`POST_DETAIL_PATHS`) +
+   `Record<HomeSectionId, ReactNode>`(page.tsx `sectionContent`) — "분류·섹션을 늘리면 컴파일이 깨진다"를
+   설계로 보장한다. 런타임에 조용히 사라지는 실패를 타입 에러로 앞당기는 것이 §15.6R-H 의 취지다.
+4. **라벨 중복 0** — `HOME_SECTIONS` 의 게시물 3분류 라벨은 `POST_CATEGORY_LABELS` 를 참조한다. 같은 한국어
+   문구가 코드에 두 번 존재하지 않으므로 메인·admin 표기가 어긋날 수 없다("방명록"만 분류가 없어 지역 상수).
+5. **메타 블록 = 토큰 배열 + 구분점 끼워넣기**(§15.6R-D 판정 4 권장안 그대로) — `MetaTokens` 가
+   `index > 0` 일 때만 `·` 을 렌더하고, `·` 을 **뒤 토큰과 같은 `inline-flex` nowrap 래퍼**에 담아
+   줄바꿈 시 행 끝에 매달리지 않게 했다. 빈 값 방어는 `hasText()`(null + 공백 문자열)로 통일.
+   - **D-n(모바일)만 토큰 배열 밖**에 둔다. `md:hidden` 으로 **CSS 로 사라지는 요소**라 구분점을 붙이면
+     md+ 에서 행이 `·` 로 시작해 판정 4를 위반한다. 현행과 동일하게 구분점 없이 행 선두에 온다.
+   - 간격 실측: 기존 `[· ][토큰]`(형제 flex 아이템, `gap-x-1`) → 신규 `[[·][토큰]]`(래퍼 `gap-x-1`).
+     구분점 좌우 여백 4px/4px 동일 → **시각 결과 동일, DOM 은 span 1단계 깊어짐**.
+6. **섹션 렌더는 `HOME_SECTIONS.map` + `sectionContent[id]`** — 라벨을 두 곳에 적지 않기 위한 구조.
+   첫 섹션 여백은 `index === 0 ? "mt-8 md:mt-10" : "mt-16 md:mt-20"` 한 곳에서만 결정된다
+   (`HomeSection` 에 기본값 없음 — `className` 은 필수 prop).
+7. **히어로 urgent 공지를 목록에서 빼지 않았다**(§15.1-6). 실측: urgent 공지 1건일 때 `/notices/n1` 링크가
+   히어로 CTA·마감 스트립·공지 카드 **3곳**에 존재한다.
+8. `any`·`as` 캐스팅·`@ts-ignore` **0건**. `isPostCategory` 는 `POST_CATEGORIES.some(c => c === value)` 로
+   구현해 `as readonly string[]` 캐스팅도 쓰지 않았다.
+
+### 18.4 스펙과의 차이 3건 (전부 기록·보고 대상)
+
+1. **`DeadlineStrip.tsx` 1행 수정** — 스펙 §15.11 "변경 0(손대지 말 것)" 목록에 있는 컴포넌트다.
+   그러나 `post.category === "news" ? ROUTES.news : ROUTES.notice` 삼항이 남아 있어, **마감일이 설정된
+   education 게시물이 스트립에 오면 `/notices/<id>` → 404** 가 된다. 링크가 404 가 되는 것은 §15.1 이 금지한
+   은폐의 변형이므로 `ROUTES.post` 매핑으로 교체했다. notice/news 동작·시각은 완전히 동일(경로 문자열 동일).
+   ※ 현재 `page.tsx` 는 스트립에 notice+news 만 넘긴다(도입 블록 현행 유지) — **education 을 스트립에
+   포함할지는 디자이너 판단 사항으로 남긴다**(§15.6R-A "urgent·deadline 은 분류 공통" vs §15.11 "도입 블록
+   현행 유지"의 해석 차). 확정 콘텐츠 5건은 전부 `deadline: null` 이라 현재 렌더 차이는 0.
+2. **admin 2파일 수정** — 스펙 §15.11 은 `admin/*` 를 "변경 0"으로 두었으나, 리더 지시서가 이 작업에
+   **포함**으로 명시했다. ① `PostForm` 분류 선택지에 노동교육(없으면 사용자가 등록·분류 변경 불가)
+   ② `AdminApp` 목록 라벨(education 이 "금융노조 소식"으로 **오표기**됨 — 정보 정확성 문제).
+   신규 색·토큰 0건. `PostForm` 분류 컨테이너에 `flex-wrap` 1개 추가: 선택지 3개 합 ≈353px 이
+   360px 화면 콘텐츠 폭(328px)을 넘어 가로 스크롤이 생긴다(§14.8.7 의 같은 판단 계승).
+3. **`hidden` 문자열 0건 판정의 예외 1건(프레임워크)** — 프리렌더 HTML `<body>` 첫 자식에
+   `<div hidden=""><!--$--><!--/$--></div>` 가 있다. Next.js App Router 셸이 넣는 **빈 서스펜스 경계**이며
+   `/_not-found` 페이지에도 동일하게 존재한다(우리 코드 아님, 콘텐츠 0). §15.12-1 검사 시
+   `role="tab"`·`role="tabpanel"` 은 0건, 콘텐츠 컨테이너 `hidden` 도 0건이다.
+   그 외 `hidden` 은 `md:hidden`(모바일 D-n)·`hidden md:flex`(DateBadge)·`overflow-hidden` 유틸리티 클래스다.
+
+### 18.5 자가 검증 (2026-08-17)
+
+```
+npx next typegen  → 통과      npx tsc --noEmit → 통과(오류 0)
+npm run lint      → 통과(0)   npm run build    → 통과 (/education/[id] ƒ 신규, / ○ 정적 유지)
+```
+
+**목 API(06 명세 §11.1 형태) 프리렌더 실측** — 프론트 렌더 검증 전용, 게시 데이터 아님:
+
+| 케이스 | 1행 | 2행 | 판정 |
+|--------|-----|-----|------|
+| 작성형 + 출처 + 첨부 + 마감 + urgent | `D-3 2026.08.17 · 지부 사무국 · 첨부 1` | (없음) | 현행과 동일 — 회귀 0 |
+| 작성형 + 출처 없음 | `2026.08.17` | (없음) | 구분점 없음 |
+| 링크형 + 출처 없음(기존 kfiu 소식) | `2026.08.17` | `외부 링크(새 창) · www.kfiu.org` | 정보 손실 0 |
+| 링크형 + 출처 有 + URL 파싱 실패(도메인 null) | `2026.08.17 · 출처있음` | `외부 링크(새 창)` | 행 말미 `·` 없음 |
+| **education 링크형(유튜브)** | `2026.08.17 · 금융노조 교육문화본부` | `외부 링크(새 창) · www.youtube.com` | **채널명 렌더 확인 — 게이트 조건 이행** |
+| education 작성형 | `2026.08.17 · 지부 교육부` | (없음) | 카드 링크 `/education/e2` |
+
+- `· ·`·행 선두 `·`·행 말미 `·`: **전 케이스 0건**.
+- **education 게시물이 목록에 실제로 렌더된다**(파서 가드 수정 확인 — 수정 전이라면 0건이 되는 케이스).
+- 라우팅 실측: `/education/e2` 200(`backHref="/#education"`, `<title>` 정상) · `/education/e1` 200 ·
+  `/notices/e2` **404** · `/education/n1` **404** · `/?tab=news` 200(리다이렉트 없음, 소식이 그대로 보인다).
+- 헤딩 아웃라인: (urgent 有) `h1 지부명 → h2 공지제목(히어로 모드 1) → h2×4 섹션` /
+  (urgent 無·API 미설정) `h1 → h2×4 → h3 방명록 준비 중입니다`. **h2 에 지부명 없음** ✓
+- 랜드마크: `region 주요 소식` → `navigation 마감 예정 일정` → `navigation 페이지 섹션 바로가기` →
+  `region ×4`(전부 `aria-labelledby`) — §15.9.1 구성과 일치.
+- 빈 상태(ok+0건) 3분류 실측: `등록된 공지사항이 없습니다` / `등록된 소식이 없습니다` /
+  **`등록된 교육 자료가 없습니다`** + 공통 보조 문구 `새 글이 등록되면 이곳에 표시됩니다`.
+- 빌드 CSS 생성 확인: `scroll-mt-6`·`md:scroll-mt-8`·`mt-12`·`mt-16`·`md:mt-20`·`md:mt-10`·`gap-1.5`·
+  `md:text-h1`·`hover:border-primary`·`hover:bg-primary-tint`·`focus-visible:outline-3`·
+  `focus-visible:outline-offset-2`·`h-1`·`w-16` 전부 존재.
+
+### 18.6 미해결·QA 인계
+
+1. **링크형 게시물의 `source`(채널명)를 admin UI 에서 입력·수정할 수 없다.** 출처 필드는 §14.4 규정대로
+   `type === "article"` 일 때만 렌더된다. 그런데 §15.6R-D 로 **링크형 카드가 `source` 를 표시**하게 되었고
+   그 표시가 fact-verifier 게이트 조건의 이행 수단이다. 즉 지금은 API 로만 채널명을 넣을 수 있다.
+   - 데이터 손실은 없다(수정 폼의 `source` state 가 기존 값을 보존해 그대로 재전송된다 — 실측 확인).
+   - 판단 필요: 링크형에도 출처 필드를 노출할지(스펙 §14.4 개정 사항이므로 **디자이너·리더 판정 요청**).
+     사용자가 "나중에 수정"하려면 채널명 수정 수단이 필요하다.
+2. **노동교육 표시 순서** — §15.6R-D3 대로 이번 범위 밖. 역순 등록(5→4→3→2→1)이 유일한 수단이며
+   새 글 추가 시 순서가 깨진다. 코드에 정렬 로직을 넣지 않았다(서버 정렬 그대로).
+3. **마감일 있는 education 게시물의 마감 스트립 포함 여부** — 18.4-1 참조(디자이너 판정 대기).
+4. **브라우저 실측 미수행**: 360px 칩 2행 래핑·터치 44px·가로 스크롤 0, 앵커 이동 시 `scroll-mt` 여백,
+   칩 hover/focus 링, 키보드 Tab 순서(§15.12-5·7·8·9). 서버 렌더 HTML·CSS 존재까지만 확인했다.
+5. **실서버 education 왕복 미수행**(§15.12-12) — 목 API 로만 검증했다. 프로덕션 등록 후 메인페이지 노출
+   확인이 필요하다.
+
+### 18.7 리더 판정 2건 반영 (2026-08-17, 18.6 미해결 항목 종결)
+
+18.6 에 올린 미해결 2건을 리더가 판정했다. 아래대로 구현·검증했으며 **두 항목 모두 종결**한다.
+
+#### 판정 1 — 링크형에도 `출처(source)` 입력 칸 노출 (**§14.4 개정** — 스펙 반영은 리더 담당)
+
+리더 판정 근거: 사용자 요구 원문이 *"게시물을 수정가능한 형태로 하면 나중에 수정할게"* 인데,
+§15.6R-D 로 **링크형 카드가 `source`(채널명)를 표시**하고 그 표시가 **fact-verifier 게이트 조건의
+이행 수단**인데도 그 값을 admin 에서 입력·수정할 수 없었다 — 사용자가 편집할 수 없는 값이 카드 표면에서
+신뢰성 판단을 담당하는 상태이므로 요구사항 미충족이자 게이트 조건이 운영 단계에서 유지될 수 없는 상태.
+
+| 항목 | 구현 |
+|------|------|
+| 노출 조건 | 출처 필드를 `type === "article"` 블록 **밖으로** 이동 → **유형 공통**. 작성형의 필드 위치(본문 다음)·라벨·`maxLength=200`·스타일 **전부 그대로** |
+| 필수 여부 | **확장하지 않음.** `sourceRequired = category === "news" && type === "article"` 유지(06 명세 §19.2 의 의도적 비대칭). 서버(`postValidate.ts`) **무변경** |
+| 라벨 | "출처" 유지(+ 필수일 때만 " (필수)" — 기존 동작) |
+| 힌트(링크형에서만) | `채널명·발행처를 적습니다. 목록 카드에 표시되어 조합원이 자료의 출처를 구분할 수 있습니다.` — `ADMIN_HINT_CLASS` 재사용. ① 무엇을 적는지(채널·발행처) ② 카드 노출 사실 ③ 기존 힌트 톤("~합니다/~습니다") 충족. **작성형에는 힌트를 붙이지 않았다**(기존 동작 유지 지시) |
+| 신규 스타일 | **0건** — 기존 `ADMIN_*` 상수만 사용. 신규 색 조합·버튼 상수 0 |
+| 곁가지 정리 1건 | 본문 힌트의 인라인 문자열 `"mt-1 text-caption text-ink-muted"` → `ADMIN_HINT_CLASS`(문자 단위 동일, 렌더 결과 불변) |
+
+**빈 입력 정규화 (리더 요구 — "없던 문제를 만들지 마라")**
+
+```ts
+// PostForm.tsx handleSubmit — deadline 과 동일 패턴
+source: source.trim().length > 0 ? source.trim() : initial !== null ? null : undefined,
+```
+
+- **수정 모드에서 비우면 `null`** 을 명시 전송해 기존 출처를 삭제한다. `undefined` 만 보내면
+  `JSON.stringify` 에서 키가 사라지고 서버 PATCH 병합이 `if (key in patch)` 이므로 **기존 값이 남는다** —
+  사용자가 출처를 비우고 저장했는데 카드에 그대로 표시되는 조용한 실패가 된다.
+- **신규 모드에서 비우면 키 생략** → 서버 기본값 `null`.
+- **빈 문자열(`""`)은 전송하지 않는다.** (서버 `optionalTrimmed` 가 `""` 도 `null` 로 정규화하지만,
+  의도를 값으로 표현한다.) `AdminPostInput.source` 타입을 `string | null` 로 확장(`deadline` 과 동일).
+
+#### 판정 2 — 마감 스트립에 education 포함
+
+`page.tsx`: `selectUpcomingDeadlines([...notices.posts, ...news.posts, ...education.posts])`.
+근거(리더): 마감일은 §14.6-4 대로 **분류·유형 공통 속성**이고 교육은 신청·수강 기한이 실재한다.
+분류에 따라 마감일이 어떤 때만 스트립에 뜨면 "관리자가 마감일을 넣었는데 조합원에게 안 보인다" =
+이번 작업이 제거하는 실패 모드 그대로다. 확정 콘텐츠 5건은 전부 `deadline: null` 이라 **현재 화면 변화 0**
+(회귀 위험이 낮은 지금 닫는다). 항목 링크는 이미 `ROUTES.post` 매핑이라 경로가 안전하다.
+
+#### 자가 검증 (추가 실측)
+
+```
+npx next typegen → 통과   npx tsc --noEmit → 통과(0)   npm run lint → 통과(0)   npm run build → 통과
+```
+
+**(가) 출처 payload 정규화 — 실제 서버 구현으로 검증.** `server/dist/lib/postValidate.js`(프로덕션과
+동일 코드)를 그대로 import 하고, PATCH 병합 2행(`server/src/routes/admin.ts`: `if (key in patch)`)을
+재현해 프론트가 만드는 payload 를 통과시켰다. **9/9 PASS**:
+
+| 케이스 | 전송 | 서버 결과 |
+|--------|------|-----------|
+| 신규(링크형) 출처 `"  지부 교육부 "` | `"지부 교육부"` | `"지부 교육부"` (trim) |
+| 신규(링크형) 출처 비움 | 키 생략 | `null` |
+| 수정(링크형) 출처 변경 | `"마이크임팩트"` | `"마이크임팩트"` |
+| 수정(링크형) 출처 비움 | `null` | `null` — **기존 값 삭제됨** |
+| 수정(링크형) 공백만 입력 | `null` | `null` |
+| 수정 payload 에 source 키 없음 | (없음) | `"금융노조 교육문화본부"` **보존** |
+| (참고) `""` 를 그대로 보낼 경우 | `""` | `null` — **빈 문자열이 저장되는 경로 없음** |
+| 소식+작성형 출처 없음 | `null` | **400 거부**(기존 규칙 유지) |
+| 노동교육+링크형 출처 없음 | 키 생략 | `null` 통과(§19.2 비대칭 유지) |
+
+**(나) 폼 렌더 — 임시 검증 페이지로 SSR 마크업 실측**(확인 후 **삭제 완료**, 리포지토리에 잔존 0):
+
+| 폼 | 결과 |
+|----|------|
+| 링크형 수정 폼 | URL 필드 O · 본문 필드 X · **출처 필드 O**(라벨 "출처", 기존 값 `금융노조 교육문화본부` 채워짐) · **힌트 O**(`mt-1 text-caption text-ink-muted`) |
+| 작성형 수정 폼 | URL 필드 X · 본문 필드 O · **출처 필드 O** · **힌트 없음**(기존 동작 유지) |
+| 분류 선택지 | `공지사항 / 금융노조 소식 / 노동교육` 3개, 컨테이너 `inline-flex flex-wrap gap-1 rounded-full bg-surface p-1` |
+
+**(다) 마감 스트립 + education — 목 API 프리렌더 실측**: 마감일(`2026-08-19`) 있는 education 게시물이
+
+- 마감 스트립에 **표시됨**: `D-2 8/19 교육 신청 마감 있는 교육 게시물`, `href="/education/e9"`
+  (`/notices/e9` 아님 — `ROUTES.post` 매핑 확인)
+- 동시에 **노동교육 섹션 목록에도 그대로 남아 있음**(§15.1-6 중복 허용), 카드 1행에 `D-2` + 게시일 + 채널명.
+
+#### 미수행 (QA 인계 — 18.6 목록에서 갱신)
+
+- **브라우저 실조작 불가**: 이 실행 환경의 Chrome 이 샌드박스에서 띄운 로컬 서버에 도달하지 못한다
+  (외부 사이트는 정상, `127.0.0.1`·LAN IP 모두 error page). 따라서 **admin 에서 실제로 타이핑→저장→재수정**
+  하는 클릭 경로, 360px 레이아웃, 앵커 스크롤, hover/focus 링, Tab 순서는 **QA 가 실브라우저로 확인**해야 한다.
+  위 (가)는 서버 계약, (나)는 SSR 마크업까지만 보증한다.
+- 프로덕션 실서버 education 왕복(§15.12-12)·실데이터 5건 렌더 대조(§15.12-10·11)도 QA 범위로 남는다.

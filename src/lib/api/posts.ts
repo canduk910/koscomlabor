@@ -15,7 +15,19 @@ import {
  * - 응답 필드는 명세와 필드 단위 일치로 명시 검증 (any/근거 없는 as 금지)
  */
 
-export type PostCategory = "notice" | "news";
+/**
+ * 게시물 분류 — 프론트 단일 출처 (06 명세 §19.1·§19.4, 서버 `POST_CATEGORIES` 와 값·순서 동일).
+ * 분류를 늘릴 때 프론트에서 고칠 곳은 이 배열 하나다. 각 파일에 리터럴을 다시 쓰지 말 것 —
+ * 한 곳이라도 빠지면 "등록은 되는데 목록에 안 나오는" 부분 고장이 된다(§15.6R-H).
+ */
+export const POST_CATEGORIES = ["notice", "news", "education"] as const;
+
+export type PostCategory = (typeof POST_CATEGORIES)[number];
+
+export function isPostCategory(value: unknown): value is PostCategory {
+  return POST_CATEGORIES.some((category) => category === value);
+}
+
 export type PostType = "link" | "article";
 
 export interface ApiAttachment {
@@ -80,9 +92,11 @@ export function parseAttachment(value: unknown): ApiAttachment | null {
 export function parsePostSummary(value: unknown): ApiPostSummary | null {
   if (!isRecord(value)) return null;
   const { id, category, type, title, urgent, publishedAt } = value;
+  // 분류 가드는 POST_CATEGORIES 파생 — 여기서 분류를 좁히면 해당 게시물이 조용히 버려지고
+  // (API 200 + 목록 0건 + 에러 표시 없음) 정보 은폐 사고가 재발한다 (§15.6R-H #2)
   if (
     typeof id !== "string" ||
-    (category !== "notice" && category !== "news") ||
+    !isPostCategory(category) ||
     (type !== "link" && type !== "article") ||
     typeof title !== "string" ||
     typeof urgent !== "boolean" ||
