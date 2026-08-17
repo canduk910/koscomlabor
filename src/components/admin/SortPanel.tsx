@@ -73,6 +73,14 @@ const LIMIT_MESSAGE =
 const URGENT_NOTE =
   "긴급으로 표시된 게시물은 공개 목록에서 지정 순서와 무관하게 맨 위에 표시됩니다.";
 
+/**
+ * 반영 지연 안내 — 메인페이지는 ISR(`app/page.tsx` 의 `revalidate = 60`)이라 저장 직후
+ * 최대 60초까지 이전 순서가 보인다. admin 목록과 API 는 즉시 반영되므로, 이 문구가 없으면
+ * 관리자가 "저장이 안 됐다"고 판단해 같은 작업을 반복하게 된다 (QA 13회차 권고 4).
+ */
+const REVALIDATE_NOTE =
+  "저장한 순서는 메인페이지에 최대 1분 뒤 반영됩니다. 관리 목록에는 바로 적용됩니다.";
+
 type Direction = "up" | "down";
 
 interface MoveButtonRefs {
@@ -310,6 +318,7 @@ export function SortPanel({ onSaved, onClose, onSessionExpired }: SortPanelProps
       </fieldset>
 
       <p className="mt-2 text-caption text-ink-muted">{URGENT_NOTE}</p>
+      <p className="mt-1 text-caption text-ink-muted">{REVALIDATE_NOTE}</p>
 
       {limitReached ? (
         <p role="alert" className="mt-2 text-caption text-urgent-strong">
