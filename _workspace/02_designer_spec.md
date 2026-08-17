@@ -4,6 +4,7 @@
 - 근거: `_workspace/00_input/requirements.md`, `union-design-system` 스킬
 - 범위: 메인페이지 전체 (헤더 / 긴급 공지 배너 / 탭 게시판(공지사항·금융노조 소식·방명록) / 푸터)
 - 다크 모드: **범위 제외** (스킬 기준). **create-next-app 기본 `globals.css`에 있는 `@media (prefers-color-scheme: dark)` 블록은 제거할 것** — 라이트 모드 토큰만 유지한다. 도입 시 전 조합 재검사 필요.
+- ⚠ **현행 시각 규정은 §16(2026-08-17 10차, 모던 전면 교체 — toss.im 계열)이다.** §16이 §1·§2·§11·§13.5·§15의 **시각 규정을 대체**하며, **구조·접근성 원칙(§15.1 은폐 금지, §15.4 내비 규칙, §15.6R-D 메타 2행·채널명)은 그대로 계승**한다 — 대응표는 **§16.0**.
 - ⚠ **현행 메인페이지 구조는 §15(2026-08-17 9차, 탭 → 섹션 나열 전환)이다.** 제목의 "(탭 게시판)"과 §3·§4·§8 일부는 이력 보존용으로 남긴 폐기분이다 — 폐기·대체 대응표는 **§15.0**.
 - 팔레트: **실제 CI 픽셀 실측 기반** (2026-08-16 2차 개정 — 추출·개정 근거는 §10). 1차 플레이스홀더 파랑(#1d4ed8 계열)·적색(#b91c1c 계열)은 전부 폐기. 대비 검증은 전 조합 재실행 완료(§2).
 
@@ -1639,6 +1640,1115 @@ education 게시물이 스트립에 오면 `/notices/<id>` 로 보내 404** 가 
 
 ---
 
+## 16. 디자인 v3 — 모던 전면 교체 + 썸네일 도입 + 정렬 UI (2026-08-17 10차)
+
+- 근거 입력: 사용자 요청 원문("썸네일 프리뷰는 왜 도입하지 않아? … toss.im 같은 홈페이지가 내 이상향이야. 디자이너 지침과 함께 현재 디자인을 전격교체해줘"), `union-design-system` 스킬 **§0 v3**(§0.1~0.5), `_workspace/00_input/requirements-sort-thumbnail.md`, `_workspace/00_input/contract-sort-thumbnail.md`, 현행 렌더 실측(`_workspace/screenshots/` 4장), 현행 구현 전수(`src/**`).
+- 리더 확정 3건: ① **정체성 색 유지**(딥블루 `#093389` 주색, 오렌지는 코스콤 CI 맥락 한정) — 팔레트를 다시 짜지 않는다 ② 교체 범위 = **조합원이 보는 화면 전부**(메인·상세·방명록·헤더·푸터), admin 은 **토큰 상속만** ③ **썸네일 도입 확정**(§15.6R-F 판정을 사용자가 번복, 서버 캐싱이라 조합원 IP 미노출).
+- **신규 색 조합 0건.** 바꾸는 것은 여백·타이포 스케일·라운드·그림자·모션·표면 운용이다(§0.2). 대비 실측은 전건 재실행했다(§16.18).
+- **§15.1 은폐 금지 7개 조건은 이 개편의 상위 규범이다.** §16 은 탭·아코디언·캐러셀·"더보기"·스크롤 등장 애니메이션을 **하나도 도입하지 않는다**(§16.6.3 검증표).
+
+### 16.0 대응표 — §16 이 대체하는 것 / 계승하는 것
+
+검증 이력 보존 원칙에 따라 기존 절을 삭제하지 않는다. **충돌 시 §16 이 우선한다.**
+
+| 기존 절 | 처리 | 대체·계승 |
+|---------|------|-----------|
+| **§1 디자인 토큰** | 색 17종은 **값 그대로 유지**, 타이포·radius·shadow·간격·컨테이너는 **대체** | §16.2~§16.8 (`globals.css` 전문은 §16.8) |
+| **§2 대비 검증 표** | 채택 조합 목록은 **유효**. §16 사용처 기준으로 재실측·재정리 | §16.18. 조합 #15(`#d0101b` 좌측 보더)·#19(`#ec6d1e` 장식 보더)·#25/#26(`#2e7df7` 장식)은 **사용처 소멸** |
+| **§3.1 · §13.2 · §13.5 헤더** | 시각 규정 **대체**(상하 4px 띠 2줄 → 상단 2px 트림 1줄) | §16.9.1. **§13.5.2 록업 크기·비율 1.183·지부명 표기 규칙은 계승** |
+| **§11.4 히어로 패널** | **대체** — 모드 2 폴백이 "지부명 2줄 록업"에서 **단문 메시지 1개**로, 장식 원형 **폐기**, 액센트 바 **폐기** | §16.11.1 (+ 종전 록업안은 §16.11.1-대안 A′ 로 보존) |
+| **§11.5 마감 스트립·날짜 배지** | 노출 조건·색 의미·D-n 규칙 **계승**, 시각(라운드·구분선·칩)만 **대체** | §16.9.5 |
+| **§11.6 라운드 카드화 표** | **대체** | §16.5(표면 운용) + §16.9 |
+| **§12.2 폰트 역할 배분** | **계승**(Gmarket=짧은 대형 표제·숫자 / Pretendard=그 외 전부). 적용 지점만 갱신 | §16.3.4 |
+| **§14.1 링크형·첨부 표현** | 규칙 **계승**(3중 병행·도메인 표기·첨부 존재 표시), 시각만 **대체** | §16.9.4 · §16.12.3 |
+| **§14 admin UI** | **재설계 대상 아님.** 토큰 상속만 받는다 | §16.14 (깨지는 곳 1건 + 최소 수정) |
+| **§15.1 은폐 금지 조건 7개** | **전부 계승 — 상위 규범** | 변경 없음 |
+| **§15.2 구조·간격표** | 구조(도입 블록 → 내비 → 섹션 4개) **계승**, 간격표 **대체** | §16.7.2 |
+| **§15.3 섹션 프레임** | 구조·헤딩·`aria-labelledby`·`scroll-mt` **계승**, **액센트 바 폐기** + 제목 스케일 갱신 | §16.11.3 |
+| **§15.4 섹션 바로가기 내비** | **전부 계승**(활성 상태 금지·비sticky·세그먼티드 금지·JS 0). 패딩·간격만 갱신 | §16.9.6 |
+| **§15.5 섹션별 콘텐츠 매핑** | **계승**(세 섹션이 같은 목록 언어) | 변경 없음 |
+| **§15.6R-C·D·E** | **전부 계승 — 변경 금지.** 특히 **2행 메타 + 링크형 `source`(채널명) 렌더**는 fact-verifier 게이트 조건의 이행 수단이다 | §16.9.4 에서 재확인 |
+| **§15.6R-F 임베드·썸네일 금지** | **썸네일 부분만 폐기**(사용자 번복 — 근거 §16.10.1). **`<iframe>` 임베드 금지는 유지** | §16.10 |
+| **§15.7 온누리 카드 위치·색** | 위치·색 체계 **계승**, 표면(좌측 바·그림자)만 **대체** | §16.9.7 |
+| **§15.8 정보 위계** | **갱신** | §16.16 |
+| **§15.9 접근성·반응형** | **계승**(헤딩 계층·앵커·포커스 규칙), 검산 수치만 갱신 | §16.17 |
+| **§15.10 대비표** | **대체** | §16.18 |
+| **§15.11 변경 목록** | **대체** | §16.19 |
+| **§15.12 QA 체크리스트** | **계승 + 확장**(기존 14항목 계속 유효) | §16.20 |
+
+### 16.1 설계 판단 요약 (핵심 5가지)
+
+| # | 판단 | 근거 요약 |
+|---|------|-----------|
+| 1 | **썸네일 혼재는 "우측 고정폭(md+) / 상단 풀블리드(모바일)"로 푼다. 플레이스홀더·섹션별 차등 둘 다 불채택** | 썸네일이 **오른쪽**에 있으면 없는 카드와 있는 카드의 **제목 좌측 정렬이 동일**하게 유지된다 → 목록 스캔이 깨지지 않는다. 상세 §16.10.2 |
+| 2 | **헤더의 상하 4px 파란 띠 2줄 → 상단 2px 트림 1줄** | 하단 띠가 히어로 패널과 **이중 경계**를 만들어 화면을 상자로 가둔다(§0.2-3 테두리 남용 = 구식 인상의 주원인). 자수 아이덴티티는 [흰 바탕 + 파란 록업 + 파란 띠]의 구성이 만들며, 띠 1줄로도 성립한다 |
+| 3 | **표면은 [테두리]·[그림자]·[배경 대비] 중 하나만 쓴다** | 현행에 3중 동시 적용 2건(온누리 카드, urgent 목록 카드)·2중 1건(준비 중 카드)이 있다. 규칙 1개로 정리하면 화면 전체의 "면"이 3층으로 단순해진다. 상세 §16.5 |
+| 4 | **히어로 모드 2(기본 상태)는 지부명 2줄 록업을 버리고 단문 메시지 1개를 크게 쓴다** | ① 록업 문자열이 헤더 `h1`과 **완전 중복**(§15.9.1이 이미 `<p>`로 강등한 요소) ② 한 화면에 하나의 메시지(§0.2-2) ③ **현행 록업은 360px에서 약 9.6px 넘쳐 클리핑된다**(§16.11.1 결함 검산 — `overflow-hidden`+`nowrap`) |
+| 5 | **urgent 목록 카드의 좌측 4px 빨간 바를 폐기하고 "긴급" 배지만 남긴다** | ① 표면 규칙 위반(배경+그림자+테두리) ② **긴급의 강조 면은 히어로**가 담당한다(§0.2-5 강조는 한 곳) ③ 배지가 색+아이콘+레이블 3중 병행으로 의미를 전달하므로 색 단독 의존이 아니다. 재검토 트리거는 §16.9.4 |
+
+### 16.2 색상 — 값 변경 0건 (유지 판정)
+
+**팔레트를 다시 짜지 않는다**(리더 확정 1). 색 17종의 값·역할·금지 규정(§1·§2·§10.2)을 그대로 승계한다.
+
+- `--color-surface`(#f9fafb) **어둡게 하지 않는다.** toss 계열은 면 채움을 `#f2f4f6` 급으로 쓰지만, 실측 결과 `#f1f3f6` 배경에서 보조 텍스트 `#4b5563`가 **6.80 → AAA 미달**이 된다(§16.18 미채택표). §0.3 "AAA 가 모던함보다 우선"에 따라 **면 대비를 포기하고 그림자로 블록을 분리**한다(§0.2-3의 취지 그대로).
+- **사용처가 0이 되는 색 토큰 3종** — 정의는 남긴다(§10.1 CI 실측 기록의 단일 소스이며 로고 자산 색이다):
+
+| 토큰 | 값 | §16 에서 사용처가 사라지는 이유 |
+|------|-----|------------------------------|
+| `--color-urgent` | `#d0101b` | urgent 카드 좌측 바 폐기(§16.1-5). 텍스트 금지 규정은 그대로 |
+| `--color-accent` | `#ec6d1e` | 온누리 카드 좌측 바 폐기(§16.9.7). 로고 이미지 색으로만 존재 |
+| `--color-primary-bright` | `#2e7df7` | 히어로 장식 원형 폐기(§16.11.1) |
+
+> 개발자 주의: 위 3종을 **`globals.css` 에서 지우지 마라.** 지우면 CI 실측값 기록이 코드에서 소실된다. 새 UI 에 **사용하지만 않으면 된다.**
+
+### 16.3 타이포그래피 스케일 (전면 갱신)
+
+#### 16.3.1 신·구 대조
+
+| 토큰 | 현행 | **§16** | 행간 | 굵기 | 자간 | 용도 |
+|------|------|--------|------|------|------|------|
+| `--text-hero` | 40px / lh1.2 / w800 | **40px** / lh **1.12** / w **700** | 1.12 | 700 | -0.03em | 히어로 표제(모바일) |
+| `--text-hero-lg` | 56px / lh1.15 | **64px** / lh **1.06** / w700 | 1.06 | 700 | -0.03em | 히어로 표제(md+) |
+| `--text-display` | 40px (사용처 0) | **40px** / lh 1.15 | 1.15 | 700 | -0.02em | **상세 페이지 제목(md+)** |
+| `--text-title` | — | **28px (신규)** | 1.25 | 700 | -0.02em | **상세 페이지 제목(모바일)** |
+| `--text-h1` | 32px | **36px** | 1.2 | 700 | -0.02em | 섹션 제목(md+) |
+| `--text-h2` | 24px / w600 | **24px** / w **700** | 1.3 | 700 | -0.01em | 섹션 제목(모바일)·소제목·카드 헤딩 |
+| `--text-lead` | — | **20px (신규)** | 1.55 | 600 | -0.01em | 목록 카드 제목(md+)·히어로 부문구·본문 h3 |
+| `--text-body` | 18px | **18px (하한 — 불변)** | 1.7 | 400 | 0 | 본문 |
+| `--text-caption` | 15px | **15px (하한 — 불변)** | 1.5 | 400 | 0 | 보조 정보 |
+
+- **본문 18px·caption 15px 하한은 유지**(스킬 §1 — 조합원 연령대). 키운 것은 상단(hero-lg 56→64, h1 32→36)과 **신규 중간 단계 2개**(title 28, lead 20)다. 중간 단계가 없어서 상세 제목이 섹션 제목과 같은 24px 이던 문제를 해소한다.
+- `--text-hero--font-weight` 를 **800 → 700 로 정정**한다: Gmarket Sans 는 500/700 만 서빙하므로(§12.3) 800 은 합성 볼드로 떨어져 획이 뭉갠다. 현행 코드가 `font-bold`로 덮어쓰고 있던 **잠재 불일치의 정리**다.
+- `--text-h2--font-weight` 600 → **700**: 제목은 굵게(§0.2-2). 영향 지점은 `PostArticle` 마크다운 h2 · `PreparingCard` h3 · admin 3곳 — **전부 제목 요소이므로 굵어지는 것이 옳다.**
+- `--tracking-heading`(-0.01em)은 **값 유지**(스케일 밖 커스텀 대형 텍스트용 보조. 현재 사용처 0).
+
+#### 16.3.2 헤딩 크기 분기 규칙 (개발자용 조합표)
+
+| 요소 | 모바일 | md+ | 클래스 |
+|------|--------|-----|--------|
+| 히어로 표제 | 40px | 64px | `text-hero md:text-hero-lg` |
+| 상세 페이지 제목(`h1`) | 28px | 40px | `text-title md:text-display` |
+| 메인 섹션 제목(`h2`×4) | 24px | 36px | `text-h2 md:text-h1` |
+| 목록 카드 제목 | 18px/600 | 20px/600 | `text-body font-semibold md:text-lead` |
+| 본문 마크다운 h2 / h3 | 24 / 20px | 동일 | `text-h2` / `text-lead` |
+| 본문·메타·캡션 | 18 / 15px | 동일 | `text-body` / `text-caption` |
+
+- **모바일 섹션 제목을 36px 로 올리지 않는 이유**: 히어로 표제가 모바일 40px 이므로 36px 이면 위계가 붕괴한다(§15.3 판단 계승 — 값만 갱신).
+
+#### 16.3.3 본문 줄 길이
+
+`--container-prose: 42rem`(672px) **유지** — 18px 한글 기준 한 줄 약 37자(672 ÷ 18 = 37.3), 스킬 §1 의 35~40자 범위 안이다. 상세 페이지 본문은 컨테이너가 960px 로 넓어져도 **prose 672px 를 넘지 않는다**(§16.12.1).
+
+#### 16.3.4 폰트 배분 (§12.2 계승 — 적용 지점만 갱신)
+
+| 요소 | 폰트 | 웨이트 | 자간 |
+|------|------|--------|------|
+| 히어로 표제(40/64px) | Gmarket Sans | 700 | -0.03em |
+| 헤더 로고타입 2줄 록업 | Gmarket Sans | 700 | -0.02em |
+| 히어로 CTA "자세히 보기"(18px) | Gmarket Sans | 500 | -0.01em |
+| 날짜 배지 "M/D"(18px) / "D-n"(15px) | Gmarket Sans | 700 / 500 | -0.01em / 0 |
+| **그 외 전부** (상세 제목·섹션 제목·카드 제목·본문·메타·버튼·폼·admin) | Pretendard Variable | 400/600/700 | 토큰 내장 |
+
+- **상세 페이지 제목(28/40px)에 Gmarket 을 쓰지 않는다**: 게시물 제목은 문장형이고 최대 40자다(§15.6R-E). 디스플레이 서체를 문장에 쓰면 판독성이 떨어진다(§12.2 원칙). Gmarket 은 **브랜드 표제·숫자 전용**으로 유지한다.
+- 폰트 자산·`@font-face`·서브셋 파이프라인은 **변경 0**(`public/fonts/` 현행 그대로).
+
+### 16.4 radius 스케일 + 버튼 라운드 정책
+
+| 토큰 | 현행 | **§16** | 적용 |
+|------|------|--------|------|
+| `--radius-badge` | 12px | **12px (유지)** | 인셋 썸네일(md+)·작은 배지·admin 패널 |
+| `--radius-card` | 24px | **16px (변경)** | 목록 카드·첨부 행·방명록 항목·입력 필드·푸터 로고 칩 |
+| `--radius-panel` | 32px | **24px (변경)** | 큰 블록(온누리 카드·빈 상태·준비 중 카드·상세 썸네일)·히어로(모바일) |
+| `--radius-panel-lg` | — | **32px (신규)** | 히어로(md+)·푸터 상단 모서리 |
+
+- 값이 아니라 **이름-값 매핑을 재정렬**했다. 결과적으로 히어로는 모바일 24 / md+ 32 로 **현행과 동일한 픽셀**이고, 목록 카드는 하드코딩 `rounded-2xl`(16px)이 **토큰화**된다(픽셀 동일). 실제로 값이 바뀌는 지점은 아래 3곳뿐이다:
+  - 온누리 카드 24 → 24 (`rounded-card` → `rounded-panel` 로 클래스만 교체, 픽셀 동일)
+  - 준비 중 카드 24 → 24 (동일, 클래스만 교체)
+  - admin "API 미연결" 카드 24 → **16**(`rounded-card` 의미 변경에 따른 상속. 무해)
+- **버튼 라운드 정책**: 공개 화면의 모든 버튼·칩·필 = **`rounded-full`**(히어로 CTA·방명록 등록/재시도·바로가기 칩·마감 스트립 임박 칩·상세 "원문 보기"). **admin 은 `rounded-lg`(8px) 유지** — 기능 화면이며 재설계 대상이 아니다(§16.14). 두 화면의 버튼이 같은 뷰에 섞이지 않으므로 "통일"은 화면 단위로 충족된다.
+- 입력 필드는 `rounded-card`(16px) — 종전 12px 에서 상향(필드 높이 56px 과 균형).
+
+### 16.5 표면 운용 규칙 — **이 개편의 중심 규칙**
+
+> **규칙 (검사 가능):** 하나의 요소는 [테두리]·[그림자]·[배경 대비] 중 **하나만** 분리 수단으로 갖는다.
+> 흰 카드의 배경은 페이지와 같은 `#ffffff` 라서 '배경 대비'로 세지 않는다 — 그 카드의 분리 수단은 **그림자 1개**다.
+
+| 층 | 정의 | 클래스 | 적용 |
+|----|------|--------|------|
+| **L1 카드** | 흰 배경 + `shadow-card`, **테두리 금지** | `rounded-card bg-bg shadow-card` | 게시물 목록 항목 · 첨부 행 · 방명록 항목 |
+| **L2 면** | `bg-surface`, **그림자·테두리 금지** | `rounded-panel bg-surface` | 썸네일 자리 · 빈 상태 · 준비 중 카드 · admin 인라인 패널(현행 유지) |
+| **L3 강조 면** | 의미색 면, **테두리 금지** | `bg-primary`(+`shadow-hero`) / `bg-accent-tint` / `bg-primary-soft` | 히어로 · 온누리 카드 · 마감 스트립 · 푸터 |
+| **컨트롤** | 흰 배경 + `1px border-border-strong`(4.83 UI), **그림자 금지** | `border border-border-strong bg-bg` | 입력 필드 · 바로가기 칩 · admin 버튼 |
+
+**현행 위반 지점과 조치 (전수)**
+
+| 위치 | 현행 | 위반 | 조치 |
+|------|------|------|------|
+| `OnnuriGuideCard.tsx:23` | `shadow-card` + `border-l-4 border-accent` + `bg-accent-tint` | **3중** | 그림자·좌측 바 제거 → L3(`bg-accent-tint`) 단독 |
+| `PostList.tsx:190-192` | `shadow-card` + `bg-bg` + urgent `border-l-4 border-urgent` | **3중**(urgent 카드) | 좌측 바 제거 → L1 단독 + "긴급" 배지 유지 |
+| `GuestbookPanel.tsx:24` | `border border-border-strong` + `bg-surface` | **2중** | 테두리 제거 → L2 단독 |
+| `SiteHeader.tsx:23` | `border-y-4`(상하 2줄) | 테두리 남용 | 상단 `border-t-2` 1줄만(브랜드 트림) |
+| `PostArticle.tsx:37` blockquote | `border-l-4 border-border-strong` | 굵기·색 | `border-l-2 border-primary`(2px, 11.37 — 인용의 의미 표지 1개) |
+| `GuestbookPanel.tsx:201` | `divide-y divide-border-soft` | 선 의존 목록 | L1 카드 스택(`gap-3`)으로 교체 |
+| `DeadlineStrip.tsx:33` | 항목 간 1px 세로 구분선 | 선 의존 | 구분선 제거 → `gap-4`(16px) 여백으로 분리 |
+| `HomeSection.tsx:35` | 섹션 제목 위 `h-1 w-16 bg-primary` 액센트 바 | 선 의존 | **폐기**(§16.11.3) |
+| `AdminApp.tsx:304/315` | `border border-border-soft` 패널 | (admin) | **유지** — 재설계 대상 아님 |
+
+### 16.6 모션
+
+#### 16.6.1 토큰·기본 규칙
+
+| 항목 | 값 |
+|------|-----|
+| duration | **150ms**(색·밑줄) / **200ms**(그림자·transform). Tailwind 기본 `duration-150`·`duration-200` 사용 — 신규 토큰 불요 |
+| easing | `--ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1)` **(신규 토큰)** → 클래스 `ease-out-soft` |
+| 허용 속성 | `opacity` · `transform` · `box-shadow` · `color` **만**. `width/height/top/left/margin` 애니메이션 **금지** |
+| transform 상한 | 카드 hover `-translate-y-0.5`(2px), 썸네일 hover `scale-[1.03]` — 그 이상 금지 |
+| reduced-motion | `prefers-reduced-motion: reduce` 에서 **전 트랜지션·애니메이션 무효화**(§16.8 전역 블록) + transform 은 `motion-safe:` 변형으로만 부여 |
+
+#### 16.6.2 상태별 모션 표
+
+| 요소 | hover | focus-visible | 비고 |
+|------|-------|---------------|------|
+| 목록 카드 | `shadow-card-hover` + 제목 `text-primary-strong`+밑줄 + `motion-safe:-translate-y-0.5` | 내향 `outline-3 outline-primary outline-offset-[-3px]` | `transition-[box-shadow,transform] duration-200 ease-out-soft` |
+| 카드 내 썸네일 | `motion-safe:group-hover:scale-[1.03]` | — | `overflow-hidden` 필수(확대분 클립) |
+| 히어로 CTA | `bg-primary-soft`(텍스트 그대로 9.23) | `outline-3 outline-white outline-offset-2` | 색 전환 150ms |
+| 바로가기 칩 | `bg-primary-tint` + `border-primary` + 밑줄 | `outline-3 outline-primary outline-offset-2` | §15.4 계승 |
+| 주 버튼(방명록 등록·원문 보기) | `outline-2 outline-primary outline-offset-2` + `motion-safe:-translate-y-0.5` | `outline-3 outline-primary outline-offset-2` | **hover 에서 배경색을 바꾸지 않는다** — 새 파랑을 만들지 않기 위한 선택(§16.2) |
+| 온누리 카드 | `outline-2 outline-accent-strong`(8.77) + 제목 밑줄 | `outline-3 outline-primary outline-offset-2` | 그림자 없음(L3) |
+
+#### 16.6.3 §0.4 은폐 금지 검증 — 도입 패턴 점검표
+
+| 패턴 | §16 도입? | 판정 근거 |
+|------|-----------|-----------|
+| 탭 / 아코디언 / 캐러셀 / "더보기" | **전부 미도입** | §15.1 계승. 썸네일이 들어와 세로가 길어지지만, 길이는 **비파괴적 수단**(§15.4 앵커 내비)으로만 다룬다 |
+| 스크롤 등장 애니메이션 | **미도입** | JS·`IntersectionObserver` 실패 시 콘텐츠가 영구 비표시될 수 있다(§0.4). 등장 효과 없이 **처음부터 전부 렌더**한다 |
+| 썸네일 `loading="lazy"` | 도입(목록만) | 은폐가 아니다 — 이미지는 `alt=""` 장식이고 **제목·출처는 항상 텍스트로 먼저 존재**한다(§0.5). 이미지가 끝까지 로드되지 않아도 정보 손실 0 |
+| `scroll-behavior: smooth` | 도입(`no-preference` 한정) | 스크롤 위치만 바꾼다. reduced-motion 사용자에게는 적용하지 않는다 |
+| 카드 hover 2px 상승 | 도입 | `transform` 만 사용, `motion-safe:` 한정, 레이아웃 불변 |
+
+### 16.7 간격·컨테이너
+
+#### 16.7.1 토큰
+
+| 토큰 | 현행 | **§16** | 용도 |
+|------|------|--------|------|
+| `--spacing-touch` | 44px | **유지** | 최소 터치 대상 |
+| `--spacing-section` | — | **4.5rem / 72px (신규)** | 대섹션 간 수직 간격(모바일) → `mt-section` |
+| `--spacing-section-lg` | — | **7.5rem / 120px (신규)** | 대섹션 간 수직 간격(md+) → `md:mt-section-lg` |
+| `--container-prose` | 42rem | **유지** | 본문 줄 길이 상한 |
+| `--container-page` | 48rem | **60rem / 960px (변경)** | 페이지 콘텐츠 컨테이너 |
+| `--container-admin` | — | **48rem / 768px (신규)** | **admin 전용** — 종전 `page` 값을 보존해 폼 폭 회귀 방지(§16.14) |
+
+- 좌우 패딩: `px-4 md:px-8`(16 / 32px). **모바일 16px 유지가 중요하다** — §15.6R-D 의 360px 메타 폭 검산(가용 288px)이 그대로 유효하다.
+- 컨테이너를 48rem → 60rem 으로 넓히는 근거: 썸네일(192px)이 카드 우측에 들어오므로 텍스트 열을 지키려면 폭이 필요하다(md 768px 뷰포트에서 텍스트 열 440px, lg 에서 632px 확보 — §16.17). 본문 장문은 `prose` 672px 로 별도 제한되므로 줄 길이 규정은 깨지지 않는다.
+
+#### 16.7.2 메인페이지 수직 리듬 (§15.2 간격표 대체)
+
+| 경계 | 모바일 | md+ | 클래스 |
+|------|--------|-----|--------|
+| 헤더 → 히어로 | 24px | 40px | `mt-6 md:mt-10` |
+| 히어로 → 마감 스트립 | 12px | 16px | `mt-3 md:mt-4` |
+| 히어로(또는 스트립) → 온누리 카드 | 32px | 40px | `mt-8 md:mt-10` |
+| 온누리 카드 → 바로가기 내비 | **56px** | **72px** | `mt-14 md:mt-18` |
+| 바로가기 내비 → 섹션 ① | 40px | 56px | `mt-10 md:mt-14` |
+| **섹션 ①→②→③→④** | **72px** | **120px** | `mt-section md:mt-section-lg` |
+| 섹션 ④ → 푸터 | 80px | 120px | 푸터 `mt-20 md:mt-section-lg` |
+| 섹션 내부: 제목 → 콘텐츠 | 24px | 28px | `mt-6 md:mt-7` |
+| 카드 리스트 항목 간 | 12px | 16px | `gap-3 md:gap-4` |
+
+- **스킬 §1 비율 검산**("섹션 위 여백 ≥ 아래(내부) 여백의 2배"): 모바일 72 / 24 = **3.0배** ✓ · md+ 120 / 28 = **4.3배** ✓.
+- §0.2-1 요구치(모바일 64~80 / 데스크톱 120~160) 충족: 72 / 120 ✓.
+
+### 16.8 `globals.css` 전문 (개발자 복사용 — 파일 전체를 이 내용으로 교체)
+
+`@font-face`(Gmarket) 블록과 `@source not` 지시는 **현행 그대로 유지**하고, `@theme` 블록과 그 아래를 아래로 교체한다.
+
+```css
+@theme {
+  /* ---- 색상 (17) — §16 변경 0건. 사용처 0 토큰도 정의는 보존(§16.2) ---- */
+  --color-bg: #ffffff;
+  --color-surface: #f9fafb;        /* L2 면 — 값 유지(어둡게 하면 보조 텍스트가 AAA 미달, §16.18) */
+  --color-ink: #1a1a1a;
+  --color-ink-muted: #4b5563;      /* 보조 텍스트 하한(7.56) */
+  --color-primary: #093389;
+  --color-primary-strong: #093389; /* primary 와 동일 값 — 기존 사용처 유지 목적 */
+  --color-primary-tint: #eff6ff;
+  --color-primary-soft: #d9e9ff;
+  --color-primary-bright: #2e7df7; /* §16 사용처 0 — CI 실측 기록 보존(지우지 말 것) */
+  --color-urgent: #d0101b;         /* §16 사용처 0 — 동일 */
+  --color-urgent-strong: #9c0d14;
+  --color-urgent-tint: #fef2f2;
+  --color-accent: #ec6d1e;         /* §16 사용처 0 — 동일 */
+  --color-accent-strong: #7a3806;
+  --color-accent-tint: #fdf0e7;
+  --color-border-strong: #6b7280;  /* 컨트롤 경계(4.83 UI) */
+  --color-border-soft: #e5e7eb;    /* 장식 구분선 전용(hr·admin) */
+
+  /* ---- 폰트 — 변경 0 ---- */
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
+  --font-display: "Gmarket Sans", "Pretendard Variable", Pretendard,
+    -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
+
+  /* ---- 타이포 스케일 (§16.3) ---- */
+  --text-hero: 2.5rem;                    /* 40px 히어로 표제(모바일) */
+  --text-hero--line-height: 1.12;
+  --text-hero--font-weight: 700;          /* 800→700: Gmarket 은 700 까지만 서빙(§16.3.1) */
+  --text-hero--letter-spacing: -0.03em;
+  --text-hero-lg: 4rem;                   /* 64px 히어로 표제(md+) */
+  --text-hero-lg--line-height: 1.06;
+  --text-hero-lg--font-weight: 700;
+  --text-hero-lg--letter-spacing: -0.03em;
+  --text-display: 2.5rem;                 /* 40px 상세 페이지 제목(md+) */
+  --text-display--line-height: 1.15;
+  --text-display--font-weight: 700;
+  --text-display--letter-spacing: -0.02em;
+  --text-title: 1.75rem;                  /* 28px 상세 페이지 제목(모바일) — 신규 */
+  --text-title--line-height: 1.25;
+  --text-title--font-weight: 700;
+  --text-title--letter-spacing: -0.02em;
+  --text-h1: 2.25rem;                     /* 36px 섹션 제목(md+) */
+  --text-h1--line-height: 1.2;
+  --text-h1--font-weight: 700;
+  --text-h1--letter-spacing: -0.02em;
+  --text-h2: 1.5rem;                      /* 24px 섹션 제목(모바일)·소제목 */
+  --text-h2--line-height: 1.3;
+  --text-h2--font-weight: 700;            /* 600→700 */
+  --text-h2--letter-spacing: -0.01em;
+  --text-lead: 1.25rem;                   /* 20px 카드 제목(md+)·부문구·본문 h3 — 신규 */
+  --text-lead--line-height: 1.55;
+  --text-lead--font-weight: 600;
+  --text-lead--letter-spacing: -0.01em;
+  --text-body: 1.125rem;                  /* 18px 본문 — 하한, 변경 금지 */
+  --text-body--line-height: 1.7;
+  --text-caption: 0.9375rem;              /* 15px 보조 — 하한, 변경 금지 */
+  --text-caption--line-height: 1.5;
+  --tracking-heading: -0.01em;            /* 스케일 밖 커스텀 대형 텍스트 보조(사용처 0) */
+
+  /* ---- radius (§16.4) ---- */
+  --radius-badge: 0.75rem;   /* 12px 인셋 썸네일·작은 배지·admin 패널 */
+  --radius-card: 1rem;       /* 16px 목록 카드·첨부 행·방명록 항목·입력 필드 */
+  --radius-panel: 1.5rem;    /* 24px 큰 블록·히어로(모바일) */
+  --radius-panel-lg: 2rem;   /* 32px 히어로(md+)·푸터 상단 — 신규 */
+
+  /* ---- 그림자 (§16.5) — 순수 장식, 대비 요건 무관 ---- */
+  --shadow-card: 0 1px 2px rgb(9 51 137 / 0.04), 0 10px 24px -6px rgb(9 51 137 / 0.10);
+  --shadow-card-hover: 0 2px 4px rgb(9 51 137 / 0.06), 0 16px 32px -8px rgb(9 51 137 / 0.16);
+  --shadow-hero: 0 24px 56px -20px rgb(9 51 137 / 0.35);  /* 신규 — 히어로 패널 부양 */
+
+  /* ---- 모션 (§16.6) ---- */
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);  /* 클래스: ease-out-soft */
+
+  /* ---- 간격·레이아웃 (§16.7) ---- */
+  --spacing-touch: 2.75rem;      /* 44px 최소 터치 대상 */
+  --spacing-section: 4.5rem;     /* 72px 대섹션 간(모바일) — 신규 */
+  --spacing-section-lg: 7.5rem;  /* 120px 대섹션 간(md+) — 신규 */
+  --container-prose: 42rem;      /* 672px 본문 줄 길이 상한(한글 약 37자) */
+  --container-page: 60rem;       /* 960px 페이지 컨테이너 — 48rem 에서 변경 */
+  --container-admin: 48rem;      /* 768px admin 전용 — 종전 page 값 보존(§16.14) */
+}
+
+html {
+  font-size: 100%;
+  color: var(--color-ink);
+  background: var(--color-bg);
+}
+
+/* 앵커 이동을 부드럽게 — 모션 축소 요청 사용자에게는 적용하지 않는다 (§16.6.1) */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* 모션 축소 요청 시 전 트랜지션·애니메이션 무효화 (§16.6.1 — 필수) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+```
+
+- **Tailwind v4 생성 확인 사항**: `--spacing-section` → `mt-section`/`py-section`, `--container-page` → `max-w-page`, `--radius-panel-lg` → `rounded-panel-lg`·`rounded-t-panel-lg`, `--ease-out-soft` → `ease-out-soft`, `--shadow-hero` → `shadow-hero`. `rounded-t-panel-lg` 가 생성되지 않는 빌드에서는 `rounded-t-[2rem]` 로 대체하고 그 사실을 03 문서에 기록하라.
+
+### 16.9 공통 컴포넌트 스펙
+
+#### 16.9.1 헤더 (`SiteHeader`) — §13.5 시각 규정 대체
+
+```html
+<header class="border-t-2 border-primary bg-bg">
+  <div class="mx-auto w-full max-w-page px-4 py-3.5 md:px-8 md:py-5">
+    <h1|p>
+      <Link href="/" class="inline-flex min-h-touch items-center gap-3
+              focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2">
+        <Image src="/brand/kfiu-mark.png" alt="" aria-hidden="true" width="247" height="192" priority
+               class="h-8 w-auto md:h-9" />
+        <span class="flex flex-col justify-center">
+          <span class="font-display text-[17.7px]/[1.15] font-bold tracking-[-0.02em] whitespace-nowrap text-primary md:text-[18.9px]/[1.15]">전국금융산업노동조합</span>
+          <span class="font-display text-[15px]/[1.15] font-bold tracking-[-0.02em] whitespace-nowrap text-primary md:text-[16px]/[1.15]">코스콤(한국증권전산)지부</span>
+        </span>
+      </Link>
+    </h1|p>
+  </div>
+</header>
+```
+
+| 항목 | 현행 | §16 | 근거 |
+|------|------|-----|------|
+| 띠 | `border-y-4 border-primary`(상하 4px) | **`border-t-2 border-primary`(상단 2px 1줄)** | §16.1-2 |
+| 세로 패딩 | `py-2 md:py-3`(8/12px) | **`py-3.5 md:py-5`(14/20px)** | 여백이 주역(§0.2-1). 총높이 모바일 ≈74px / md+ ≈86px |
+| 좌우 패딩 | `px-4 md:px-6` | **`px-4 md:px-8`** | §16.7.1 |
+| 록업 크기·비율·자간·`whitespace-nowrap` | §13.5.2 | **변경 0** | 사용자가 8차에서 "절반 수준 축소"를 직접 지정한 값이다. 등폭 비율 1.183 재산정 연쇄를 피한다 |
+| 마크 높이 | `h-8 md:h-9` | **변경 0** | 록업 높이(≈37.6/40.1px)와 균형 |
+| 하단 경계 | 4px 파란 띠 | **없음** | 히어로 패널(라운드+그림자)의 형태 대비가 경계를 만든다. 상세 페이지에서는 40px 여백이 경계다 |
+| focus-visible | 파랑 3px | **변경 0** | 11.37 ≥ 3:1 |
+
+- 360px 폭 검산: 마크 32 + gap 12 + 록업 167 + 패딩 32 = **243px ≤ 360** ✓ (§13.5.2 검산 유효).
+- **헤더를 sticky 로 만들지 않는다** — §15.9.2 의 `scroll-mt` 규정이 sticky 를 전제하지 않으며, 상단 고정 바는 바로가기 칩과 결합해 탭바로 오독될 위험이 있다(§15.4).
+
+#### 16.9.2 푸터 (`SiteFooter`)
+
+```html
+<footer class="rounded-t-panel-lg mt-20 bg-primary py-12 md:mt-section-lg md:py-16">
+  <div class="mx-auto w-full max-w-page px-4 md:px-8">
+    <p class="text-body font-bold text-white">전국금융산업노동조합 코스콤(한국증권전산)지부</p>
+    <div class="rounded-card mt-5 inline-flex items-center gap-4 bg-bg px-4 py-3">
+      <Image … class="h-7 w-auto" />  <!-- KFIU 마크 -->
+      <Image … class="h-7 w-auto" />  <!-- 코스콤 기본형 -->
+    </div>
+    <p class="mt-5 text-caption text-primary-soft">© 2026 전국금융산업노동조합 코스콤(한국증권전산)지부</p>
+  </div>
+</footer>
+```
+
+| 변경 | 값 | 근거 |
+|------|-----|------|
+| 상단 모서리 라운드 | `rounded-t-panel-lg`(32px) | 딥블루 밴드가 페이지를 자르는 인상을 없애고 히어로의 라운드 언어와 짝을 맞춘다 |
+| 세로 패딩 | `py-8` → **`py-12 md:py-16`**(48/64px) | 여백 확대 |
+| 지부명 | caption 15/700 → **`text-body font-bold`(18/700)** | 푸터의 유일한 1차 정보. 11.37 AAA |
+| 로고 칩 | `rounded-badge` px-3 py-2, 로고 24px → **`rounded-card` px-4 py-3, 로고 28px** | 라운드 정책 + 판독성 |
+| 항목 간격 | `mt-3` → **`mt-5`**(20px) | 동일 |
+| 색·문구·`alt` | — | **변경 0**(§13.5.2 지부명 표기 규칙 준수) |
+
+#### 16.9.3 목록 카드 프레임 (`PostList`의 `<li>`) — 썸네일 슬롯 포함
+
+```html
+<li class="rounded-card bg-bg shadow-card hover:shadow-card-hover overflow-hidden
+           transition-[box-shadow,transform] duration-200 ease-out-soft
+           motion-safe:hover:-translate-y-0.5">
+  <!-- 작성형: <Link href={ROUTES.post(category,id)}> / 링크형: <a target="_blank" rel="noopener noreferrer"> -->
+  <a class="group block focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-[-3px]
+            md:flex md:items-start md:gap-6 md:p-6">
+
+    <!-- ① 썸네일 — thumbnailUrl 이 있을 때만 렌더 (§16.10) -->
+    <span class="bg-surface block aspect-video w-full overflow-hidden
+                 md:order-2 md:w-48 md:shrink-0 md:rounded-badge">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={thumbnailUrl} alt="" width="1280" height="720" loading="lazy" decoding="async"
+           class="h-full w-full object-cover transition-transform duration-200 ease-out-soft
+                  motion-safe:group-hover:scale-[1.03]" />
+    </span>
+
+    <!-- ② 텍스트 블록 -->
+    <span class="block p-5 md:order-1 md:min-w-0 md:flex-1 md:p-0">
+      <span class="flex items-start gap-4">
+        <DateBadge … class="hidden md:flex" />   <!-- deadline 있을 때만, md+ 전용 (§16.9.5) -->
+        <span class="min-w-0 flex-1">
+          <span class="flex items-start gap-2">
+            <UrgentBadge withIcon />             <!-- urgent 일 때만 -->
+            <span class="line-clamp-2 text-body font-semibold text-ink
+                         group-hover:text-primary-strong group-hover:underline md:text-lead">
+              {title}<ExternalLinkIcon class="ml-1 inline size-4 align-[-2px]" />  <!-- 링크형만 -->
+            </span>
+          </span>
+          <span class="mt-2 flex flex-wrap items-center gap-x-1 text-caption text-ink-muted">…1행 메타…</span>
+          <span class="flex flex-wrap items-center gap-x-1 text-caption text-ink-muted">…2행 메타(링크형만)…</span>
+        </span>
+      </span>
+    </span>
+  </a>
+</li>
+```
+
+| 항목 | 현행 | §16 |
+|------|------|-----|
+| radius | `rounded-2xl`(하드코딩 16px) | **`rounded-card`**(토큰화, 픽셀 동일) |
+| 패딩 | `px-5 py-4`(20/16) | **모바일 `p-5`(20) / md+ `p-6`(24)** — 썸네일이 있으면 모바일은 텍스트 블록에만 적용(이미지는 풀블리드) |
+| urgent 표시 | 좌측 4px `border-urgent` + 배지 | **배지만**(좌측 바 폐기 — §16.1-5) |
+| 제목 | 18/600 | **18/600 → md+ 20/600(`md:text-lead`)** |
+| 메타 1행 상단 여백 | `mt-1.5`(6px) | **`mt-2`(8px)** |
+| 메타 2행·`source`·구분점 안전 규칙 | §15.6R-D | **변경 0 — 삭제 금지**(fact-verifier 게이트 조건) |
+| hover | `shadow-card-hover` | **+ 2px 상승(motion-safe) + 썸네일 1.03 확대** |
+| focus | 내향 outline 3px | **변경 0** |
+| 항목 간 gap | `gap-3` | **`gap-3 md:gap-4`** |
+
+- **`overflow-hidden` 필수**: 모바일 풀블리드 썸네일의 상단 모서리를 카드 radius 로 클립하고, hover 확대분을 가둔다.
+- 카드 최소 높이: 썸네일 없는 카드도 제목 1줄 + 메타 1행 + 패딩 = ≈98px ≥ 44px ✓.
+
+#### 16.9.4 urgent·긴급 배지 (`UrgentBadge`)
+
+- 배경 `--color-urgent-strong` / 흰 텍스트 15px/700 + 경고 아이콘 14px → **8.46 AAA**. **변경 0.**
+- radius 만 `rounded`(4px) → **`rounded-badge`**(12px)로 통일. 색·문구·아이콘·`aria` 불변.
+- **색 단독 의존 아님**: 배경색 + 경고 아이콘 + "긴급" 텍스트 3중 병행(§2 규정 계승).
+- **재검토 트리거(측정 가능)**: 목록 한 화면에 urgent 카드가 **2건 이상 동시**로 상시화되면(히어로가 1건만 흡수하므로) 좌측 바 대신 **카드 배경 tint** 방식을 재검토한다. 단 `#fef2f2` 배경에서는 보조 텍스트가 6.91(AAA 미달)이므로, 그때는 메타 색을 `--color-ink`(15.91)로 올리는 조합으로 재설계해야 한다(§16.18 미채택표 근거).
+
+#### 16.9.5 마감 스트립 · 날짜 배지
+
+**마감 스트립 (`DeadlineStrip`)** — 노출 조건·D-n 규칙·경과 마감 미표시·3분류 포함(§15.6R-D4)은 **전부 계승**.
+
+| 항목 | 현행 | §16 |
+|------|------|-----|
+| 컨테이너 | `rounded-badge bg-primary-soft px-4 py-3` | **`rounded-card bg-primary-soft px-5 py-3.5`** |
+| 항목 간 분리 | 1px 세로 구분선(`bg-primary`) | **구분선 폐기 → `gap-4`(16px) 여백** (§16.5) |
+| 임박 칩 | `rounded-lg`(8px) | **`rounded-full`**(버튼 라운드 정책) |
+| 항목 텍스트 | 15/700 `text-primary`(9.23) | **변경 0** |
+| 임박 칩 색 | `bg-urgent-strong` + 흰 텍스트(8.46) + "D-n" 병행 | **변경 0** |
+| 가로 스크롤 | `overflow-x-auto` | **변경 0**(페이지 가로 스크롤 금지) |
+
+**날짜 배지 (`DateBadge`)** — 크기 56×56, 3변형, 폰트(Gmarket 700/500), 색 조합 **전부 변경 0**. radius 만 `rounded-badge`(12px) 유지.
+
+#### 16.9.6 섹션 바로가기 칩 (`SectionNav`)
+
+**§15.4 의 필수 규칙(활성 상태 금지 · 스크롤 스파이 금지 · 세그먼티드 외형 금지 · 비sticky · ↓ 아이콘 병행 · `<nav>`+`<ul>` · `next/link` 미사용 · 조건부 렌더 금지)은 전부 계승한다.** 시각만 갱신:
+
+```ts
+const CHIP_CLASS =
+  "inline-flex min-h-touch items-center gap-2 rounded-full border border-border-strong bg-bg px-4 " +
+  "text-body font-semibold text-primary transition-colors duration-150 ease-out-soft " +
+  "hover:border-primary hover:bg-primary-tint hover:underline " +
+  "focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2 md:px-5";
+```
+
+| 변경 | 현행 → §16 |
+|------|-----------|
+| 좌우 패딩 | `px-3 md:px-4` → **`px-4 md:px-5`**(16→20px) |
+| 아이콘 간격 | `gap-1.5` → **`gap-2`** |
+| 칩 간 gap | `gap-2` → **`gap-2.5`**(10px) |
+| 트랜지션 | `transition-colors` → **`transition-colors duration-150 ease-out-soft`** |
+| 색·보더·상태 | **변경 0**(11.37 / 4.83 / hover 10.45 — §15.4 표 그대로) |
+
+- 360px 재검산: 칩 폭이 각 8px 늘어 1행 `공지사항`(122) + `금융노조 소식`(161) = 283 + gap 10 = **293 ≤ 328** ✓ / 2행 `노동교육`(122) + `방명록`(105) = 227 + 10 = **237** ✓ → 2행 유지, 총높이 44×2 + 10 = **98px**.
+- md+(704px 이상): 4칩 합 ≈ 615 + gap 30 = **645 ≤ 704** ✓ 1행.
+
+#### 16.9.7 디지털온누리 가이드 카드 (`OnnuriGuideCard`)
+
+**위치(도입 블록)·색 체계(accent)·3중 병행 문구·포커스 링 파랑은 §15.7 그대로 계승.** 표면만 교체:
+
+```html
+<a href={onnuriGuide} target="_blank" rel="noopener noreferrer"
+   class="rounded-panel group flex min-h-touch items-center gap-4 bg-accent-tint p-5
+          transition-transform duration-200 ease-out-soft
+          hover:outline-2 hover:outline-accent-strong motion-safe:hover:-translate-y-0.5
+          focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2 md:p-6">
+  <BookIcon class="size-6 shrink-0 text-accent-strong" />
+  <span class="min-w-0 flex-1">
+    <span class="block text-body font-bold text-accent-strong group-hover:underline md:text-lead">디지털온누리 사용 가이드</span>
+    <span class="mt-1 block text-caption font-normal text-ink">코스콤 조합원 대상 안내 · 외부 페이지가 새 창에서 열립니다</span>
+  </span>
+  <ExternalLinkIcon class="size-5 shrink-0 text-accent-strong" />
+</a>
+```
+
+| 변경 | 근거 |
+|------|------|
+| `shadow-card` **제거** | L3 강조 면은 배경색이 분리 수단(§16.5) |
+| `border-l-4 border-accent` **제거** | 3중 동시 적용 위반. 또한 `#ec6d1e` 는 tint 인접면에서 2.78 로 의미 UI 자격이 없어(§2) 순수 장식이었다 — **의미는 아이콘 + 오렌지 제목 + 문구가 전달하므로 정보 손실 0** |
+| radius `rounded-card` → `rounded-panel` | 24px(픽셀 동일, 토큰 의미 재정렬) |
+| 패딩 `p-4 md:px-6` → `p-5 md:p-6` | 여백 확대 |
+| 제목 md+ 20px, gap 3→4 | 타이포 스케일 |
+
+#### 16.9.8 빈 상태 (`EmptyState`) · 방명록 준비 중 카드 (`PreparingCard`)
+
+| 요소 | 현행 | §16 |
+|------|------|-----|
+| `EmptyState` 컨테이너 | `px-4 py-12`(면 없음) | **`rounded-panel bg-surface px-6 py-14 text-center`**(L2 면) |
+| 아이콘 | `DocumentIcon size-10 text-border-strong`(4.63 on surface — UI ✓) | **변경 0** |
+| 주 메시지 | 18/600 ink(16.65) | **변경 0** |
+| 보조 메시지 | 15 ink-muted(7.23) | **변경 0** |
+| `PreparingCard` | `rounded-card border border-border-strong bg-surface px-4 py-8` | **`rounded-panel bg-surface px-6 py-12`**(테두리 제거 — §16.5) |
+| 문구·헤딩 레벨(`h3`) | — | **변경 0**(§15.9.1 계승) |
+
+### 16.10 썸네일 카드 — 판정과 스펙 ★
+
+#### 16.10.1 §15.6R-F 번복 기록
+
+- §15.6R-F 는 썸네일 프리뷰를 4가지 근거로 불채택했다: ① 외부 스크립트·쿠키 유입 ② 다수 임베드의 모바일 로딩·CLS 악화 ③ 카드 프레임 일관성 파괴 ④ 자동재생 위험.
+- **사용자가 직접 번복했고**, 계약 §4·§5 의 **서버 캐싱**(우리 서버가 `i.ytimg.com` 에서 1회 받아 `/thumbnails/:key` 로 제공)이 ①·④ 를 구조적으로 제거한다 — 조합원 IP·UA·Referer 가 구글에 닿지 않고, 정적 JPEG 이므로 재생 자체가 없다. ② 는 고정 종횡비 박스 + `loading="lazy"` 로 해소한다(§16.10.4).
+- **남은 실질 쟁점 ③(카드 프레임 일관성)에 대한 판정이 §16.10.2 다.** `<iframe>` 임베드 금지는 **계속 유효**하다.
+
+#### 16.10.2 혼재 처리 판정 — **레이아웃을 썸네일 유무와 무관하게 만든다(우측 배치). 플레이스홀더·섹션별 차등 불채택**
+
+전제(실측): 공지사항은 전건 작성형이라 썸네일이 **없다**. 노동교육 5건은 전부 YouTube 링크형이라 **전건 있다**. 금융노조 소식은 **섞인다**. 즉 혼재는 회피 불가다.
+
+| 후보 | 판정 | 근거 |
+|------|------|------|
+| **(가) 없는 항목에 플레이스홀더 박스** | **불채택** | ① 공지사항 목록은 **전건이 플레이스홀더**가 되어 "이미지 로드에 실패한 목록"으로 보인다 ② 정보량 0 인 면적이 카드 높이를 모바일에서 **+184px(+57%)** 늘려 여백 원칙(§0.2-1)과 정면 충돌한다 ③ 플레이스홀더에 아이콘·로고를 넣으면 그것이 "가짜 콘텐츠"가 된다(하네스 제1원칙: 없는 것을 만들지 않는다) |
+| **(나) 섹션별로 다른 레이아웃**(노동교육만 썸네일 그리드) | **불채택** | ① §15.5·§15.6R-A 가 확정한 "세 섹션이 완전히 같은 목록 언어"를 깬다 — 조합원이 목록 읽는 법을 두 번 배워야 한다 ② 섹션이 아니라 **게시물 유형**(링크형/작성형)이 실제 변수다. 소식 섹션에는 두 종류가 섞이므로 섹션 단위 분기로는 애초에 해결되지 않는다 ③ 2열 그리드 불채택 근거(§15.6.3)가 그대로 유효 |
+| **(다) 카드 안의 선택 슬롯 + 텍스트 좌측 정렬 고정** | **채택** | ① **md+ 에서 썸네일을 우측에 두면 제목의 좌측 시작점이 썸네일 유무와 무관하게 동일**하다 → 세로로 훑는 시선이 끊기지 않는다(왼쪽 배치는 텍스트가 216px 밀려 들쭉날쭉해진다) ② 모바일은 상단 풀블리드라 어차피 텍스트가 좌측 정렬된다 ③ 카드 프레임(radius·그림자·패딩·타이포·hover·focus)이 **단 하나**로 유지된다 → §15.6R-F 의 쟁점 ③ 해소 ④ 규칙의 키가 `category` 가 아니라 **데이터(`thumbnailUrl` 유무)** 라서 §15.6R-D 판정 3(분류별 차등 0)과 일관된다 |
+
+**결론 규칙**: `thumbnailUrl !== null` 이면 렌더, `null` 이면 슬롯 자체를 렌더하지 않는다. **분류 조건·플레이스홀더 없음.**
+
+#### 16.10.3 배치·크기 (360px / md+ 각각)
+
+| 구간 | 배치 | 크기 | 검산 |
+|------|------|------|------|
+| **모바일(~767px)** | 카드 **상단 풀블리드**, 텍스트는 아래 | 카드 폭 100% × 16:9 → 360px 뷰포트에서 **328 × 184.5px** | 텍스트 열이 288px 로 유지되어 §15.6R-D 의 메타 2행 검산(1행 249 / 2행 234 ≤ 288)이 **그대로 유효** ✓ |
+| **md+(768px~)** | 카드 **우측 고정폭**, 텍스트 좌측 | **192 × 108px**(`md:w-48`, `aspect-video`) | 768px 뷰포트: 카드 내부 656 − 192 − gap 24 = **텍스트 440px** ✓ / 1024px+: 848 − 216 = **632px** ✓ |
+
+- **좌측 배치를 쓰지 않는 이유(정량)**: 360px 에서 좌측 112px 썸네일을 두면 제목 열이 164px(≈11자/줄)로 줄어 2줄 clamp 상한이 22자가 된다 — 권장 제목 40자의 절반이다. md+ 에서 좌측 배치는 썸네일 없는 카드와 제목 시작점이 **216px 어긋난다.**
+- `hqdefault`(480×360, 4:3)는 **사용 금지**(계약 §4). `maxresdefault`(1280×720)·`mqdefault`(320×180) 모두 정확히 16:9 이므로 **하나의 종횡비 박스로 두 변형을 모두 담는다.**
+- 화질 한계 기록: `mqdefault`(320px) 만 존재하는 항목은 모바일 풀블리드(328px, 2배 DPR 에서 656 디바이스 픽셀)에서 다소 부드럽게 보인다. **정보 전달에 영향이 없고**, 대안(모바일 썸네일 폭 축소)은 시각 요소 강화라는 목적에 반하므로 수용한다.
+- `DateBadge`(deadline)와 썸네일이 동시에 존재하면 md+ 배치는 `[배지][텍스트][썸네일]` 이다. deadline 있는 항목의 제목 시작점이 72px 밀리는 것은 **현행에서도 동일한 기존 동작**이므로 §16 에서 바꾸지 않는다.
+
+#### 16.10.4 CLS·로딩·실패·접근성
+
+| 항목 | 규정 |
+|------|------|
+| **CLS 0** | 래퍼에 `aspect-video`(16/9) + `<img>` 에 `width="1280" height="720"` **둘 다 필수**. 이미지가 늦게 와도 박스 크기는 확정되어 있다 |
+| 이미지 태그 | **`next/image` 를 쓰지 않고 `<img>` 를 쓴다.** 근거: ① 소스가 API 호스트(환경변수)라 `images.remotePatterns` 를 환경마다 설정해야 한다 ② 이미 최적 크기(192/328px 표시에 320~1280px 소스)이고 서버가 `Cache-Control: immutable` 로 내려준다(계약 §5) ③ 최적화 프록시를 한 단 더 두면 실패 지점이 늘어난다. **ESLint `@next/next/no-img-element` 경고는 해당 줄에 `eslint-disable-next-line` 주석으로 처리하고 사유를 주석에 남긴다** |
+| 로딩 | 목록: `loading="lazy" decoding="async"` / 상세 페이지: `loading="eager"`(첫 화면 요소) |
+| **실패 표현** | 래퍼 `bg-surface`(#f9fafb) → 이미지가 404·타임아웃이면 **중립 회색 박스**만 남는다. `alt=""` 이므로 대체 텍스트·깨진 아이콘 문자열이 노출되지 않는다. **JS `onError` 핸들러를 쓰지 않는다**(서버 컴포넌트 유지 — `"use client"` 를 부르지 않는다) |
+| `alt` | **빈 문자열 `alt=""`.** 제목이 바로 인접해 있으므로 썸네일은 장식이다(§0.5). `aria-hidden` 은 붙이지 않는다(빈 alt 로 충분하며 중복 규정은 혼란만 만든다) |
+| 썸네일이 제목을 대체하지 않음 | 제목·게시일·출처·"외부 링크(새 창)"는 **항상 텍스트로 존재**한다(§0.5·§15.6R-D) |
+| 상세 페이지 | 링크형 게시물에만 표시(§16.12.2) |
+| **표시하지 않는 곳** | 히어로 패널 · 마감 스트립 · admin 목록. 근거: 히어로/스트립은 강조·요약 레이어라 이미지가 들어가면 1순위 정보(긴급·마감)의 시선을 뺏는다. admin 은 제목·분류·게시일로 식별하며 행 높이 증가는 관리 작업을 느리게 한다 |
+
+#### 16.10.5 페이지 높이 영향 검산 (§15.4 재검토 트리거 대비)
+
+- 노동교육 5건(전건 썸네일): 카드당 모바일 = 184.5(이미지) + 52(제목 2줄) + 45(메타 2행) + 40(패딩) ≈ **322px**, 5건 + gap 48 = **1,658px**.
+- 메인페이지 총높이(360×640, 공지 2 + 소식 2 + 교육 5 + 방명록) ≈ **4,500~4,800px ≈ 7.0~7.5 뷰포트**.
+- §15.4 의 재검토 트리거는 **8뷰포트(≈5,120px)** 다 → **미달, 따라서 "맨 위로" 수단·플로팅 버튼을 도입하지 않는다.** 단 여유가 줄었으므로 트리거를 **높이 기준으로 재기술**한다: 360px 기준 메인 총높이가 5,120px 을 넘으면 복귀 수단을 재검토한다(게시물 건수 기준 표현은 폐기 — 썸네일 유무로 건당 높이가 2배 이상 달라지기 때문).
+
+### 16.11 메인페이지
+
+구조(도입 블록 → 바로가기 내비 → 섹션 4개 → 푸터)와 §15.1 은폐 금지 조건은 **그대로**다. 컨테이너: `mx-auto mt-6 w-full max-w-page px-4 md:mt-10 md:px-8`. 간격은 §16.7.2 표.
+
+#### 16.11.1 히어로 패널 (`HeroPanel`) — §11.4 대체
+
+**공통 컨테이너**
+
+```html
+<section aria-label="주요 소식"
+         class="rounded-panel bg-primary shadow-hero p-5 md:rounded-panel-lg md:p-12">
+```
+
+| 항목 | 현행 | §16 | 근거 |
+|------|------|-----|------|
+| radius | 24 / md 32 | **24 / md 32(픽셀 동일, 토큰명 변경)** | §16.4 |
+| 패딩 | `p-6 md:p-10`(24/40) | **`p-5 md:p-12`(20/48)** | 모바일은 폭 확보(아래 검산), md+ 는 여백 확대 |
+| 그림자 | `shadow-card` | **`shadow-hero`** | 페이지의 유일한 강조 면을 부양(§0.2-5) |
+| 장식 원형(`primary-bright`) | 모드 1 전용 렌더 | **폐기** | ① 3.89:1 장식이 텍스트와 겹치는 기하 문제로 이미 모드 2 에서 미렌더 처리된 예외였다 ② 원형·모드 예외가 사라져 컴포넌트가 단순해진다 ③ 강조는 딥블루 면 하나로 충분하다 |
+| `relative overflow-hidden` / `z-10` 래퍼 | 원형 때문에 필요 | **제거** | 원형 폐기로 불필요 |
+| 액센트 바(`h-1 w-16 bg-white`) | 모드 1 | **폐기** | 선 요소 감축(§16.5). 제목–CTA 간 32/40px 여백이 구분을 담당 |
+
+**모드 1 — urgent 공지 바인딩** (verified + urgent 최신 1건)
+
+```html
+<p class="flex flex-wrap items-center gap-3">
+  <UrgentBadge withIcon />
+  <time class="text-caption text-primary-soft">{dateLabel}</time>   <!-- 9.23 -->
+</p>
+<h2 class="font-display mt-5 line-clamp-3 text-hero text-white md:mt-6 md:text-hero-lg">{title}</h2>
+<p class="mt-8 md:mt-10">
+  <Link class="font-display inline-flex min-h-touch items-center gap-2 rounded-full bg-white px-7
+               text-body font-medium tracking-[-0.01em] text-primary
+               transition-colors duration-150 ease-out-soft hover:bg-primary-soft
+               focus-visible:outline-3 focus-visible:outline-white focus-visible:outline-offset-2">
+    자세히 보기 <ArrowRightIcon class="size-5" />
+  </Link>
+</p>
+```
+
+- 제목: 40 / **64px**(md+), 흰색 **11.37 AAA**, 3줄 clamp. `font-bold` 클래스는 **토큰 웨이트 700 내장으로 불필요**해졌다(제거 가능, 남겨도 무해).
+- CTA: 필 버튼, 흰 배경 + primary 텍스트(11.37), hover `bg-primary-soft`(9.23), 포커스 흰 링(11.37). 좌우 패딩 24→28px.
+- 여러 urgent 시 최신 1건만 히어로, 나머지는 목록에 그대로(§15.1-6 계승).
+
+**모드 2 — 폴백(urgent 0건, 현재 기본 상태) — 지부명 록업 폐기, 단문 메시지 채택**
+
+```html
+<p class="font-display text-hero text-white md:text-hero-lg">코스콤 조합원을 위한 정보 공유</p>
+```
+
+- **문구는 사용자 지정 문자열 그대로**(§11.4 6차 확정분). **새 문구를 만들지 않는다.**
+- 요소는 `<p>` 유지 → 헤딩 아웃라인 `h1(지부명) → h2×4(섹션)` 가 정확히 목차로 남는다(§15.9.1 계승).
+- **채택 근거**
+  1. 지부명 2줄 록업은 헤더 `h1` 과 **문자열이 완전히 중복**된다. §15.9.1 이 이미 "제목이 아닌 브랜드 표시"로 강등한 요소이며, 헤더·푸터에 지부명이 각각 있으므로 **정체성 표기는 화면에 2회 유지**된다.
+  2. 한 화면에 하나의 메시지(§0.2-2). 딥블루 면 + 40/64px 단문이 toss 계열 히어로의 핵심 형태다.
+  3. **현행 록업의 360px 결함이 해소된다** — 아래 검산.
+
+**⚠ 현행 결함 기록 (QA 재확인 요청 항목)**
+
+- §11.4 는 모바일 록업을 **375px 기준**으로 검산했다("록업 폭 11.14×26 ≈ 290px ≤ 패널 내부 295px"). 그러나 §15.9.3 이 선언한 설계 하한은 **360px** 이다.
+- 360px 실측 계산: 패널 폭 328 − 패딩 48 = **내부 280px** < 록업 폭 **289.6px** → **약 9.6px 초과.** 패널에 `overflow-hidden` + 록업에 `whitespace-nowrap` 이 걸려 있어 "코스콤(한국증권전산)지부"의 **오른쪽 끝이 잘린다.**
+- §16 모드 2 는 nowrap 록업을 쓰지 않으므로 이 결함이 **구조적으로 소멸**한다. 단문은 자동 줄바꿈되며 40px 기준 360px 에서 2줄(≈90px)이다.
+
+**대안 A′ (리더가 록업 유지를 지시할 경우에만 사용 — 크기 재산정 완료)**
+
+| 구간 | 2줄(지부명) | 1줄(상위조직명) | 록업 폭 | 패널 내부 폭 | 판정 |
+|------|-------------|-----------------|---------|--------------|------|
+| 모바일 360px | **25px** | **29.6px** | 11.14×25 = **278.5** | 328 − 40(`p-5`) = **288** | ✓ 여유 9.5px |
+| md 768px | **52px** | **61.5px** | 11.14×52 = **579** | 704 − 96(`md:p-12`) = **608** | ✓ 여유 29px |
+| lg 1024px+ | **60px** | **71.0px** | 11.14×60 = **668** | 896 − 96 = **800** | ✓ 여유 132px |
+
+- 등폭 비율 1.183(§13.5.2)·Gmarket Bold 700·자간 -0.02em·행간 1.15·`whitespace-nowrap` 는 계승. **현행 값(모바일 26/30.8, md 56/66.2)은 어느 구간에서도 쓰지 마라 — 360px 과 768px 에서 넘친다.**
+
+#### 16.11.2 도입 블록
+
+- 마감 스트립: §16.9.5. 히어로에 `mt-3 md:mt-4` 로 종속.
+- 온누리 카드: §16.9.7, `mt-8 md:mt-10`. 위치·색 유지 판정은 §15.7 그대로.
+
+#### 16.11.3 섹션 프레임 (`HomeSection`) — 액센트 바 폐기
+
+```html
+<section id="{id}" aria-labelledby="{id}-heading" class="scroll-mt-6 md:scroll-mt-8 {className}">
+  <h2 id="{id}-heading" class="text-h2 text-ink md:text-h1">{label}</h2>
+  <div class="mt-6 md:mt-7">{children}</div>
+</section>
+```
+
+| 항목 | 현행 | §16 | 근거 |
+|------|------|-----|------|
+| 액센트 바 `h-1 w-16 bg-primary` | 제목 위 | **폐기** | ① 72/120px 섹션 간격이 3.0~4.3배 비율로 소속을 이미 확정한다(§16.7.2) ② 4px 실선 × 4섹션 반복은 §0.2-3(구분은 여백으로)과 정면 충돌하고 템플릿 인상을 준다 ③ 히어로의 흰 액센트 바도 폐기하므로 "동일 기하 재사용" 명분(§15.3)이 소멸한다 |
+| 제목 | 24 / md 32, w600 | **24 / md 36, w700** | §16.3 |
+| 제목 → 콘텐츠 | `mt-5`(20) | **`mt-6 md:mt-7`(24/28)** | 리듬 |
+| `aria-labelledby` · `scroll-mt` · `tabindex` 미부여 · 건수/아이콘/설명 불채택 | — | **전부 계승** | §15.3 |
+| 상단 여백 주입(`className` 필수 prop) | — | **계승** | 누락이 눈에 띄어야 한다 |
+
+- 모바일 24px 유지 근거: 히어로 표제가 40px 이므로 36px 이면 위계가 흐려진다. md+ 는 히어로 64px 이라 36px 이 안전하다.
+
+#### 16.11.4 섹션별 콘텐츠
+
+§15.5 매핑 **변경 0**(공지/소식/노동교육 = 같은 `PostList`, 방명록 = `GuestbookPanel`). 첫 섹션 `mt-10 md:mt-14`, 이후 `mt-section md:mt-section-lg`.
+
+### 16.12 상세 페이지 (`PostArticle`) — 공지·소식·노동교육 공용
+
+#### 16.12.1 골격
+
+```html
+<article class="mx-auto mt-8 w-full max-w-page px-4 md:mt-14 md:px-8">
+  <div class="mx-auto max-w-prose">
+    <!-- ① 상단 복귀 링크 (신규) -->
+    <p><Link href={backHref} class="inline-flex min-h-touch items-center text-caption font-semibold text-primary
+             hover:underline focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2">
+      <span aria-hidden="true">←&nbsp;</span>목록으로 돌아가기</Link></p>
+
+    <!-- ② 긴급 배지(조건부) → 제목 → 메타 -->
+    <p class="mt-4"><UrgentBadge withIcon /></p>
+    <h1 class="mt-3 text-title text-ink md:text-display">{title}</h1>
+    <p class="mt-4 flex flex-wrap items-center gap-x-1 text-caption text-ink-muted">
+      <time>{dateLabel}</time> · {source}
+    </p>
+
+    <!-- ③ 썸네일 (링크형 + thumbnailUrl 있을 때만, §16.10) -->
+    <span class="rounded-panel bg-surface mt-8 block aspect-video w-full overflow-hidden">
+      <img src={thumbnailUrl} alt="" width="1280" height="720" loading="eager" decoding="async"
+           class="h-full w-full object-cover" />
+    </span>
+
+    <!-- ④ 원문 보기 (링크형) — 필 버튼으로 격상 -->
+    <p class="mt-6">
+      <a href={url} target="_blank" rel="noopener noreferrer"
+         class="inline-flex min-h-touch items-center gap-2 rounded-full bg-primary px-7 text-body font-bold text-white
+                transition-transform duration-200 ease-out-soft hover:outline-2 hover:outline-primary hover:outline-offset-2
+                motion-safe:hover:-translate-y-0.5
+                focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2">
+        원문 보기 — 외부 링크(새 창){domain ? ` · ${domain}` : ""}
+        <ExternalLinkIcon class="size-5 shrink-0" />
+      </a>
+    </p>
+
+    <!-- ⑤ 본문 → ⑥ 첨부 → ⑦ 하단 복귀 링크 -->
+  </div>
+</article>
+```
+
+| 항목 | 현행 | §16 | 근거 |
+|------|------|-----|------|
+| 제목 | `text-h2 md:text-h1`(24/32) | **`text-title md:text-display`(28/40)** | 페이지 대제목이 섹션 제목과 같은 크기이던 문제 해소 |
+| 상단 복귀 링크 | 없음(하단만) | **추가**(caption 15/600 primary, 11.37) | 긴 본문에서 상단 복귀 수단이 없었다. 문구는 기존 문자열 재사용(신규 카피 0). 하단 링크도 **유지** — 같은 목적지·같은 이름의 링크 2개는 허용 패턴이다 |
+| 메타 상단 여백 | `mt-2` | **`mt-4`** | 리듬 |
+| 원문 보기 | 밑줄 텍스트 링크 | **primary 필 버튼**(흰 텍스트 11.37) | 링크형 상세의 1순위 행동이다. 문구·`rel`·아이콘 **변경 0** |
+| 본문 시작 | `mt-8` | **`mt-8 md:mt-10`** | — |
+| 컨테이너 | `max-w-page px-4 md:px-6` + `max-w-prose` | **`max-w-page px-4 md:px-8` + `max-w-prose`** | 본문 줄 길이는 672px 로 계속 제한 |
+
+#### 16.12.2 본문 마크다운 매핑
+
+| 요소 | 현행 | §16 |
+|------|------|-----|
+| h1·h2 → `<h2>` | `mt-8 text-h2 text-ink` | **`mt-10 text-h2 text-ink`** |
+| h3 | `mt-6 text-body font-bold` | **`mt-8 text-lead text-ink`**(20/600) |
+| p | `mt-4 text-body text-ink` | **`mt-5 text-body text-ink`** |
+| a | `text-primary-strong underline` + 포커스 링 | **변경 0** |
+| ul·ol | `mt-4 … pl-6` | **`mt-5 … pl-6`**, li `mt-2` |
+| blockquote | `border-l-4 border-border-strong pl-4 text-ink-muted` | **`mt-6 border-l-2 border-primary pl-5 text-ink`** — 2px 파란 인용 표지 1개(11.37), 색은 ink(17.40)로 올려 본문 AAA 유지 |
+| hr | `mt-8 border-border-soft` | **`mt-10 border-border-soft`**(장식 구분선 — 허용 용도) |
+
+#### 16.12.3 첨부 블록 (§14.1 규칙 계승, 표면·타이포 교체)
+
+```html
+<h2 class="mt-12 text-h2 text-ink">첨부파일</h2>
+<ul class="mt-4 flex flex-col gap-3">
+  <li>
+    <a href={href} class="rounded-card bg-bg shadow-card hover:shadow-card-hover group flex min-h-touch items-center gap-4 px-5 py-4
+              transition-[box-shadow,transform] duration-200 ease-out-soft motion-safe:hover:-translate-y-0.5
+              focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-[-3px]">
+      <DocumentIcon class="size-5 shrink-0 text-border-strong" />
+      <span class="min-w-0 flex-1">
+        <span class="block truncate text-body font-semibold text-ink group-hover:text-primary group-hover:underline">{filename}</span>
+        <span class="text-caption text-ink-muted">{sizeLabel}</span>
+      </span>
+      <ArrowDownIcon class="size-5 shrink-0 text-border-strong" aria-hidden />
+    </a>
+  </li>
+</ul>
+```
+
+| 변경 | 근거 |
+|------|------|
+| `bg-surface` → **L1 카드**(흰 배경 + `shadow-card`) | 목록 항목 언어 통일(§16.5). surface 면은 흰 배경 대비 1.05 로 사실상 보이지 않는다 |
+| 파일명 15px → **18px/600** | 그 행의 1차 정보다. 15px 은 보조 정보 전용(스킬 §1) |
+| 우측 `↓` 텍스트 글리프 → **`ArrowDownIcon` 20px** | 텍스트 화살표는 서체마다 위치·크기가 튄다. 아이콘은 `aria-hidden`, 색 `border-strong`(4.83 UI) |
+| **"첨부파일" 제목 추가**(`h2`, `text-h2`) | 회색 행 목록이 무엇인지 문장으로 확정한다. UI 레이블이며 게시물 콘텐츠 문안이 아니다(§15.6R-D2 창작 금지와 무관) |
+| radius `rounded-badge` → `rounded-card` | 라운드 정책 |
+| 아이콘·크기 표기·`min-h-touch`·hover 규칙 | **변경 0** |
+
+### 16.13 방명록 (`GuestbookPanel`)
+
+#### 16.13.1 입력 폼
+
+| 요소 | 현행 | §16 |
+|------|------|-----|
+| 레이블 | `mb-2 block text-body font-semibold text-ink` | **변경 0** |
+| 입력 필드 | `rounded-badge h-12 px-3` + `border border-border-strong bg-bg` | **`rounded-card h-14 px-4`**(56px 높이, 16px radius) + 보더 동일 |
+| 텍스트영역 | `rounded-badge min-h-30 px-3 py-2` | **`rounded-card min-h-40 p-4`**(160px) |
+| 글자 수 caption | `mt-1 text-caption text-ink-muted` | **`mt-2 …`** |
+| 등록 버튼 | `min-h-touch rounded-full bg-primary-strong px-6 text-body font-bold text-white` | **`h-14 rounded-full … px-8`** + `motion-safe:hover:-translate-y-0.5` |
+| 필드 간 간격 | `mt-4` | **`mt-6`** |
+| 버튼 상단 | `mt-4` | **`mt-6`** |
+| `role="status"` 피드백·에러 색(`text-urgent-strong` 8.46) | — | **변경 0** |
+| 필드 보더 색 | `border-border-strong`(4.83 UI) | **변경 0 — 컨트롤은 테두리가 의미다**(§16.5) |
+
+#### 16.13.2 글 목록
+
+| 요소 | 현행 | §16 | 근거 |
+|------|------|-----|------|
+| 목록 | `divide-y divide-border-soft` | **`flex flex-col gap-3` + 각 항목 L1 카드**(`rounded-card bg-bg shadow-card p-5`) | 선 의존 제거(§16.5), 게시물 목록과 같은 언어 |
+| 내용 첫 줄 | `line-clamp-2 text-body font-semibold text-ink` | **변경 0**(17.40) |
+| 작성자·시각 메타 | `mt-1.5 text-caption text-ink-muted` | **`mt-2 …`**(7.56) |
+| 로딩·에러·빈 상태 문구 | — | **변경 0**. 빈 상태는 §16.9.8 L2 면 |
+| 목록 상단 여백 | `mt-8` | **`mt-10`** |
+
+- 방명록 섹션을 별도 서피스로 감싸지 않는다는 §15.5 판정 **계승**(4개 섹션 동등).
+
+### 16.14 admin 영향 점검 — 재설계 아님, 상속만
+
+| # | 대상 | 토큰 변경의 영향 | 조치 |
+|---|------|------------------|------|
+| 1 | **`src/app/admin/page.tsx:21`의 `max-w-page`** | 768 → **960px**. 폼 입력 필드가 `w-full` 이라 **896px 로 늘어나 폼 가독·조작성이 나빠진다** | **`max-w-page` → `max-w-admin`(48rem 신규 토큰)으로 교체.** §16 에서 admin 에 필요한 **유일한 필수 수정**이다 |
+| 2 | `text-h2` 24px, 600 → **700** | `AdminApp:154·275`, `DeleteDialog:71` 제목이 굵어진다 | 없음(제목이므로 옳다) |
+| 3 | `--radius-card` 24 → **16px** | `AdminApp:152` API 미연결 카드 모서리 | 없음 |
+| 4 | `--radius-badge` 12px | 패널·필드·배지 | **변경 없음** ✓ |
+| 5 | `--shadow-card` 값 변경 | admin 은 그림자 미사용 | 없음 |
+| 6 | 버튼 `rounded-lg`(8px) | 공개 화면은 `rounded-full` 로 통일하지만 admin 은 유지 | **없음 — `styles.ts` 를 고치지 마라**(재설계 대상 아님) |
+| 7 | `--text-body`·`--text-caption` | 불변 | 없음 |
+| 8 | 신규 `text-title`·`text-lead`·`text-display` | admin 미사용 | 없음 |
+| 9 | `--color-*` | 값 변경 0 | 없음 — admin 대비 검증 전부 유효 |
+| 10 | 전역 reduced-motion 블록 | admin 트랜지션도 무효화 | 없음(의도된 동작) |
+| 11 | `html { scroll-behavior: smooth }` | admin 내 앵커 이동 없음 | 없음 |
+
+- 결론: **admin 필수 수정 1건**(컨테이너 토큰) + **신규 1건**(정렬 UI §16.15). 그 외 admin 파일은 손대지 않는다.
+
+### 16.15 정렬 UI (admin 신규 — 계약 §8) ★
+
+#### 16.15.1 조작 방식·저장 시점 판정
+
+| 쟁점 | 판정 | 근거 |
+|------|------|------|
+| 조작 방식 | **위/아래 이동 버튼**(리더 확정) | 드래그앤드롭은 키보드·스크린리더 비용이 크고, 숫자 직접 입력은 중복·누락 관리를 사용자에게 떠넘긴다 |
+| 저장 시점 | **로컬 재배치 + 명시적 "순서 저장" 버튼** | ① 위/아래 이동은 본질적으로 **여러 번 누르는** 조작이다. 누를 때마다 네트워크 왕복이면 응답 순서 역전을 막기 위해 매번 전체를 비활성화해야 하고 조작이 불가능해진다 ② 계약 §3 의 409 검사는 **전체 순열 1회 검사**다 — 저장을 잘게 쪼개면 충돌 창이 그만큼 늘어난다 ③ 저장 전 상태는 "저장되지 않은 순서 변경이 있습니다" 상태 문구 + "원래 순서로" 버튼으로 **가시화·되돌리기 가능**하게 만든다 |
+| 목록 위치 | **분류별 패널**(전체 목록과 별도) | 계약 §3 은 `ids` 가 **해당 분류 활성 게시물 전체의 순열**이어야 한다(409 조건). 현행 admin 목록은 전 분류 + 삭제분이 섞여 있어 그대로는 순열을 만들 수 없다 |
+| 패널 내 분류 선택에 "선택됨" 표시 | **허용** | §15.4 의 "활성 상태 금지"는 **조합원용 섹션 바로가기**에 대한 규칙이다. admin 의 분류 라디오는 실제로 상태를 가지며, 표시하지 않으면 무엇을 정렬하는지 알 수 없다. 전체 목록은 패널 아래에 **그대로 남아 있으므로 은폐가 아니다** |
+
+#### 16.15.2 진입점·패널 골격
+
+- 진입: `AdminApp` 헤더 버튼 행에 **"순서 지정"** 보조 버튼 추가(`ADMIN_SECONDARY_BUTTON_CLASS`). 버튼 4개가 되어 360px 에서 2행으로 래핑된다(`flex-wrap` 기존 유지 ✓).
+- 상호 배타: 순서 패널을 열면 **편집 폼·비밀번호 패널을 닫는다**(반대도 동일). 열려 있는 패널은 항상 1개다.
+- 닫을 때 포커스는 **"순서 지정" 버튼으로 복귀**(`useRef` — `passwordButtonRef` 패턴 계승).
+
+```html
+<div class="rounded-badge mt-4 border border-border-soft p-4">   <!-- admin 패널 현행 스타일 계승 -->
+  <h3 class="text-body font-bold text-ink">게시물 순서 지정</h3>
+
+  <fieldset class="mt-4">
+    <legend class="text-caption font-semibold text-ink">분류</legend>
+    <div class="mt-2 flex flex-wrap gap-2">
+      <!-- 3개: 공지사항 / 금융노조 소식 / 노동교육 — POST_CATEGORY_LABELS 에서 파생 -->
+      <label class="…"><input type="radio" name="sort-category" value="notice" class="peer sr-only" />
+        <span class="…">공지사항</span></label>
+    </div>
+  </fieldset>
+
+  <p class="mt-2 text-caption text-ink-muted">
+    긴급으로 표시된 게시물은 공개 목록에서 지정 순서와 무관하게 맨 위에 표시됩니다.
+  </p>
+
+  <!-- 목록: 각 행 = 순번 + 제목/메타 + 위/아래 버튼 -->
+  <ul class="mt-4">…</ul>
+
+  <p role="status" class="mt-3 text-caption text-ink">{이동·저장 안내}</p>
+  <p role="alert" class="mt-1 text-caption text-urgent-strong">{저장 실패·409 문구}</p>
+
+  <div class="mt-4 flex flex-wrap gap-2">
+    <button class="{ADMIN_PRIMARY_BUTTON_CLASS}" disabled={!dirty}>순서 저장</button>
+    <button class="{ADMIN_SECONDARY_BUTTON_CLASS}" disabled={!dirty}>원래 순서로</button>
+    <button class="{ADMIN_SECONDARY_BUTTON_CLASS}">{dirty ? "저장하지 않고 닫기" : "닫기"}</button>
+  </div>
+</div>
+```
+
+- 분류 라디오 칩: 기본 `rounded-full border border-border-strong bg-bg px-4 min-h-touch text-body font-semibold text-primary`(11.37 / 보더 4.83) · 선택 `peer-checked:` → `bg-primary text-white`(11.37) · focus `peer-focus-visible:outline-3 outline-primary outline-offset-2`. **실제 `<input type="radio">` 를 쓴다**(화살표 키·스크린리더 그룹 안내가 네이티브로 동작).
+- 안내 문구 근거: 계약 §2 정렬 규칙이 `urgent DESC` 를 **`sort_order` 보다 앞**에 두므로, urgent 게시물은 지정 순서와 다르게 맨 위에 나온다. 이 사실을 화면에 쓰지 않으면 관리자는 "순서 지정이 동작하지 않는다"고 판단한다.
+
+#### 16.15.3 목록 행 스펙
+
+```html
+<li class="flex items-center gap-3 border-b border-border-soft py-3">
+  <span class="rounded-badge bg-primary-soft text-primary flex size-8 shrink-0 items-center justify-center
+               text-caption font-bold">{index + 1}</span>          <!-- 9.23 -->
+  <span class="min-w-0 flex-1">
+    <span class="block truncate text-body font-semibold text-ink">{title}</span>
+    <span class="mt-1 flex flex-wrap items-center gap-x-2 text-caption text-ink-muted">
+      <time dateTime={publishedAt}>{dateLabel}</time>
+      <UrgentBadge />   <!-- urgent 일 때만 -->
+    </span>
+  </span>
+  <span class="flex shrink-0 gap-1">
+    <button type="button" disabled={index === 0}
+      aria-label={`${title} — 위로 이동 (현재 ${index + 1}번째)`}
+      class="size-touch inline-flex items-center justify-center rounded-lg border border-border-strong bg-bg
+             text-primary hover:bg-primary-tint focus-visible:outline-3 focus-visible:outline-primary
+             focus-visible:outline-offset-2 disabled:border-border-soft disabled:text-border-strong
+             disabled:hover:bg-bg">
+      <ArrowUpIcon class="size-5" />
+    </button>
+    <button … aria-label={`${title} — 아래로 이동 (현재 ${index + 1}번째)`} disabled={index === last}>
+      <ArrowDownIcon class="size-5" />
+    </button>
+  </span>
+</li>
+```
+
+| 항목 | 규정 |
+|------|------|
+| 순번 배지 | 32×32, `bg-primary-soft` + `text-primary` **9.23 AAA**. 순서를 **숫자로** 보여준다(색·위치 단독 의존 금지) |
+| 제목 | 1줄 `truncate`. 360px 검산: 328 − 패딩 32 − 배지 32 − 버튼 88 − gap 24 = **152px** → 1줄 truncate 가 유일한 선택 |
+| 이동 버튼 | **44×44px**(`size-touch`) 아이콘 버튼 2개. 아이콘만이므로 **`aria-label` 필수**(제목 + 방향 + 현재 순번) |
+| 비활성 | 첫 행 "위로", 마지막 행 "아래로"에 **실제 `disabled`**. 시각: 보더 `border-soft`, 아이콘 `border-strong`(4.83). 비활성 컨트롤은 WCAG 1.4.11 대상이 아니며 상태는 `disabled` 속성으로도 전달된다 |
+| 행 구분 | admin 목록의 현행 `border-b border-border-soft` 계승(기능 화면 — 표 형태 판독성 우선) |
+| 삭제된 게시물 | **표시하지 않는다.** 계약 §3 의 순열 조건은 `deleted_at IS NULL` 기준이다 |
+
+#### 16.15.4 동작 계약 (개발자 필수 준수)
+
+1. **로드**: `adminListPosts({ category, limit: 100 })` → `deletedAt === null` 만 남긴다.
+   - **정렬(로컬)**: `sortOrder ?? Number.MAX_SAFE_INTEGER` 오름차순 → 동순위는 `publishedAt` 내림차순 → 동순위는 `id` 내림차순. **`urgent` 를 정렬 키로 쓰지 않는다** — 패널은 "지정 순서"를 보여주는 화면이고, urgent 우선은 공개 목록의 렌더 규칙이다(그 사실은 §16.15.2 안내 문구가 알린다).
+   - **100건 가드**: 필터 후 건수가 100 이면(limit 도달 가능성) **저장을 비활성화**하고 `role="alert"`로 "게시물이 100건을 넘어 이 화면에서는 순서를 지정할 수 없습니다." 를 표시한다. 낡은/부분 목록으로 저장하면 계약 §3 #4 에 의해 409 가 나거나(다행) 순열 조건을 우연히 만족해 **일부 게시물의 순서가 소실**될 수 있다.
+2. **이동**: 배열에서 인접 요소와 교환한다. 즉시 서버 호출 **없음**. `dirty = (현재 순서 ≠ 로드 시점 순서)`.
+3. **포커스 유지 (필수)**: 행은 `key={post.id}` 로 렌더하므로 DOM 노드가 이동해 포커스는 자동 유지된다. 단 **이동으로 그 버튼이 `disabled` 가 되면 브라우저가 포커스를 잃는다** → 이동 후 `useEffect`(또는 `flushSync` 후)에서 **같은 게시물의 반대 방향 버튼으로 포커스를 옮긴다**. 버튼 ref 는 `Map<postId, {up, down}>` 으로 관리한다.
+4. **안내(`role="status"`)**: 이동마다 `"{제목} — {n}번째로 이동했습니다 (총 {total}건)"`. 시각적으로도 보이는 한 줄로 둔다(스크린리더 전용으로 숨기지 않는다 — 마우스 사용자도 결과 확인이 필요하다).
+5. **저장**: `adminReorderPosts(category, ids)` (계약 §8 시그니처). 처리 중 이동·저장 버튼 비활성 + 버튼 문구 `"저장 중…"`.
+   - 성공: `role="status"` 에 `"순서를 저장했습니다."`, 패널 목록을 서버에서 **재조회**(sortOrder 반영), `dirty = false`, **전체 목록도 재조회**(`onSaved` → `reload()`).
+   - `reason === "conflict"`: `role="alert"` 에 계약 문구 **"목록이 변경되었습니다. 새로고침 후 다시 시도해 주세요."** 를 표시하고 **즉시 재조회 + 로컬 순서 폐기(`dirty = false`)**. 낡은 순서로 재시도하게 두지 않는다(계약 §8). **재조회 후에도 alert 문구는 지우지 않는다** — 사라지면 관리자는 자기 작업이 저장됐다고 오해한다.
+   - `reason === "unauthorized"`: 기존 패턴대로 로그인 화면 전환(`onSessionExpired`).
+   - 그 외(`validation`·`network`·`rate-limited`): 서버 문구를 `role="alert"` 에 표시하고 **로컬 순서는 유지**(재시도 가능).
+6. **"원래 순서로"**: 로드 시점 배열로 복원, `dirty = false`, `role="status"` 에 `"원래 순서로 되돌렸습니다."`.
+7. **닫기**: `dirty` 면 버튼 문구가 **"저장하지 않고 닫기"** 로 바뀐다(확인 다이얼로그를 만들지 않는다 — 문구가 결과를 명시하고, 잃는 것은 아직 저장되지 않은 순서뿐이다).
+
+#### 16.15.5 신규 아이콘 `ArrowUpIcon`
+
+`src/components/ui/icons.tsx` 에 기존 `ArrowDownIcon` 과 **동일 규격**(`viewBox="0 0 24 24"`, `fill="none"`, `stroke="currentColor"`, `strokeWidth="2"`, round cap/join, `aria-hidden="true"`)으로 추가. path 2개: `M12 19V5` / `m5 12 7-7 7 7`.
+
+### 16.16 정보 위계 (§15.8 갱신)
+
+| 순위 | 정보 | §16 의 시각적 구분 |
+|------|------|--------------------|
+| 1 | **긴급 공지·임박 마감**(행동 필요·기한 있음) | **히어로 딥블루 면 1개**(페이지의 유일한 강조 면 + `shadow-hero`) + "긴급" 배지(색+아이콘+레이블) / 마감 스트립 red 칩(D-n 텍스트 병행). 동일 게시물은 아래 섹션 목록에도 그대로 남는다(§15.1-6) |
+| 2 | 4개 섹션의 콘텐츠 | 전부 동등하게 상시 노출. **72/120px 여백 + 24/36px 제목**이 섹션 경계를 만든다(선·면 사용 0) |
+| 3 | 상시 실용 안내(온누리 가이드) | accent tint 면 1장 — 오렌지의 유일성이 "다른 층"임을 표시 |
+| 4 | 내비·상시 정보(바로가기 칩·헤더·푸터) | 아웃라인 칩(채움 없음)·caption 급 텍스트 |
+
+- **썸네일은 위계를 만들지 않는다.** 썸네일 유무는 게시물 유형(링크형 YouTube)의 결과일 뿐이며 중요도와 무관하다. 따라서 **긴급·마감 신호는 배지·칩(텍스트 병행)으로만** 전달하고, 이미지 크기·유무로 중요도를 표현하지 않는다.
+- 의미색 3종 상한 **유지**(파랑=주조·링크·내비, 빨강=긴급·마감 임박, 오렌지=코스콤 CI 맥락). **추가 0.**
+
+### 16.17 접근성·반응형 검산
+
+| 구간 | 컨테이너 | 카드 내부 | 썸네일 | 주요 검산 |
+|------|----------|-----------|--------|-----------|
+| **360px (설계 하한)** | 328px(`px-4`) | 288px(`p-5`) | **328×184.5** 상단 풀블리드 | 메타 1행 249 / 2행 234 ≤ 288 ✓(§15.6R-D 유효) · 칩 2행 98px ✓ · 히어로 내부 288 ≥ 단문 2줄 ✓ · 가로 스크롤 0(스트립만 자체 `overflow-x-auto`) |
+| ~639px | 동일 | 동일 | 동일 | 섹션 간 72px |
+| sm 640px~ | 중앙 정렬 시작 | — | — | 변화 없음 |
+| **md 768px~** | 704px(`px-8`) | 656px(`p-6`) | **192×108** 우측 | 텍스트 열 440px ✓ · 칩 1행(645 ≤ 704) ✓ · 섹션 간 120px · 섹션 제목 36px |
+| **lg 1024px~** | **960px**(`max-w-page`) | 848px | 192×108 | 텍스트 열 632px ✓ · 제목 20px 2줄 clamp ≈ 62자 |
+
+- **터치 대상**: 바로가기 칩 44 ✓ · 목록 카드 ≥98px ✓ · 이동 버튼 44×44 ✓ · 입력 필드 56 ✓ · 등록 버튼 56 ✓ · 첨부 행 `min-h-touch` ✓ · 헤더 링크 `min-h-touch` ✓.
+- **`:focus-visible`**: 전부 `outline-3`(3px) + `offset-2`. 색은 `--color-primary`(흰·surface·tint·soft 배경에서 9.23~11.37 ≥ 3:1), 딥블루 면 위에서는 `#ffffff`(11.37).
+- **헤딩 아웃라인**(§15.9.1 계승): 메인 `h1`(헤더 지부명) → `h2`×4(섹션). 상세 `p`(헤더) → `h1`(게시물 제목) → `h2`(본문 소제목·"첨부파일"). 방명록 준비 중 `h3`.
+- **키보드 Tab 순서**: 헤더 → (히어로 CTA) → (마감 스트립 항목) → 온누리 카드 → 칩 4개 → 섹션 ①…④ 내부. 썸네일은 포커스 대상이 아니다(`<img>` 는 링크 안의 장식).
+- 320px 미만은 설계 범위 밖(§15.9.3 하한 360px 계승).
+
+### 16.18 대비 검증 결과 — 전건 실측 (`check-contrast.mjs` 2026-08-17 재실행)
+
+**신규 색 조합 0건.** 아래는 §16 이 실제로 사용하는 전 조합의 재실측값이다.
+
+| # | 전경 | 배경 | 비율 | 판정 | §16 사용처 |
+|---|------|------|------|------|-----------|
+| 1 | `#1a1a1a` | `#ffffff` | **17.40** | AAA(본문) | 섹션 제목 · 상세 제목 · 카드 제목 · 첨부 파일명 · 방명록 첫 줄 · 빈 상태 주 메시지 · 본문 |
+| 2 | `#4b5563` | `#ffffff` | **7.56** | AAA(본문) | 메타 2행(게시일·채널명·외부 링크·도메인) · 상세 메타 · 글자 수 caption · 빈 상태 보조 |
+| 3 | `#093389` | `#ffffff` | **11.37** | AAA(본문)·UI | 헤더 록업 · 상단 복귀 링크 · 칩 텍스트/아이콘 · 카드 hover 제목 · 포커스 링 · 헤더 상단 트림 |
+| 4 | `#9c0d14` | `#ffffff` | **8.46** | AAA(본문) | 방명록 에러 문구 · admin 위험 텍스트 · 정렬 패널 alert |
+| 5 | `#7a3806` | `#ffffff` | **8.77** | AAA(본문) | 온누리 카드 hover 아웃라인 |
+| 6 | `#6b7280` | `#ffffff` | **4.83** | UI 3:1 | 칩 기본 보더 · 입력 필드 보더 · 첨부 아이콘 · 빈 상태 아이콘 · 비활성 이동 버튼 아이콘 |
+| 7 | `#ffffff` | `#093389` | **11.37** | AAA(본문) | 히어로 표제·단문 · CTA 텍스트(반전) · 푸터 지부명 · 원문 보기 버튼 · 분류 라디오 선택 상태 |
+| 8 | `#d9e9ff` | `#093389` | **9.23** | AAA(본문) | 히어로 게시일 · 푸터 저작권 |
+| 9 | `#093389` | `#d9e9ff` | **9.23** | AAA(본문) | 마감 스트립 항목 · **정렬 패널 순번 배지** · 히어로 CTA hover 텍스트 |
+| 10 | `#1a1a1a` | `#d9e9ff` | **14.13** | AAA(본문) | (예비 — soft 면 위 본문) |
+| 11 | `#ffffff` | `#9c0d14` | **8.46** | AAA(본문) | "긴급" 배지 · 마감 임박 red 칩 |
+| 12 | `#093389` | `#eff6ff` | **10.45** | AAA(본문) | 칩 hover 텍스트·아이콘·보더 안쪽면 · admin 보조 버튼 hover |
+| 13 | `#1a1a1a` | `#eff6ff` | **15.99** | AAA(본문) | (예비) |
+| 14 | `#7a3806` | `#fdf0e7` | **7.84** | AAA(본문) | 온누리 카드 제목·아이콘 |
+| 15 | `#1a1a1a` | `#fdf0e7` | **15.58** | AAA(본문) | 온누리 카드 설명 |
+| 16 | `#093389` | `#fdf0e7` | **10.18** | AAA(본문) | 온누리 카드 포커스 링(§14.8.7 조합 재사용) |
+| 17 | `#1a1a1a` | `#f9fafb` | **16.65** | AAA(본문) | L2 면(빈 상태·준비 중 카드) 위 제목 |
+| 18 | `#4b5563` | `#f9fafb` | **7.23** | AAA(본문) | L2 면 위 보조 텍스트 |
+| 19 | `#093389` | `#f9fafb` | **10.88** | AAA(본문)·UI | L2 면 위 링크·포커스 링 |
+| 20 | `#6b7280` | `#f9fafb` | **4.63** | UI 3:1 | L2 면 위 아이콘 |
+| 21 | `#9c0d14` | `#fef2f2` | **7.74** | AAA(본문) | (admin 위험 버튼 hover 배경 — 현행 유지) |
+| 22 | `#1a1a1a` | `#fef2f2` | **15.91** | AAA(본문) | (동일) |
+
+**검증했으나 §16 에서 사용하지 않기로 확정한 조합**
+
+| 전경 | 배경 | 비율 | 처리 |
+|------|------|------|------|
+| `#f1f3f6` | `#ffffff` | 1.11 | **surface 어둡게 하기 불채택** — 아래 두 줄이 이유다 |
+| `#4b5563` | `#f1f3f6` | **6.80** | **AAA 미달** → 보조 텍스트 하한(7:1) 위반. §0.3 "AAA 가 모던함보다 우선" 적용 |
+| `#4b5563` | `#eef1f5` | 6.67 | 동일 이유로 불채택 |
+| `#4b5563` | `#fef2f2` | **6.91** | **AAA 미달** → urgent 카드 배경 tint 안을 불채택한 정량 근거(§16.9.4) |
+| `#f9fafb` | `#ffffff` | 1.05 | 면 자체의 대비 — **썸네일 자리·L2 면은 텍스트를 얹지 않거나(썸네일) 위 표의 검증된 조합만 얹는다.** 면 대비로 블록을 구분하려 하지 말 것 |
+| `#e5e7eb` | `#ffffff` | 1.24 | 장식 구분선 전용(hr·admin 행 구분). **의미 전달 UI 금지** |
+| `#d0101b` / `#ec6d1e` / `#2e7df7` | (모든 배경) | ≤5.57 | §16 사용처 0(§16.2). 텍스트 금지 규정 유지 |
+| `#6b7280` | `#eff6ff` | 4.44 | 칩 hover 보더로 불채택(기본 4.83보다 약해진다 — §15.4 판정 계승) |
+
+- 실행 명령(재현용):
+  ```bash
+  node .claude/skills/union-design-system/scripts/check-contrast.mjs \
+    "#1a1a1a:#ffffff" "#4b5563:#ffffff" "#093389:#ffffff" "#9c0d14:#ffffff" "#7a3806:#ffffff" \
+    "#6b7280:#ffffff" "#ffffff:#093389" "#d9e9ff:#093389" "#093389:#d9e9ff" "#1a1a1a:#d9e9ff" \
+    "#ffffff:#9c0d14" "#093389:#eff6ff" "#1a1a1a:#eff6ff" "#7a3806:#fdf0e7" "#1a1a1a:#fdf0e7" \
+    "#093389:#fdf0e7" "#1a1a1a:#f9fafb" "#4b5563:#f9fafb" "#093389:#f9fafb" "#6b7280:#f9fafb" \
+    "#9c0d14:#fef2f2" "#1a1a1a:#fef2f2" "#4b5563:#fef2f2" "#f9fafb:#ffffff" "#e5e7eb:#ffffff"
+  ```
+
+### 16.19 개발자 변경 파일 목록 (파일 단위 작업 순서)
+
+**1단계 — 토큰 (먼저 끝내야 나머지가 컴파일된다)**
+
+| 파일 | 작업 |
+|------|------|
+| `src/app/globals.css` | **§16.8 전문으로 `@theme` 이하 교체.** `@font-face`·`@source not` 블록은 유지. 신규 토큰: `--text-title`·`--text-lead`·`--radius-panel-lg`·`--shadow-hero`·`--ease-out-soft`·`--spacing-section`·`--spacing-section-lg`·`--container-admin`. 값 변경: `--text-hero-lg`·`--text-h1`·`--text-h2`(weight)·`--text-hero`(weight)·`--radius-card`·`--radius-panel`·`--shadow-card(-hover)`·`--container-page`. **색 값 변경 0** |
+| `src/app/admin/page.tsx` | `max-w-page` → **`max-w-admin`**(§16.14-1. 이 1줄이 admin 전체의 회귀를 막는다) |
+
+**2단계 — 데이터 계층(썸네일·정렬 필드 수용)**
+
+| 파일 | 작업 |
+|------|------|
+| `src/lib/api/posts.ts` | 공개 응답 파서에 **`thumbnailUrl`** 추가. **없거나 타입이 다르면 `null`** — `invalidResponse` 로 떨어뜨리지 마라(계약 §6 프론트 파서 규정) |
+| `src/lib/postView.ts` | `PostListItem` 에 `thumbnailUrl: string \| null` 추가, `toPostListItem` 에서 **`resolveApiUrl()` 로 절대화**(첨부와 동일 방식). 실패(미설정)면 `null` |
+| `src/lib/api/admin.ts` | `ApiAdminPost` 에 `sortOrder: number \| null`·`thumbnailUrl: string \| null`(둘 다 관용 파싱) + **`adminReorderPosts(category, ids)`** 추가(계약 §8 시그니처 그대로) |
+| `src/lib/api/http.ts` | `ApiFailureReason` 에 **`"conflict"`**, `CODE_TO_REASON` 에 **`CONFLICT: "conflict"`** 등록. **미등록 시 409 가 `"network"` 로 오분류된다**(계약 §3) |
+
+**3단계 — 공통 컴포넌트(시각 교체)**
+
+| 파일 | 작업 | 절 |
+|------|------|-----|
+| `src/components/layout/SiteHeader.tsx` | `border-y-4` → `border-t-2`, 패딩 `py-3.5 md:py-5`, `md:px-8`. **록업 크기·문구·마크 크기 변경 금지** | §16.9.1 |
+| `src/components/layout/SiteFooter.tsx` | `rounded-t-panel-lg`, `mt-20 md:mt-section-lg`, `py-12 md:py-16`, `md:px-8`, 지부명 18/700, 로고 칩 `rounded-card px-4 py-3`·로고 28px, 간격 `mt-5` | §16.9.2 |
+| `src/components/home/HeroPanel.tsx` | **장식 원형·`relative overflow-hidden`·`z-10` 래퍼·액센트 바 제거** / `shadow-hero` / 패딩 `p-5 md:p-12` / `md:rounded-panel-lg` / 모드 1 제목 `md:text-hero-lg`(64px)·CTA `px-7` / **모드 2 = 단문 1줄**(`코스콤 조합원을 위한 정보 공유`, 록업·부문구 삭제) | §16.11.1 |
+| `src/components/home/HomeSection.tsx` | **액센트 바 `<div>` 삭제**, 제목 `md:text-h1`(36px), 콘텐츠 `mt-6 md:mt-7` | §16.11.3 |
+| `src/components/home/SectionNav.tsx` | 칩 패딩 `px-4 md:px-5`, `gap-2`, 리스트 `gap-2.5`, 트랜지션 토큰. **활성 상태·sticky·세그먼티드 금지 규칙 유지** | §16.9.6 |
+| `src/components/home/DeadlineStrip.tsx` | `rounded-card px-5 py-3.5`, **세로 구분선 삭제**, 항목 `gap-4`, 임박 칩 `rounded-full` | §16.9.5 |
+| `src/components/home/OnnuriGuideCard.tsx` | **`shadow-card`·`border-l-4 border-accent` 삭제**, `rounded-panel`, `p-5 md:p-6`, `gap-4`, 제목 `md:text-lead`, hover 상승 | §16.9.7 |
+| `src/components/ui/UrgentBadge.tsx` | radius `rounded` → `rounded-badge`. 그 외 변경 0 | §16.9.4 |
+| `src/components/board/EmptyState.tsx` | `rounded-panel bg-surface px-6 py-14` | §16.9.8 |
+| `src/components/ui/icons.tsx` | **`ArrowUpIcon` 추가**(§16.15.5) | — |
+
+**4단계 — 목록·상세·방명록**
+
+| 파일 | 작업 | 절 |
+|------|------|-----|
+| **`src/components/board/PostList.tsx`** | ① `<li>` `rounded-card`·`overflow-hidden`·transition/hover 상승 ② **urgent 좌측 보더 삭제** ③ `<a>`/`<Link>` 에 `md:flex md:items-start md:gap-6 md:p-6` ④ **썸네일 슬롯 신규**(`thumbnailUrl` 있을 때만, `md:order-2 md:w-48`) ⑤ 텍스트 블록 `p-5 md:order-1 md:min-w-0 md:flex-1 md:p-0` ⑥ 제목 `md:text-lead` ⑦ 메타 1행 `mt-2`. **메타 2행 구조·`source` 렌더·구분점 안전 규칙·`MetaTokens` 는 절대 변경 금지** | §16.9.3 · §16.10 |
+| **`src/components/board/PostArticle.tsx`** | 상단 복귀 링크 추가 · 제목 `text-title md:text-display` · 메타 `mt-4` · **링크형 썸네일 블록 추가** · 원문 보기 필 버튼화 · 마크다운 매핑 갱신(blockquote 2px primary·h3 `text-lead`) · **"첨부파일" h2 추가** · 첨부 행 L1 카드화·파일명 18px·`ArrowDownIcon` · 컨테이너 `md:mt-14 md:px-8` | §16.12 |
+| `src/components/board/GuestbookPanel.tsx` | 폼: 필드 `rounded-card h-14 px-4` / 텍스트영역 `min-h-40 p-4` / 버튼 `h-14 px-8` / 간격 `mt-6` · 목록: **`divide-y` → `gap-3` + L1 카드** · 준비 중 카드 **테두리 제거 + `rounded-panel`** | §16.13 |
+| `src/app/page.tsx` | 컨테이너 `mt-6 md:mt-10 px-4 md:px-8` · 간격 클래스 §16.7.2 표로 교체(`mt-14 md:mt-18`, `mt-10 md:mt-14`, `mt-section md:mt-section-lg`) · **구조·데이터 로딩·`HOME_SECTIONS` 순회는 변경 0** | §16.7.2 |
+| `src/app/notices/[id]/page.tsx` · `news/[id]` · `education/[id]` | **변경 0**(`PostArticle` 이 전부 흡수) | — |
+
+**5단계 — admin 정렬 UI (신규)**
+
+| 파일 | 작업 |
+|------|------|
+| **`src/components/admin/SortPanel.tsx`** (신규) | `"use client"`. props: `onSaved(notice)`·`onClose()`·`onSessionExpired()`. §16.15.2~16.15.4 전문 구현. 버튼 클래스는 `styles.ts` 상수 재사용 |
+| `src/components/admin/AdminApp.tsx` | "순서 지정" 보조 버튼 + `sortPanelOpen` 상태 + 패널 상호 배타 + 닫을 때 포커스 복귀(ref) + 저장 성공 시 `reload()` |
+| `src/components/admin/styles.ts` | **변경 0**(§16.14-6) |
+
+**변경 0 — 손대지 말 것**
+
+`DateBadge` · `homeSections.ts` · `postCategories.ts` · `routes.ts` · `date.ts` · `PostForm` · `DeleteDialog` · `PasswordChangeForm` · `layout.tsx`(폰트 링크) · `public/fonts/**`
+
+> 규모: **신규 2**(`SortPanel.tsx`, `ArrowUpIcon`) · **수정 17** · **삭제 0** · 신규 토큰 8 · 색 변경 0 · 신규 색 조합 0.
+> 백엔드 선행 필요: 계약 §1·§3·§4·§5·§6·§7(마이그레이션·reorder·썸네일 취득·제공 라우트·응답 필드·백필). **`thumbnailUrl` 이 아직 안 내려오는 동안에도 프론트는 깨지지 않는다**(파서가 `null` 처리 → 슬롯 미렌더 = 현행과 동일한 텍스트 카드).
+
+### 16.20 QA 수용 체크리스트 (§15.12 의 14항목은 계속 유효, 아래를 추가)
+
+**표면·토큰**
+1. `src/**` 전수 grep: **`shadow-card` 와 `border`(테두리 유틸)를 동시에 가진 요소 0건**(입력 필드·admin 제외). `border-l-4` **0건**.
+2. `globals.css` 에 `--color-*` 17종이 **값 변경 없이** 존재하고 `--color-urgent`·`--color-accent`·`--color-primary-bright` 정의가 **삭제되지 않았다**.
+3. admin 화면 폭이 **768px**(`max-w-admin`)이고 입력 필드가 화면 폭 전체로 늘어나지 않는다.
+
+**모션**
+4. OS "동작 줄이기"를 켠 상태에서 카드 hover 시 **상승·그림자 전환·이미지 확대가 일어나지 않고**, 바로가기 칩 클릭 시 스크롤이 **즉시 점프**한다.
+5. 애니메이션 속성 grep: `transition-` 대상이 `box-shadow`·`transform`·`colors` 뿐이고 `width/height/margin/top/left` 전환 **0건**.
+
+**썸네일**
+6. 노동교육 5건 전부 썸네일이 보인다. 360px 에서 **328×184.5px 상단 풀블리드**, 768px+ 에서 **192×108px 우측**.
+7. **CLS**: 느린 회선(3G 스로틀)에서 목록을 열었을 때 이미지 도착 전후로 **제목 위치가 움직이지 않는다**(래퍼 `aspect-video` + `<img width/height>` 동시 존재를 DOM 으로 확인).
+8. **혼재 검증**: 썸네일 있는 카드와 없는 카드가 섞인 목록(금융노조 소식)에서 **md+ 제목의 좌측 x 좌표가 모든 카드에서 동일**하다. 플레이스홀더 박스가 **0건**이다.
+9. 존재하지 않는 `thumbnailUrl` 을 강제로 넣었을 때 **깨진 이미지 아이콘·대체 텍스트 없이 회색 박스만** 남고 레이아웃이 흔들리지 않는다.
+10. 썸네일 `<img>` 의 `alt` 가 **빈 문자열**이고, 스크린리더 낭독에 이미지 이름이 끼지 않는다. 카드의 접근성 이름은 제목 + 메타 텍스트다.
+11. `<iframe>` **0건**(§15.6R-F 임베드 금지 유지).
+
+**히어로·헤더·섹션**
+12. **360px 에서 히어로 텍스트가 잘리지 않는다**(현행 록업 결함 §16.11.1 의 회귀 검사). 가로 스크롤 0.
+13. 헤더에 파란 띠가 **상단 1줄(2px)만** 있고 하단 띠가 없다.
+14. 섹션 제목 위 4px 파란 액센트 바가 **0건**이고, 섹션 간 간격이 모바일 **72px** / md+ **120px** 이다(개발자 도구 실측).
+15. 헤딩 아웃라인: 메인 `h1` → `h2`×4, **`h2` 에 지부명이 없다**. 상세 페이지에 "첨부파일" `h2` 가 첨부 있을 때만 나온다.
+
+**정렬 UI**
+16. 첫 행의 "위로", 마지막 행의 "아래로"가 **`disabled`** 이고, 그 외 모든 이동 버튼이 **44×44px** 이다.
+17. 마지막 행에서 "위로"를 눌러 첫 행이 되면 **포커스가 같은 게시물의 "아래로" 버튼으로 옮겨져 있다**(포커스 소실 0).
+18. 이동마다 `role="status"` 문구가 `"{제목} — {n}번째로 이동했습니다 (총 {total}건)"` 로 갱신되고 스크린리더가 읽는다.
+19. 저장 전에는 "저장되지 않은 순서 변경이 있습니다" 상태 문구가 보이고, 닫기 버튼 문구가 **"저장하지 않고 닫기"** 로 바뀐다.
+20. 다른 창에서 같은 분류에 글을 1건 추가한 뒤 저장하면 **409** 가 나고, `role="alert"` 에 **"목록이 변경되었습니다. 새로고침 후 다시 시도해 주세요."** 가 표시되며 **목록이 재조회되고 로컬 순서가 폐기**된다(저장 버튼 비활성).
+21. 순번 배지가 **1부터 연속**이고, urgent 게시물 행이 목록 중간에 있을 때 안내 문구("긴급으로 표시된 게시물은 …맨 위에 표시됩니다")가 화면에 보인다.
+22. 저장 후 공개 메인페이지의 해당 섹션 순서가 패널에서 지정한 순서와 일치한다(**urgent 게시물 제외** — 계약 §2).
+
+**대비**
+23. §16.18 표의 22개 조합을 `check-contrast.mjs` 로 재실행해 **수치가 표와 일치**하고, 실제 렌더에서 표에 없는 색 조합이 **0건**이다(특히 `#4b5563` 이 `#f9fafb`·`#ffffff` 이외의 배경에 얹히지 않았는지).
+
+---
+
 ## 구현 참고 (web-developer용 체크리스트)
 
 1. `globals.css`: 위 `@theme` 블록 적용 + create-next-app 기본 다크모드 미디어쿼리 제거
@@ -1649,3 +2759,10 @@ education 게시물이 스트립에 오면 `/notices/<id>` 로 보내 404** 가 
 6. 스펙 모호 시 frontend-designer에게 질의 (임의 값 결정 금지)
 7. (2026-08-17) 비밀번호 변경 UI는 §14.8 — `globals.css` 변경 0건, `styles.ts` 상수 3건 추가(§14.8.7), 신규 색 조합 1건(#27 `#093389` on `#fdf0e7` = 10.18). 배너는 **적색이 아니라 accent(오렌지)** — 근거 §14.8.1
 8. (2026-08-17 9차) **메인페이지 탭 → 섹션 나열 전환은 §15.** §3 구조도·§3.3·§4 전문·§8의 2·3순위는 폐기(대체표 §15.0). `globals.css`·토큰·색 조합·폰트 **변경 0건**. 규모(§15.6R 반영 후): **신규 4**(`HomeSection`·`SectionNav`·`education/[id]` 라우트·섹션 정의 상수) + 아이콘 함수 1(`ArrowDownIcon`), **수정 9**(`page.tsx`·`routes.ts`·`PostList`·`postView`·`api/posts`·`HeroPanel`·`GuestbookPanel`·`notices/[id]`·`news/[id]`), **삭제 1**(`BoardTabs.tsx`). 백엔드는 별도(마이그레이션 + `education` 서버 검증). **설계 판정 기준은 §15.1 "은폐 금지"** — 탭·아코디언·접기·더보기 등 콘텐츠를 감추는 UI는 어떤 이유로도 재도입 금지. **노동교육은 §15.6.1~15.6.5가 폐기되고 §15.6R이 유효 스펙이다** — 정적 상수(`educationLinks.ts`)·전용 컴포넌트(`EducationLinkList`)를 **만들지 말 것**. 노동교육은 `category: "education"` 게시물 분류이며 `PostList`를 재사용한다. **⚠ 최우선 확인 2건**: ① `posts.ts` 런타임 파서 가드에 `education` 추가(누락 시 게시물이 조용히 사라진다 — §15.6R-H) ② `PostList` L98의 `!isExternal` 가드 제거로 **링크형 카드에도 `source`(채널명) 렌더**(fact-verifier 게이트 필수 조건 — §15.6R-D). 메타는 2행 구조, `영상` 토큰은 **불채택**, 콘텐츠 문안은 `decision-education-content.md`를 문자 단위로 사용(창작 금지)
+9. **(2026-08-17 10차) 현행 시각 규정은 §16(모던 전면 교체 — toss.im 계열 + 썸네일 + 정렬 UI).** 대응표는 §16.0, `globals.css` 전문은 §16.8, 파일 단위 작업 순서는 §16.19, QA 기준은 §16.20. **작업 순서를 지켜라 — 토큰(§16.8) → 데이터 계층 → 공통 컴포넌트 → 목록/상세 → admin 정렬 UI.**
+   - **색 값 변경 0건 · 신규 색 조합 0건.** `--color-urgent`·`--color-accent`·`--color-primary-bright` 는 §16 에서 사용처가 0이 되지만 **정의를 지우지 마라**(CI 실측 기록 — §16.2).
+   - **표면 규칙(§16.5)이 이 개편의 중심이다**: 한 요소는 [테두리]·[그림자]·[배경 대비] 중 **하나만** 쓴다. 카드에 `border-l-4` 를 다시 붙이지 말 것(urgent·온누리 둘 다 폐기).
+   - **썸네일(§16.10)**: `thumbnailUrl` 있을 때만 렌더, **플레이스홀더 금지**, 모바일 상단 풀블리드 / md+ 우측 192px, `aspect-video` + `<img width/height>` 로 **CLS 0**, `alt=""`, `next/image` 미사용(사유 §16.10.4).
+   - **계승 항목 — 변경 금지**: §15.1 은폐 금지 7조건 · §15.4 바로가기 내비 규칙(활성 상태·sticky·세그먼티드 금지) · §15.6R-D **메타 2행 + 링크형 `source`(채널명)** · §13.5.2 지부명 표기·헤더 록업 크기.
+   - **admin 은 재설계 대상이 아니다**: 필수 수정은 `admin/page.tsx` 의 `max-w-page → max-w-admin` **1줄**뿐이고, `styles.ts`·버튼 radius 는 손대지 않는다(§16.14). 신규는 정렬 패널(§16.15)뿐이다.
+   - **정렬 UI 저장 방식**: 로컬 재배치 + **명시적 "순서 저장"**(즉시 저장 아님), 409 시 계약 문구 표시 + 재조회 + 로컬 순서 폐기, 이동 후 **포커스 유지 규칙(§16.15.4-3) 필수**.

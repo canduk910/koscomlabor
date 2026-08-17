@@ -747,3 +747,266 @@ npx next typegen → 통과   npx tsc --noEmit → 통과(0)   npm run lint → 
   하는 클릭 경로, 360px 레이아웃, 앵커 스크롤, hover/focus 링, Tab 순서는 **QA 가 실브라우저로 확인**해야 한다.
   위 (가)는 서버 계약, (나)는 SSR 마크업까지만 보증한다.
 - 프로덕션 실서버 education 왕복(§15.12-12)·실데이터 5건 렌더 대조(§15.12-10·11)도 QA 범위로 남는다.
+
+---
+
+## 19. 디자인 v3 전면 교체 + 썸네일 + 정렬 UI (2026-08-17, 리더 지시 — 스펙 §16 / 계약 `contract-sort-thumbnail.md`)
+
+작업 순서는 §16.19 의 5단계를 그대로 따랐다: **토큰 → 데이터 계층 → 공통 컴포넌트 → 목록·상세·방명록 → admin 정렬 UI.**
+`--radius-card` 의 의미가 24 → 16px 로 바뀌므로 **토큰 교체와 컴포넌트 클래스 교체를 같은 커밋 범위에서** 처리했다
+(히어로·온누리는 `rounded-panel`/`rounded-panel-lg` 로 올려 픽셀 결과를 유지했다 — 아래 19.2).
+
+### 19.1 변경 파일 (신규 1 · 수정 21 · 삭제 0)
+
+**1단계 — 토큰**
+
+| 파일 | 변경 |
+|------|------|
+| `src/app/globals.css` | `@theme` 이하를 §16.8 전문으로 교체. `@import`·`@source not`·`@font-face`(Gmarket) 블록은 **그대로 유지**. 신규 토큰 8(`--text-title`·`--text-lead`·`--radius-panel-lg`·`--shadow-hero`·`--ease-out-soft`·`--spacing-section`·`--spacing-section-lg`·`--container-admin`), 값 변경 9, **색 값 변경 0 · 색 토큰 17종 전부 보존** |
+| `src/app/admin/page.tsx` | `max-w-page` → **`max-w-admin`** (1줄 + 사유 주석). §16.14-1 의 유일한 admin 필수 수정 |
+
+**2단계 — 데이터 계층**
+
+| 파일 | 변경 |
+|------|------|
+| `src/lib/api/http.ts` | `ApiFailureReason` 에 **`"conflict"`**, `CODE_TO_REASON` 에 **`CONFLICT: "conflict"`**, `STATUS_TO_REASON` 에 **`409: "conflict"`** 추가 |
+| `src/lib/api/posts.ts` | `ApiPostSummary.thumbnailUrl: string \| null` 추가. 관용 파서 `readOptionalString()` 신설 — 없거나 타입이 달라도 `null` 로 낮추고 `invalidResponse` 로 올리지 않는다 |
+| `src/lib/postView.ts` | `PostListItem.thumbnailUrl` 추가, `toPostListItem` 에서 `resolveApiUrl()` 절대화(미설정 시 `null`) |
+| `src/lib/api/admin.ts` | `ApiAdminPost.sortOrder: number \| null`(정수 아니면 `null`) + **`adminReorderPosts(category, ids)`** 신설(계약 §8 시그니처 그대로) |
+
+**3단계 — 공통 컴포넌트**
+
+| 파일 | 변경 |
+|------|------|
+| `SiteHeader.tsx` | `border-y-4` → `border-t-2`, `py-3.5 md:py-5`, `md:px-8`. **록업 크기·문구·마크 크기 변경 0** |
+| `SiteFooter.tsx` | `rounded-t-panel-lg`, `mt-20 md:mt-section-lg`, `py-12 md:py-16`, `md:px-8`, 지부명 18/700, 로고 칩 `rounded-card px-4 py-3`·로고 28px, 간격 `mt-5` |
+| `HeroPanel.tsx` | 장식 원형·`relative overflow-hidden`·`z-10` 래퍼·흰 액센트 바 **제거**. `shadow-hero`, `p-5 md:p-12`, `md:rounded-panel-lg`, 모드 1 제목 `md:text-hero-lg`·CTA `px-7`. **모드 2 = 단문 1줄**(리더 확정안 — 대안 A′ 미사용) |
+| `HomeSection.tsx` | 액센트 바 `<div>` **삭제**, 제목 `text-h2 md:text-h1`, 콘텐츠 `mt-6 md:mt-7` |
+| `SectionNav.tsx` | 칩 `px-4 md:px-5`·`gap-2`, 리스트 `gap-2.5`, `duration-150 ease-out-soft`. 활성 상태·sticky·세그먼티드 금지 규칙 **유지** |
+| `DeadlineStrip.tsx` | `rounded-card px-5 py-3.5`, **세로 구분선 삭제**, 항목 `gap-4`, 임박 칩 `rounded-full` |
+| `OnnuriGuideCard.tsx` | `shadow-card`·좌측 4px accent 보더 **삭제**(3중 위반 시정), `rounded-panel`, `p-5 md:p-6`, `gap-4`, 제목 `md:text-lead`, hover 2px 상승 |
+| `UrgentBadge.tsx` | radius `rounded` → `rounded-badge`. 색·문구·아이콘·aria **변경 0** |
+| `EmptyState.tsx` | `rounded-panel bg-surface px-6 py-14`(L2 면) |
+| `ui/icons.tsx` | **`ArrowUpIcon` 추가**(§16.15.5 — `ArrowDownIcon` 과 동일 규격, path 2개) |
+
+**4단계 — 목록·상세·방명록**
+
+| 파일 | 변경 |
+|------|------|
+| `PostList.tsx` | `<li>` `rounded-card`+`overflow-hidden`+`transition-[box-shadow,transform] duration-200 ease-out-soft`+`motion-safe:hover:-translate-y-0.5`. **urgent 좌측 보더 삭제.** 링크에 `md:flex md:items-start md:gap-6 md:p-6`. **썸네일 슬롯 신규**(`md:order-2 md:w-48`). 텍스트 블록 `p-5 md:order-1 md:min-w-0 md:flex-1 md:p-0`. 제목 `md:text-lead`. 메타 1행 `mt-2`. 항목 gap `md:gap-4`. **`MetaTokens`·`hasText`·메타 2행 구조·`source` 렌더·구분점 안전 규칙은 한 글자도 건드리지 않았다** |
+| `PostArticle.tsx` | 상단 복귀 링크 추가, 제목 `text-title md:text-display`, 메타 `mt-4`, **링크형 썸네일 블록**(eager), 원문 보기 필 버튼화, 마크다운 매핑 갱신, **"첨부파일" h2 추가**, 첨부 행 L1 카드·파일명 18px·`ArrowDownIcon`, 컨테이너 `md:mt-14 md:px-8`, **`max-w-prose` → `max-w-[var(--container-prose)]`**(19.3-③) |
+| `GuestbookPanel.tsx` | 필드 `rounded-card h-14 px-4` / 텍스트영역 `min-h-40 p-4` / 버튼 `h-14 rounded-full px-8` + hover 상승 / 간격 `mt-6` · 목록 구분선 → `gap-3` + L1 카드 · 준비 중 카드 테두리 제거 + `rounded-panel` |
+| `app/page.tsx` | 컨테이너 `mt-6 md:mt-10 px-4 md:px-8`, 간격 §16.7.2 표 적용(`mt-3 md:mt-4` / `mt-8 md:mt-10` / `mt-14 md:mt-18` / `mt-10 md:mt-14` / `mt-section md:mt-section-lg`). **구조·데이터 로딩·`HOME_SECTIONS` 순회 변경 0** |
+| 상세 라우트 3종 | **변경 0** — `PostArticle` 이 전부 흡수 |
+
+**5단계 — admin 정렬 UI**
+
+| 파일 | 변경 |
+|------|------|
+| **`src/components/admin/SortPanel.tsx`** (신규) | §16.15.2~16.15.4 전문 구현. 자체 래퍼(`rounded-badge border border-border-soft p-4`) + h3 |
+| `AdminApp.tsx` | "순서 지정" 보조 버튼(+`sortButtonRef`), `sortPanelOpen` 상태, 3패널 상호 배타, 닫을 때 포커스 복귀, 저장 성공 시 `setNotice` + `reload()`, 로그아웃 시 패널 닫기 |
+| `admin/styles.ts` | **변경 0**(§16.14-6) |
+
+**손대지 않은 파일 확인**: `DateBadge` · `homeSections.ts` · `postCategories.ts` · `routes.ts` · `date.ts` · `PostForm` · `DeleteDialog` · `PasswordChangeForm` · `layout.tsx` · `public/fonts/**` · `server/**`.
+
+### 19.2 `--radius-card` 의미 변경(24→16px) 대응 — 픽셀 동일성 확인
+
+| 요소 | 종전 클래스(값) | §16 클래스(값) | 결과 |
+|------|----------------|---------------|------|
+| 히어로(모바일) | `rounded-card`(24) | `rounded-panel`(24) | **픽셀 동일** ✓ 실측 24px |
+| 히어로(md+) | `md:rounded-panel`(32) | `md:rounded-panel-lg`(32) | **픽셀 동일** ✓ 실측 32px |
+| 온누리 카드 | `rounded-card`(24) | `rounded-panel`(24) | **픽셀 동일** ✓ |
+| 준비 중 카드 | `rounded-card`(24) | `rounded-panel`(24) | **픽셀 동일** ✓ |
+| 목록 카드 | `rounded-2xl`(하드코딩 16) | `rounded-card`(16) | **픽셀 동일 + 토큰화** ✓ |
+| admin "API 미연결" 카드 | `rounded-card`(24) | `rounded-card`(16) | 의도된 상속(§16.14-3) — 실측 16px |
+
+### 19.3 §16 대비 차이 3건 (전부 기록·근거)
+
+**① `PostArticle` 제목의 비-urgent 상단 여백 — 스펙 미규정 구간을 채웠다**
+§16.12.1 골격은 `<p class="mt-4"><UrgentBadge/></p>` → `<h1 class="mt-3">` 만 제시하고, **긴급 배지가 없을 때의 h1 여백을 규정하지 않았다.** 배지가 없으면 h1 이 상단 복귀 링크 바로 아래에 `mt-3`(12px)으로 붙는다. 배지가 있을 때와 "복귀 링크 → 첫 요소" 간격을 같게 맞추기 위해 **비-urgent 시 `mt-4`(16px)** 를 적용했다(`post.urgent ? "mt-3" : "mt-4"`). 스펙 값과 충돌하지 않는 보간이지만 임의 값이므로 **디자이너 확인 요청 항목**이다.
+
+**② `DeadlineStrip` 비임박 항목의 `px-2` 제거**
+종전 항목은 1px 세로 구분선과의 간격 확보를 위해 `px-2` 를 갖고 있었다. §16.9.5 가 구분선을 폐기하고 분리 수단을 `gap-4`(16px)로 지정했으므로, `px-2` 를 남기면 실제 간격이 32px 이 되어 스펙 값과 어긋난다. 제거해 **정확히 16px** 로 맞췄다. 임박 칩의 `px-3 py-1`(칩 내부 패딩)은 유지했다.
+
+**③ `max-w-prose` → `max-w-[var(--container-prose)]` — §16 이전부터의 결함 시정**
+Tailwind v4 의 **`max-w-prose` 는 내장 정적 유틸리티(`max-width: 65ch`)** 이며 `--container-prose` 테마 변수로 덮이지 않는다. 실측 결과 상세 본문 폭이 **620px(≈34자)** 로, §16.3.3 이 검산한 **672px(37.3자)** 및 스킬 §1 의 35~40자 범위와 어긋났고 서체 메트릭에 따라 값이 흔들렸다. 토큰을 직접 참조하도록 바꿔 **실측 672px** 을 확보했다. §16.19 의 변경 목록에는 없는 항목이므로 **리더·디자이너 확인 요청**(되돌리려면 이 1개 클래스만 원복하면 된다).
+
+### 19.4 정렬 UI 구현 결정 3건
+
+1. **포커스 이전을 `useEffect` 대신 `flushSync` 로 구현했다.** §16.15.4-3 이 "`useEffect`(또는 `flushSync` 후)"를 모두 허용한다. `useEffect` 안에서 `setPendingFocus(null)` 을 호출하는 형태는 프로젝트 ESLint(`react-hooks/set-state-in-effect`)가 **error 로 차단**한다. `handleMove` 안에서 `flushSync(() => setState(...))` 로 커밋을 동기 완료시킨 뒤 반대 방향 버튼에 `focus()` 한다 — 이벤트 핸들러 내부이므로 `flushSync` 사용이 안전하고, pendingFocus 상태·연쇄 렌더가 사라진다.
+2. **버튼 ref 는 `Map<postId, { up, down }>`**(§16.15.4-3 지정 형태). 목록 로드 시 `buttonRefs.current.clear()` 로 이전 분류의 노드를 정리한다.
+3. **409 문구는 서버 message 를 쓰지 않고 상수(`CONFLICT_MESSAGE`)로 고정**했다. 계약 §3 #4 가 이 문자열을 **화면 표시 요건**으로 규정하므로, 프록시가 본문을 갈아치우거나 서버 문구가 바뀌어도 요건이 깨지지 않아야 한다. 그 외 실패(`validation`·`network`·`rate-limited`)는 서버 문구를 그대로 표시한다.
+4. **"저장되지 않은 순서 변경이 있습니다"는 별도 `<p>`** 로 렌더한다(라이브 리전 아님). `role="status"` 한 줄에 넣으면 이동 안내 문구가 덮어써 사라진다. 100건 가드 문구도 조건이 지속되므로 별도 `role="alert"` 로 분리했다.
+5. **분류 라디오 선택 상태에 `peer-checked:border-primary` 를 추가**했다. §16.15.2 는 `bg-primary text-white` 만 지정했으나 보더가 `border-strong`(#6b7280) 로 남으면 파란 채움 위에 회색 링이 보인다. `border-primary` 는 `bg-primary` 와 **같은 색**이므로 신규 색 조합이 아니다.
+
+### 19.5 자가 검증 결과
+
+**빌드 체인 — 전부 통과**
+
+```
+npx next typegen  → ✓ Types generated successfully
+npx tsc --noEmit  → 오류 0 (any·as·@ts-ignore 0건)
+npm run lint      → 오류 0 · 경고 0
+npm run build     → ✓ Compiled successfully / 7 페이지 생성
+```
+
+**신규 Tailwind 클래스 생성 확인 (빌드 산출 CSS 실측)** — `rounded-t-panel-lg` 를 포함해 **전부 생성됨. `rounded-t-[2rem]` 대체는 불필요했다.**
+
+| 클래스 | 생성 | 클래스 | 생성 |
+|--------|------|--------|------|
+| `rounded-t-panel-lg` | ✓ | `md:rounded-panel-lg` | ✓ |
+| `mt-section` / `md:mt-section-lg` | ✓ | `md:mt-18` | ✓ |
+| `max-w-admin` | ✓ | `max-w-[var(--container-prose)]` | ✓ |
+| `ease-out-soft` | ✓ | `shadow-hero` | ✓ |
+| `text-title` / `md:text-lead` / `md:text-display` / `md:text-h1` | ✓ | `size-touch` | ✓ |
+| `md:w-48` / `md:order-2` / `aspect-video` | ✓ | `motion-safe:hover:-translate-y-0.5` | ✓ |
+| `motion-safe:group-hover:scale-[1.03]` | ✓ | `peer-checked:bg-primary` / `sr-only` | ✓ |
+
+`globals.css` 에 `--color-*` **17종이 값 변경 없이 존재**하고 `--color-urgent`·`--color-accent`·`--color-primary-bright` 정의가 보존됨. 참고: Tailwind v4 는 **사용처가 0인 테마 변수를 빌드 산출물에서 제거**하므로 `--color-accent` 는 컴파일된 CSS 에 나타나지 않는다 — 이는 §16.2 의 의도(정의는 소스에 보존, 새 UI 에서 미사용)와 일치한다.
+
+**대비 재실측** — §16.18 표 22개 조합을 `check-contrast.mjs` 로 재실행해 **전건 수치 일치**(17.40 / 7.56 / 11.37 / 8.46 / 8.77 / 4.83 / 11.37 / 9.23 / 9.23 / 14.13 / 8.46 / 10.45 / 15.99 / 7.84 / 15.58 / 10.18 / 16.65 / 7.23 / 10.88 / 4.63 / 7.74 / 15.91). 신규 색 조합 0건.
+
+**소스 전수 grep**
+
+| 검사 | 결과 |
+|------|------|
+| `shadow-card` + 테두리 유틸 동시 보유 요소 | **0건** |
+| `border-l-4` | **1건 — admin 초기 비밀번호 배너만**(§14.8.1, §16.14 로 재설계 대상 아님. 19.7-① 참조) |
+| `border-urgent` / 하드코딩 `rounded-2xl`·`rounded-xl` | **0건** |
+| `transition-` 대상 | `colors` · `transform` · `[box-shadow,transform]` 뿐. `width/height/margin/top/left` 전환 **0건** |
+| `<iframe>` | **0건** |
+| `next/image` | 헤더·푸터 로고 2곳만(썸네일은 `<img>` — 사유는 코드 주석) |
+| `rounded-lg` | admin `styles.ts` 3건(미변경) + `SortPanel` 이동 버튼(§16.15.3 지정) |
+
+**목 API 실측 (헤드리스 Chrome 실조작 — 계약 §6 응답 필드 포함 목 서버)**
+
+목 데이터: 공지 2건(전건 작성형·썸네일 없음, 1건 urgent+마감) / 소식 3건(**작성형 1 + 썸네일 정상 1 + 썸네일 404 키 1 = 혼재**) / 교육 5건(전건 링크형·썸네일). reorder 는 **1회차 409 → 2회차 200** 으로 두 경로를 한 세션에서 실측.
+
+| 항목 | 실측 결과 |
+|------|-----------|
+| **혼재 목록 제목 좌측 x좌표(md+)** | 썸네일 유/무 3장 전부 **216px 동일** ✓ (§16.10.2 채택안의 목적 달성) |
+| md+ 썸네일 크기·위치 | **192×108px**, x=872 (카드 192~1088 의 우측) ✓ |
+| 360px 썸네일 | **328×184.5px**, x=16 (상단 풀블리드) ✓ |
+| 플레이스홀더 박스 | **0건** ✓ |
+| **CLS** | 썸네일 요청을 전면 차단한 렌더와 정상 렌더의 **제목 Y 좌표가 5건 전부 동일**(1932·2104·2276·2448·2620), 섹션 높이 915px 동일, 이미지 박스 높이 108px 고정 ✓ |
+| 404 썸네일 | `naturalWidth 0`, 래퍼 `#f9fafb` 박스 유지(높이 108px), 3배 확대 캡처에서 **깨진 아이콘·대체 텍스트 0** ✓ |
+| 접근성 | 썸네일 7개 전부 AX 트리에서 `presentation`(이미지 노드 아님). 카드 링크 접근성 이름 = 제목 + 메타(채널명·"외부 링크(새 창)"·도메인) ✓ |
+| 섹션 간격 | 모바일 **72 / 72 / 72px**, md+ **120 / 120 / 120px** ✓ |
+| 헤더 | 상단 보더 **2px** / 하단 **0px**, 총높이 89px(md+) ✓ |
+| 히어로 모드 1 | 제목 md+ 64px, radius 24/32px, `shadow-hero` = `rgba(9,51,137,0.35) 0 24px 56px -20px` ✓ |
+| **히어로 모드 2** | `<p class="font-display text-hero text-white md:text-hero-lg">코스콤 조합원을 위한 정보 공유</p>` — 40px/700/Gmarket/자간 -1.2px, md+ 64px. **360px 클리핑 0**(패널 scrollWidth 328 = clientWidth 328), 장식 원형 0건, 록업 문자열 0건 ✓ |
+| 헤딩 아웃라인 | 모드 2: `h1`×1(헤더 지부명) + `h2`×4(섹션). 모드 1: 히어로 게시물 제목 `h2` 가 더해져 5개 — §16.11.1 이 모드 1 의 `h2` 유지를 명시하므로 정상 |
+| 가로 스크롤 | 360 / 1280px 전부 **0** ✓ |
+| 360px 메인 총높이 | **4,945px** (§16.10.5 재검토 트리거 5,120px 미달 → 복귀 수단 미도입 유지) |
+| reduced-motion | `transition-duration: 1e-05s`, `scroll-behavior: auto`, 카드·이미지 transform `none` ✓ |
+| 상세 3라우트 | `/notices/n1`·`/news/s2`·`/education/e1` 전부 제목 28px/700(360px), 복귀 링크 2개, 복귀 경로 `/#notices`·`/#news`·`/#education` 정확, 가로 스크롤 0 ✓ |
+| 상세 썸네일 | `loading="eager"`, `alt=""`, 래퍼 24px radius, 작성형에는 미렌더 ✓ |
+| 첨부 블록 | "첨부파일" `h2` 렌더, 행이 L1 카드(그림자 O·테두리 0), 파일명 **18px** ✓ |
+| 방명록 | 필드 56px/16px radius/1px 보더/그림자 0, 텍스트영역 160px·p-4, 등록 버튼 56px 필, 빈 상태 L2 면 ✓ |
+| **API 미설정** | 썸네일 `<img>` 0건(`resolveApiUrl` null 관용 처리), 빈 상태 3개 + 준비 중 카드 1개 전부 L2 면, 히어로 모드 2 폴백, 마감 스트립 미렌더, admin "API 미연결" 카드 radius 16px, admin 폭 768px ✓ |
+| 콘솔 | 에러·예외·하이드레이션 경고 **0건**(Next dev HMR 로그만) |
+
+**정렬 UI 실조작 (admin, 노동교육 5건)**
+
+| 항목 | 실측 결과 |
+|------|-----------|
+| 진입 | 헤더 버튼 4개 `새 게시물 / 순서 지정 / 비밀번호 변경 / 로그아웃` ✓ |
+| 패널 | h3 "게시물 순서 지정", 분류 라디오 3개(선택 칩 `rgb(9,51,137)`), **긴급 안내 문구 렌더** ✓ |
+| 순번 배지 | **1,2,3,4,5 연속** ✓ |
+| 이동 버튼 | **44×44px**, `aria-label` = `노조가 필요한 이유 — 아래로 이동 (현재 1번째)` ✓ |
+| disabled | 첫 행 "위로" / 마지막 행 "아래로" 만 `disabled` ✓ |
+| `role="status"` | `노조가 필요한 이유 — 4번째로 이동했습니다 (총 5건)` — 형식 일치 ✓ |
+| **포커스 이전** | 마지막 행에서 "위로" 4회 → 1번째 도달 시 포커스가 **같은 게시물의 "아래로" 버튼**(`… — 아래로 이동 (현재 1번째)`)으로 이전됨. 포커스 소실 0 ✓ |
+| dirty 가시화 | "저장되지 않은 순서 변경이 있습니다" 표시 + 닫기 버튼 문구 **"저장하지 않고 닫기"** 로 전환 ✓ |
+| **409** | `role="alert"` = **"목록이 변경되었습니다. 새로고침 후 다시 시도해 주세요."**, 목록 재조회로 원래 순서 복귀, dirty 해제, **저장 버튼 비활성**, alert 문구 유지 ✓ |
+| 200 | `role="status"` = "순서를 저장했습니다.", alert 비움, dirty 해제, 부모 `notice` 표시(= 전체 목록 `reload()`) ✓ |
+| "원래 순서로" | 로드 시점 배열로 복원 + "원래 순서로 되돌렸습니다." ✓ |
+| 상호 배타 | "새 게시물" 클릭 시 순서 패널이 닫히고 PostForm 만 남음 ✓ |
+| **공개 목록 반영** | 저장 후 메인 노동교육 섹션 순서가 패널 지정 순서와 **문자 단위 일치** ✓ |
+
+### 19.6 회귀 확인
+
+게시물 목록·상세 3라우트·첨부 다운로드 링크·마감 스트립 링크(`ROUTES.post` 매핑)·admin 로그인/목록/수정·삭제 다이얼로그·**비밀번호 변경 패널**(상호 배타에 순서 패널을 추가했을 뿐 기존 동작 불변)·방명록 폼/목록/빈 상태·API 미설정 폴백 — 전부 정상. `PostForm`·`DeleteDialog`·`PasswordChangeForm`·`styles.ts`·`routes.ts`·`DateBadge`·`homeSections.ts` 는 **파일 자체를 열지 않았다.**
+
+### 19.7 미해결 · QA 인계 항목
+
+1. **`border-l-4` 1건 잔존 — admin 초기 비밀번호 경고 배너(`AdminApp.tsx:280`).** §16.20-1 은 "`border-l-4` 0건"을 요구하지만, §16.14 는 admin 을 재설계 대상에서 제외하고 §16.19 는 `AdminApp` 변경을 "순서 지정 버튼 + 패널 상태"로 한정한다. 조합원이 보는 화면에는 0건이다. **판정을 리더에게 요청한다**(§14.8.1 이 이 배너의 accent 좌측 보더를 명시적으로 규정했으므로 임의로 지우지 않았다).
+2. **저장 성공 문구가 두 라이브 리전에서 동시에 낭독된다.** §16.15.4-5 가 패널 `role="status"` 표시와 `onSaved → reload()`(부모가 `notice` 를 `role="status"` 로 표시)를 **둘 다** 규정하므로 스펙 그대로 구현했다. 실측에서 "순서를 저장했습니다."가 두 리전에 동시에 존재한다. 스크린리더 중복 낭독이 문제라면 부모 `onSaved` 를 문구 없는 `reload()` 전용으로 바꾸는 것이 최소 수정이다 — **디자이너 판정 필요**.
+3. **19.3 의 차이 3건**(비-urgent 제목 여백 / `DeadlineStrip` px-2 / `max-w-prose` 시정)에 대한 승인.
+4. **`mqdefault`(320px) 전용 항목의 모바일 화질**은 §16.10.3 이 수용하기로 한 한계다. 목 데이터로는 판정 불가 — 실서버 백필 후 QA 가 육안 확인.
+5. **백엔드 미배포 상태에서의 배포 순서**: 07 §11.7 대로 **API → 프론트**. 프론트를 먼저 올리면 `순서 지정` 저장이 404(→ `not-found`)로 실패한다. 썸네일·정렬 없이도 목록·상세는 현행과 동일하게 동작함을 API 미설정 실측으로 확인했다.
+6. **실서버 왕복 미수행**: 목 API 로만 검증했다. 실 데이터(교육 5건 실 YouTube 썸네일·소식 혼재)·`Cache-Control: immutable` 응답·`/thumbnails/:key` rate limit 하의 동작은 QA·배포 검증 범위다.
+7. `_workspace/02_designer_spec.md` 가 git 상 **미커밋 상태(§16 1,117행 추가분)** 다. 이 문서는 읽기만 했고 수정하지 않았다 — 커밋 여부는 리더 판단.
+
+### 19.8 리더 판정 4건 반영 (2026-08-17, 19.7 후속)
+
+| 판정 | 내용 | 처리 |
+|------|------|------|
+| **1** | `border-l-4` 잔존(admin 초기 비밀번호 배너 `AdminApp.tsx:280`) — **그대로 둔다** | 코드 변경 0. §16.20-1 의 "border-l-4 0건" 체크는 **조합원이 보는 화면에 한정**되는 항목으로 리더가 확정. §16.14·§16.19 가 admin 을 전면 재설계 범위 밖으로 명시하고, 이 보더는 §14.8.1 이 별도 규정한 요소다. 실질 영향도 없다 — 사용자가 이미 비밀번호를 변경했으므로 `passwordIsInitial = false` 이고 배너 자체가 렌더되지 않는다 |
+| **2** | 저장 성공 문구 **이중 낭독은 결함 → 고쳐라** | **수정 완료** (아래 상세) |
+| **3** | `max-w-prose` → `max-w-[var(--container-prose)]` — **승인** | 유지. 함정 기록은 19.3-③ + 코드 주석(`PostArticle.tsx`)에 남겼다 |
+| **4** | 비-urgent 제목 여백 `mt-4` · `DeadlineStrip` `px-2` 제거 · `peer-checked:border-primary` — **승인** | 유지. 근거는 19.3-①② · 19.4-5 |
+
+#### 판정 2 수정 — 라이브 리전 역할 분리
+
+**프로젝트 규약으로 확정: 성공 문구는 부모(`AdminApp` 의 상시 `role="status"`), 맥락 에러는 패널.**
+근거는 비밀번호 변경 폼에서 이미 겪은 문제다 — `setFeedback` 직후 폼이 언마운트돼 문구가 사라졌고, 그래서 성공 문구를 부모의 상시 status 로 옮겼다(§17). 순서 저장도 같은 구조다.
+
+`src/components/admin/SortPanel.tsx` 변경 (1개 지점 + 주석 3곳):
+
+- `handleSave()` 성공 분기에서 `setStatusMessage(SAVED_MESSAGE)` → **`setStatusMessage("")`**.
+  단순 제거가 아니라 **비우는 것**이 중요하다: 직전 이동 안내("n번째로 이동했습니다")가 남으면 저장 후 상태를 오해하게 된다.
+- `onSaved(SAVED_MESSAGE)` 경로는 그대로 — 부모 `handleSortSaved` 가 `setNotice()` + `reload()` 를 수행한다.
+- **에러·409 문구는 패널에 그대로 둔다**: 어느 패널에서 실패했는지가 맥락이고, 패널이 닫히지 않으므로 사라지지 않는다. 409 문구는 재조회 후에도 지우지 않는다(§16.15.4-5).
+- **이동 안내·"원래 순서로 되돌렸습니다"는 패널 담당 유지** — 로컬 조작의 결과이므로 부모가 말할 것이 없다.
+- `SAVED_MESSAGE` 상수 선언부에 규약과 근거를 주석으로 명시했다(다음 사람이 다시 패널에 넣지 않도록).
+
+**목 API 재검증 (헤드리스 Chrome 실조작 — 화면의 전 `[role=status]`·`[role=alert]` 를 열거해 문구별 보유 리전 수를 셈)**
+
+| 시점 | 라이브 리전 실측 | 판정 |
+|------|------------------|------|
+| 이동 직후 | `SortPanel role=status` 1곳: `노조가 필요한 이유 — 4번째로 이동했습니다 (총 5건)` | ✓ 이동 안내 정상 동작·1곳 |
+| 저장 409 | `SortPanel role=alert` 1곳: `목록이 변경되었습니다. 새로고침 후 다시 시도해 주세요.` / 이동 안내 비워짐 / 로컬 순서 폐기 + 저장 비활성 + 원래 순서 복귀 | ✓ 에러는 패널 담당 유지 |
+| **저장 200** | **`AdminApp role=status` 1곳만**: `순서를 저장했습니다.` — **패널 status 는 빈 문자열**, alert 비움, dirty 해제, 닫기 문구 "닫기" 복귀 | ✓ **이중 낭독 해소** |
+| "원래 순서로" | `SortPanel role=status` 1곳: `원래 순서로 되돌렸습니다.` | ✓ 패널 담당 유지 |
+
+콘솔 에러 0건. 재검증: `npx next typegen && npx tsc --noEmit && npm run lint && npm run build` **전부 재통과**(오류 0·경고 0).
+
+### 19.9 프로덕션 실서버 대조 (백엔드 배포 완료 후, 읽기 전용)
+
+리더가 백엔드를 프로덕션(`https://union-api.koscomlabor.cloud`)에 배포했으므로 **목 API 와 실서버의 계약 일치를 실측 대조**했다. 공개 GET 만 호출했다 — `POST /admin/posts/reorder` 등 변경 계열은 **프로덕션 데이터를 바꾸므로 호출하지 않았다**(admin 정렬 저장의 실서버 왕복은 QA·리더 범위).
+
+**API 응답 (계약 §6 대조)**
+
+| 검사 | 실측 | 판정 |
+|------|------|------|
+| `GET /posts?category=education` | 5건, 전건 `thumbnailUrl` 존재. 4건 `maxresdefault` + **오바마 건만 `mqdefault`** (리더 보고와 일치) | ✓ |
+| `GET /posts?category=news` | 1건(링크형, 비YouTube 성명) → **`thumbnailUrl: null`** | ✓ 실데이터에 혼재 존재 |
+| `GET /posts?category=notice` | **0건** | ✓ |
+| 공개 응답 키집합 | `attachments·category·deadline·id·publishedAt·source·thumbnailUrl·title·type·urgent·url` — **`sortOrder` 없음** | ✓ 계약 §6("공개 응답에 넣지 마라") 준수 |
+| `GET /posts/:id` | 위 + `body`. `thumbnailUrl` 존재, `sortOrder` 없음 | ✓ |
+| `GET /thumbnails/<key>` 정상 | `200` · `content-type: image/jpeg` · **`cache-control: public, max-age=31536000, immutable`** · 73,512 bytes | ✓ |
+| 잘못된 키(`notavalidkey.jpg`) | `400` | ✓ |
+| 경로 조작(`../package.json`, `--path-as-is`) | `404` | ✓ |
+| 없는 키(`AAAAAAAAAAA-mqdefault.jpg`) | `404` | ✓ |
+
+**프론트 ↔ 실서버 렌더 실측** (`NEXT_PUBLIC_API_BASE_URL=https://union-api.koscomlabor.cloud` 로 기동)
+
+| 항목 | 실측 결과 |
+|------|-----------|
+| 노동교육 5건 | **전건 실 썸네일 로드 성공** — 원본 `1280×720`×4 + `320×180`×1, **박스는 전부 192×108** ✓ |
+| `mqdefault` 폴백 항목 | 오바마 건: 원본 320×180 → 192×108 박스에 정상 표시(§16.10.3 이 수용한 화질 한계 범위) |
+| 금융노조 소식(비YouTube 링크형) | **썸네일 슬롯 미렌더** — `thumbnailUrl: null` 관용 처리 ✓ |
+| **혼재 정렬** | 썸네일 있는 교육 카드 5장 + 없는 소식 카드 1장의 **제목 좌측 x = 216px 전부 동일** ✓ (§16.10.2 채택안의 실데이터 검증) |
+| 채널명(`source`) | 전 카드 메타 1행에 렌더(`금융노조 교육문화본부`·`금융노조`·`하종강의 노동과 꿈`·`마이크임팩트`) ✓ fact-verifier 게이트 조건 유지 |
+| 공지 0건 | 빈 상태 L2 면 `등록된 공지사항이 없습니다 / 새 글이 등록되면 이곳에 표시됩니다` ✓ |
+| 히어로 | urgent 0건 → **모드 2 단문 "코스콤 조합원을 위한 정보 공유"**. `h2` 4개(섹션만) ✓ |
+| 마감 스트립 | 마감일 있는 게시물 0건 → 미렌더 ✓ |
+| 360px | 썸네일 **328×184.5** 풀블리드, 가로 스크롤 0, 총높이 **4,030px**(트리거 5,120px 미달) ✓ |
+| 1280px | 가로 스크롤 0, 총높이 3,594px, 콘솔 에러 0건 ✓ |
+
+**목 API 와 실서버가 어긋나는 부분: 없다.** 필드명·타입·상대 경로 형식·`sortOrder` 부재·캐시 헤더·400/404 분기까지 일치했다.
+
+**디자이너 참고 관찰 1건 (결함 아님, 스펙 위반 아님)**: 노동교육 2번째 항목(`산별노동조합이란`)의 실 썸네일이 **거의 흰 배경**이라 흰 카드(L1) 위에서 이미지 경계가 보이지 않고 "일러스트가 떠 있는" 모양으로 읽힌다. 콘텐츠 의존 현상이며, 테두리를 두르면 §16.5 표면 규칙(카드는 그림자 단독) 위반이라 **손대지 않았다.** 판단이 필요하면 디자이너가 결정할 사안이다(예: 썸네일 래퍼에 아주 연한 인셋 링을 허용할지 — 신규 색 조합 검토 필요).
+
+**배포 순서 요건 해소**: 백엔드가 이미 프로덕션에 있으므로 07 §11.7 의 "API → 프론트" 순서 조건은 **충족된 상태**다. 프론트를 배포하면 즉시 실데이터로 동작한다(위 실측이 그 상태를 그대로 재현한 것이다).

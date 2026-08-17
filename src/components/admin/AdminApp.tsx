@@ -18,6 +18,7 @@ import { EmptyState } from "@/components/board/EmptyState";
 import { PostForm } from "@/components/admin/PostForm";
 import { PasswordChangeForm } from "@/components/admin/PasswordChangeForm";
 import { DeleteDialog } from "@/components/admin/DeleteDialog";
+import { SortPanel } from "@/components/admin/SortPanel";
 import {
   ADMIN_DANGER_BUTTON_CLASS,
   ADMIN_FIELD_CLASS,
@@ -99,10 +100,13 @@ export function AdminApp() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [passwordPanelOpen, setPasswordPanelOpen] = useState(false);
+  /** 순서 지정 패널 (§16.15) — PostForm·비밀번호 패널과 같은 슬롯이므로 상호 배타로 관리한다 */
+  const [sortPanelOpen, setSortPanelOpen] = useState(false);
   /** GET /admin/me 의 passwordIsInitial (계약 §1) — 초기 비밀번호 경고 배너 노출 조건 */
   const [passwordIsInitial, setPasswordIsInitial] = useState(false);
   const [meToken, setMeToken] = useState(0);
   const passwordButtonRef = useRef<HTMLButtonElement | null>(null);
+  const sortButtonRef = useRef<HTMLButtonElement | null>(null);
 
   // 세션 확인 + 초기 비밀번호 여부 조회 (비동기 콜백 setState).
   // 로그인 직후에도 meToken 을 올려 재조회한다 — 최초 진입에서 세션이 없으면
@@ -181,18 +185,46 @@ export function AdminApp() {
   async function handleLogout() {
     await adminLogout();
     setPasswordPanelOpen(false);
+    setSortPanelOpen(false);
     setPhase("login");
   }
 
-  /** 비밀번호 패널과 PostForm 은 같은 슬롯을 공유하므로 동시에 열지 않는다 (§14.8.3) */
+  /**
+   * 비밀번호 패널·PostForm·순서 지정 패널은 같은 슬롯을 공유하므로 동시에 열지 않는다
+   * (§14.8.3 · §16.15.2 — 열려 있는 패널은 항상 1개다).
+   */
   function openPasswordPanel() {
     setEditing(null);
+    setSortPanelOpen(false);
     setPasswordPanelOpen(true);
   }
 
   function openPostForm(target: ApiAdminPost | "new") {
     setPasswordPanelOpen(false);
+    setSortPanelOpen(false);
     setEditing(target);
+  }
+
+  function openSortPanel() {
+    setEditing(null);
+    setPasswordPanelOpen(false);
+    setSortPanelOpen(true);
+  }
+
+  /** 닫을 때 포커스는 진입점("순서 지정" 버튼)으로 복귀 — passwordButtonRef 패턴 계승 */
+  function closeSortPanel() {
+    setSortPanelOpen(false);
+    sortButtonRef.current?.focus();
+  }
+
+  function handleSortSaved(savedNotice: string) {
+    setNotice(savedNotice);
+    reload(); // 전체 목록도 새 순서로 재조회 (§16.15.4-5)
+  }
+
+  function handleSortSessionExpired() {
+    setSortPanelOpen(false);
+    setPhase("login");
   }
 
   /** 취소·성공 모두 포커스 복귀 대상은 헤더 버튼으로 고정 (배너 CTA는 성공 후 사라짐 — §14.8.6) */
@@ -273,7 +305,8 @@ export function AdminApp() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-h2 text-ink">게시물 관리</h2>
-        {/* flex-wrap: 360px 에서 3버튼 합(≈330px)이 콘텐츠 폭(328px)을 넘는다 (§14.8.7) */}
+        {/* flex-wrap: 360px 에서 버튼 합이 콘텐츠 폭(328px)을 넘는다 — §16.15.2 로 4버튼이 되어
+            2행으로 래핑된다(기존 flex-wrap 이 그대로 흡수) */}
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -281,6 +314,14 @@ export function AdminApp() {
             className={ADMIN_PRIMARY_BUTTON_CLASS}
           >
             새 게시물
+          </button>
+          <button
+            type="button"
+            ref={sortButtonRef}
+            onClick={openSortPanel}
+            className={ADMIN_SECONDARY_BUTTON_CLASS}
+          >
+            순서 지정
           </button>
           <button
             type="button"
@@ -309,6 +350,15 @@ export function AdminApp() {
             onSessionExpired={handlePasswordSessionExpired}
           />
         </div>
+      ) : null}
+
+      {/* 순서 지정 패널은 자체 래퍼(rounded-badge + border-border-soft)를 렌더한다 — §16.15.2 */}
+      {sortPanelOpen ? (
+        <SortPanel
+          onSaved={handleSortSaved}
+          onClose={closeSortPanel}
+          onSessionExpired={handleSortSessionExpired}
+        />
       ) : null}
 
       {editing !== null ? (

@@ -126,6 +126,29 @@ export function ArrowDownIcon({ className }: IconProps) {
   );
 }
 
+/**
+ * 상향 화살표 아이콘 (§16.15.5 — admin 정렬 패널 "위로 이동" 버튼 20px).
+ * ArrowDownIcon 과 동일 규격(viewBox·stroke·cap/join·aria-hidden)이며 path 만 반전이다 —
+ * 두 버튼이 같은 행에 나란히 놓이므로 획 굵기·끝 처리가 어긋나면 즉시 보인다.
+ */
+export function ArrowUpIcon({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 19V5" />
+      <path d="m5 12 7-7 7 7" />
+    </svg>
+  );
+}
+
 /** 공사(준비 중) 아이콘 (방명록 준비 중 카드 40px) */
 export function ConstructionIcon({ className }: IconProps) {
   return (

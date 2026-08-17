@@ -31,6 +31,11 @@ export interface PostListItem {
   publishedAt: string;
   /** YYYY.MM.DD (KST, Intl 계산) */
   dateLabel: string;
+  /**
+   * 썸네일 절대 URL | null (§16.10). 첨부와 동일하게 `resolveApiUrl()` 로 절대화한다.
+   * `null` 이면 카드·상세에서 **슬롯 자체를 렌더하지 않는다** — 플레이스홀더 금지(§16.10.2).
+   */
+  thumbnailUrl: string | null;
   attachmentCount: number;
 }
 
@@ -77,6 +82,8 @@ export function toPostListItem(post: ApiPostSummary): PostListItem {
     domain: post.type === "link" ? extractDomain(post.url) : null,
     publishedAt: post.publishedAt,
     dateLabel: formatEntryDate(post.publishedAt),
+    // API 미설정이면 resolveApiUrl 이 null → 썸네일 미렌더 (깨진 이미지 대신 부재)
+    thumbnailUrl: post.thumbnailUrl !== null ? resolveApiUrl(post.thumbnailUrl) : null,
     attachmentCount: post.attachments.length,
   };
 }

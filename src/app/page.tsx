@@ -93,27 +93,32 @@ export default async function Home() {
     <>
       <SiteHeader />
       <main className="flex-1">
-        <div className="mx-auto mt-6 w-full max-w-page px-4 md:px-6">
-          {/* ── 도입 블록 (§15.2 — 현행 유지) ── */}
+        {/* 컨테이너 960px(max-w-page) — 썸네일이 카드 우측에 들어오므로 텍스트 열을 지키려면
+            폭이 필요하다(§16.7.1). 본문 장문은 상세 페이지에서 prose 672px 로 별도 제한된다 */}
+        <div className="mx-auto mt-6 w-full max-w-page px-4 md:mt-10 md:px-8">
+          {/* ── 도입 블록 (§16.11.2 — 구조 유지, 간격은 §16.7.2 표) ── */}
           <HeroPanel post={urgentNotice} />
           {deadlinePosts.length > 0 ? (
-            <div className="mt-3">
+            <div className="mt-3 md:mt-4">
               <DeadlineStrip posts={deadlinePosts} />
             </div>
           ) : null}
-          <div className="mt-8">
+          <div className="mt-8 md:mt-10">
             <OnnuriGuideCard />
           </div>
 
-          {/* ── 섹션 스택 (§15.2 간격표) ── */}
-          <SectionNav className="mt-12" />
+          {/* ── 섹션 스택 (§16.7.2 간격표) ── */}
+          <SectionNav className="mt-14 md:mt-18" />
           {HOME_SECTIONS.map((section, index) => (
             <HomeSection
               key={section.id}
               id={section.id}
               label={section.label}
-              /* 첫 섹션은 바로가기 내비와 한 그룹(32/40px), 이후 섹션 간 구분은 64/80px */
-              className={index === 0 ? "mt-8 md:mt-10" : "mt-16 md:mt-20"}
+              /* 첫 섹션은 바로가기 내비와 한 그룹(40/56px), 이후 섹션 간은 72/120px.
+                 72/24 = 3.0배 · 120/28 = 4.3배 — "섹션 위 여백 ≥ 내부 여백 2배" 충족(§16.7.2) */
+              className={
+                index === 0 ? "mt-10 md:mt-14" : "mt-section md:mt-section-lg"
+              }
             >
               {sectionContent[section.id]}
             </HomeSection>

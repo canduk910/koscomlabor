@@ -51,6 +51,12 @@ export interface ApiPostSummary {
   deadline: string | null;
   /** ISO 8601 UTC — 표시·정렬 기준 게시일 */
   publishedAt: string;
+  /**
+   * 썸네일 상대 경로 `/thumbnails/<key>` | null (정렬·썸네일 계약 §6).
+   * **관용 파싱**: 필드가 없거나 문자열이 아니면 `null` 로 간주하고 invalidResponse 로 올리지
+   * 않는다 — 백엔드 미배포 구간에서 프론트가 통째로 빈 목록이 되는 것을 막는 하위 호환 방어다.
+   */
+  thumbnailUrl: string | null;
   attachments: ApiAttachment[];
 }
 
@@ -72,6 +78,15 @@ function readNullableString(value: unknown): string | null | undefined {
   if (value === null) return null;
   if (typeof value === "string") return value;
   return undefined;
+}
+
+/**
+ * 관용 문자열 파싱 (계약 §6 "프론트 파서" 규정) — 없음·타입 불일치를 전부 `null` 로 낮춘다.
+ * `readNullableString` 과 달리 `undefined`(= 응답 형식 오류) 를 만들지 않는다:
+ * 신규 추가 필드는 **구버전 API 응답에 아예 존재하지 않으므로** 필수 검증 대상이 될 수 없다.
+ */
+export function readOptionalString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
 }
 
 export function parseAttachment(value: unknown): ApiAttachment | null {
@@ -117,7 +132,20 @@ export function parsePostSummary(value: unknown): ApiPostSummary | null {
     attachments.push(attachment);
   }
 
-  return { id, category, type, title, url, source, urgent, deadline, publishedAt, attachments };
+  return {
+    id,
+    category,
+    type,
+    title,
+    url,
+    source,
+    urgent,
+    deadline,
+    publishedAt,
+    // 계약 §6: 미배포 API 는 이 필드를 내려주지 않는다 → null (슬롯 미렌더 = 현행 텍스트 카드)
+    thumbnailUrl: readOptionalString(value.thumbnailUrl),
+    attachments,
+  };
 }
 
 export function parsePostDetail(value: unknown): ApiPostDetail | null {

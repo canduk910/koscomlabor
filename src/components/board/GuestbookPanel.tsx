@@ -16,12 +16,13 @@ const AUTHOR_MAX_LENGTH = 20;
 const BODY_MAX_LENGTH = 500;
 
 /**
- * 방명록 준비 중 카드 (스펙 §7.1).
+ * 방명록 준비 중 카드 (스펙 §7.1 · 표면 §16.9.8).
  * 비활성 폼을 보여주는 방식 금지 — 폼 자체를 렌더하지 않는다.
+ * 표면은 L2 면(rounded-panel + bg-surface) 단독 — 테두리 제거(§16.5 2중 적용 시정).
  */
 function PreparingCard() {
   return (
-    <div className="rounded-card border border-border-strong bg-surface px-4 py-8 text-center">
+    <div className="rounded-panel bg-surface px-6 py-12 text-center">
       <ConstructionIcon className="mx-auto size-10 text-border-strong" />
       {/* §15.9.1: 방명록 섹션 h2 아래에 놓이므로 h3 (text-h2 토큰 유지 — 시각 변화 0) */}
       <h3 className="mt-4 text-h2 text-ink">방명록 준비 중입니다</h3>
@@ -43,12 +44,17 @@ interface Feedback {
   message: string;
 }
 
-/* v2 (§11.6): 입력 필드 radius 12px(rounded-badge), 버튼 radius 9999px(rounded-full) */
+/*
+ * §16.13.1: 입력 필드 radius 16px(rounded-card — 필드 높이 56px 과 균형), 버튼은 rounded-full.
+ * 필드 보더 색 border-strong(4.83 UI)은 **변경 0** — 컨트롤은 테두리가 의미다(§16.5 "컨트롤" 층).
+ * 컨트롤에는 그림자를 주지 않는다.
+ */
 const FIELD_CLASS =
-  "rounded-badge w-full border border-border-strong bg-bg text-body text-ink focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2";
+  "rounded-card w-full border border-border-strong bg-bg text-body text-ink focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2";
 
+/* h-14(56px)은 입력 필드 높이와 같은 값 — 44px 최소 터치 대상을 상회한다(§16.17) */
 const BUTTON_CLASS =
-  "min-h-touch rounded-full bg-primary-strong px-6 text-body font-bold text-white hover:outline-2 hover:outline-primary-strong hover:outline-offset-2 focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2";
+  "ease-out-soft h-14 rounded-full bg-primary-strong px-8 text-body font-bold text-white transition-transform duration-200 hover:outline-2 hover:outline-primary-strong hover:outline-offset-2 focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2 motion-safe:hover:-translate-y-0.5";
 
 /** 작성 폼 + 글 목록 (스펙 §7.2 — 백엔드 연결 시) */
 function GuestbookBoard() {
@@ -139,11 +145,11 @@ function GuestbookBoard() {
             onChange={(event) => setAuthor(event.target.value)}
             maxLength={AUTHOR_MAX_LENGTH}
             required
-            className={`${FIELD_CLASS} h-12 px-3`}
+            className={`${FIELD_CLASS} h-14 px-4`}
           />
         </div>
 
-        <div className="mt-4">
+        <div className="mt-6">
           <label
             htmlFor="guestbook-body"
             className="mb-2 block text-body font-semibold text-ink"
@@ -157,14 +163,14 @@ function GuestbookBoard() {
             onChange={(event) => setBody(event.target.value)}
             maxLength={BODY_MAX_LENGTH}
             required
-            className={`${FIELD_CLASS} min-h-30 px-3 py-2`}
+            className={`${FIELD_CLASS} min-h-40 p-4`}
           />
-          <p className="mt-1 text-caption text-ink-muted">
+          <p className="mt-2 text-caption text-ink-muted">
             {body.length}/{BODY_MAX_LENGTH}자
           </p>
         </div>
 
-        <button type="submit" disabled={submitting} className={`${BUTTON_CLASS} mt-4`}>
+        <button type="submit" disabled={submitting} className={`${BUTTON_CLASS} mt-6`}>
           {submitting ? "등록 중…" : "등록"}
         </button>
 
@@ -178,7 +184,7 @@ function GuestbookBoard() {
         </p>
       </form>
 
-      <div className="mt-8">
+      <div className="mt-10">
         {listState.status === "loading" ? (
           <p role="status" className="px-4 py-12 text-center text-caption text-ink-muted">
             방명록을 불러오는 중입니다…
@@ -198,14 +204,19 @@ function GuestbookBoard() {
           listState.entries.length === 0 ? (
             <EmptyState message="아직 남겨진 글이 없습니다" />
           ) : (
-            <ul className="divide-y divide-border-soft">
+            /* §16.13.2: 구분선 의존 목록을 폐기하고 L1 카드 스택으로 교체(게시물 목록과 같은
+               언어). 카드의 분리 수단은 shadow-card 하나뿐이다 — 테두리를 더하지 말 것 */
+            <ul className="flex flex-col gap-3">
               {listState.entries.map((entry) => (
-                <li key={entry.id} className="py-4">
+                <li
+                  key={entry.id}
+                  className="rounded-card bg-bg shadow-card p-5"
+                >
                   {/* §5 패턴 재사용 — 링크 없음, 제목 대신 내용 첫 줄 (스펙 §7.2) */}
                   <p className="line-clamp-2 text-body font-semibold text-ink">
                     {entry.body.split("\n")[0]}
                   </p>
-                  <p className="mt-1.5 flex flex-wrap items-center gap-x-1 text-caption text-ink-muted">
+                  <p className="mt-2 flex flex-wrap items-center gap-x-1 text-caption text-ink-muted">
                     <span>{entry.author}</span>
                     <span aria-hidden="true">·</span>
                     <time dateTime={entry.createdAt}>

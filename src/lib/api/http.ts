@@ -14,6 +14,13 @@ export type ApiFailureReason =
   | "unauthorized"
   /** 인증 수단은 유효하나 본문의 currentPassword 불일치 (계약 개정 1 — INVALID_CREDENTIALS) */
   | "invalid-credentials"
+  /**
+   * 낙관적 동시성 충돌 (정렬 계약 §3 #4 — CONFLICT / HTTP 409).
+   * 순서 저장 시 `ids` 가 서버의 활성 게시물 집합과 일치하지 않을 때 발생한다.
+   * 이 reason 이 없으면 409 가 `?? "network"` 로 떨어져 "서버에 연결하지 못했습니다"라는
+   * 엉뚱한 안내가 뜬다 — CODE_TO_REASON·STATUS_TO_REASON 등록이 함께 필수다.
+   */
+  | "conflict"
   | "not-found"
   | "link-fetch-failed"
   | "payload-too-large";
@@ -80,6 +87,8 @@ const CODE_TO_REASON: Record<string, ApiFailureReason> = {
   // 계약 개정 1: 세션 만료(UNAUTHORIZED)와 현재 비밀번호 불일치를 프론트에서 구분해야 한다.
   // 미등록 code 는 아래 `?? "network"` 로 잘못 분류되므로 등록 필수.
   INVALID_CREDENTIALS: "invalid-credentials",
+  // 정렬 계약 §3 #4: 순서 저장의 순열 불일치(409). 미등록 시 연결 실패로 오분류된다.
+  CONFLICT: "conflict",
   NOT_FOUND: "not-found",
   LINK_FETCH_FAILED: "link-fetch-failed",
   PAYLOAD_TOO_LARGE: "payload-too-large",
@@ -89,6 +98,8 @@ const STATUS_TO_REASON: Record<number, ApiFailureReason> = {
   400: "validation",
   401: "unauthorized",
   404: "not-found",
+  // body 가 비정형(프록시 에러 페이지 등)이어도 409 는 충돌로 다룬다 — CODE_TO_REASON 과 이중 방어
+  409: "conflict",
   413: "payload-too-large",
   429: "rate-limited",
 };

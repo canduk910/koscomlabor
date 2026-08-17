@@ -30,6 +30,11 @@ import {
 export interface ApiAdminPost extends Omit<ApiPostDetail, "body"> {
   body: string | null;
   deletedAt: string | null;
+  /**
+   * 수동 지정 순서 (정렬 계약 §6 — admin 응답 전용. 공개 응답에는 존재하지 않는다).
+   * `null` = 미지정. 관용 파싱: 없거나 정수가 아니면 `null`.
+   */
+  sortOrder: number | null;
 }
 
 export interface AdminPostInput {
@@ -87,11 +92,17 @@ export const ATTACHMENT_MIME_TYPES = [
 ];
 
 function parseAdminPost(value: unknown): ApiAdminPost | null {
+  // thumbnailUrl 은 parsePostSummary 가 관용 파싱한다 (계약 §6 — admin 응답에도 동일 필드)
   const summary = parsePostSummary(value);
   if (summary === null || !isRecord(value)) return null;
   const body = typeof value.body === "string" ? value.body : null;
   const deletedAt = typeof value.deletedAt === "string" ? value.deletedAt : null;
-  return { ...summary, body, deletedAt };
+  // 계약 §6: 없거나 정수가 아니면 null — 구버전 API 와 공존하기 위해 invalidResponse 로 올리지 않는다
+  const sortOrder =
+    typeof value.sortOrder === "number" && Number.isInteger(value.sortOrder)
+      ? value.sortOrder
+      : null;
+  return { ...summary, body, deletedAt, sortOrder };
 }
 
 async function requestJson(
@@ -281,6 +292,44 @@ export async function adminDeletePost(id: string): Promise<ApiResult<{ id: strin
     return invalidResponse("게시물 삭제 응답 형식이 올바르지 않습니다.");
   }
   return { ok: true, data: { id: result.data.id } };
+}
+
+/* ---------- 순서 지정 (정렬 계약 §3·§8) ---------- */
+
+/**
+ * 순서 저장 (POST /admin/posts/reorder) — `ids` 배열 순서대로 sort_order 를 1..n 으로 지정한다.
+ *
+ * `ids` 는 **해당 분류 활성 게시물 전체의 순열**이어야 한다(계약 §3 #4). 아니면 서버가 409
+ * `CONFLICT` 로 거부한다 → `reason === "conflict"`. 호출부는 계약 문구를 표시하고 목록을
+ * 재조회하며 **낡은 순서로 재시도하게 두지 않는다**(계약 §8).
+ * 409 → "conflict" 매핑은 `http.ts` 의 CODE_TO_REASON·STATUS_TO_REASON 에 등록되어 있다.
+ */
+export async function adminReorderPosts(
+  category: PostCategory,
+  ids: string[],
+): Promise<ApiResult<{ updated: number }>> {
+  const result = await requestJson(
+    "/admin/posts/reorder",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category, ids }),
+    },
+    "순서를 저장하지 못했습니다.",
+  );
+  if (!result.ok) return result;
+  if (!isRecord(result.data) || result.data.ok !== true) {
+    return invalidResponse("순서 저장 응답 형식이 올바르지 않습니다.");
+  }
+  const { updated } = result.data;
+  return {
+    ok: true,
+    data: {
+      // 정수가 아니면 요청 건수로 대체 — 성공 자체는 ok:true 가 확정했으므로 실패로 낮추지 않는다
+      updated:
+        typeof updated === "number" && Number.isInteger(updated) ? updated : ids.length,
+    },
+  };
 }
 
 /* ---------- 링크 메타데이터 (§13.2) ---------- */

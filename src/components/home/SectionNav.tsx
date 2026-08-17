@@ -6,7 +6,10 @@ import { ArrowDownIcon } from "@/components/ui/icons";
  * 활성 표시가 곧 탭 은유이며, "지금 이것이 선택됨"이 보이면 나머지가 "안 보임"으로 읽힌다.
  */
 const CHIP_CLASS =
-  "inline-flex min-h-touch items-center gap-1.5 rounded-full border border-border-strong bg-bg px-3 text-body font-semibold text-primary transition-colors hover:border-primary hover:bg-primary-tint hover:underline focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2 md:px-4";
+  "inline-flex min-h-touch items-center gap-2 rounded-full border border-border-strong bg-bg px-4 " +
+  "text-body font-semibold text-primary transition-colors duration-150 ease-out-soft " +
+  "hover:border-primary hover:bg-primary-tint hover:underline " +
+  "focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2 md:px-5";
 
 interface SectionNavProps {
   /** 상단 여백 — 페이지가 주입한다(§15.2 간격표: 온누리 카드 → 내비 48px) */
@@ -29,7 +32,7 @@ interface SectionNavProps {
 export function SectionNav({ className }: SectionNavProps) {
   return (
     <nav aria-label="페이지 섹션 바로가기" className={className}>
-      <ul className="flex flex-wrap gap-2">
+      <ul className="flex flex-wrap gap-2.5">
         {HOME_SECTIONS.map((section) => (
           <li key={section.id}>
             <a href={`#${section.id}`} className={CHIP_CLASS}>

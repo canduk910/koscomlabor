@@ -22,82 +22,114 @@
 }
 
 /*
- * 디자인 토큰 — _workspace/02_designer_spec.md §1 (2026-08-16 CI 실측 개정) 그대로 적용.
+ * 디자인 토큰 — _workspace/02_designer_spec.md §16.8 전문 (2026-08-17 10차 모던 전면 교체).
  * 다크 모드는 스펙 범위 제외 (create-next-app 기본 다크모드 미디어쿼리 제거됨).
- * 색상 근거: 스펙 §10.1 픽셀 실측 (KFIU 파랑/빨강, 코스콤 오렌지).
+ * 색상 근거: 스펙 §10.1 픽셀 실측 (KFIU 파랑/빨강, 코스콤 오렌지) — §16 에서 **값 변경 0건**.
  */
 @theme {
-  /* ---- 색상 (15) — 2026-08-16 CI 실측 개정 ---- */
-  --color-bg: #ffffff;             /* 페이지 기본 배경 */
-  --color-surface: #f9fafb;        /* 탭바·푸터·카드 배경 */
-  --color-ink: #1a1a1a;            /* 본문·제목 텍스트 */
-  --color-ink-muted: #4b5563;      /* 보조 텍스트(날짜·출처·비선택 탭) */
-  --color-primary: #093389;        /* 주조색 — KFIU 깃발 파랑 원색(실측). 텍스트·UI 겸용(11.37:1) */
-  --color-primary-strong: #093389; /* primary와 동일 값 — 토큰명 유지 목적(§10). 기존 사용처 그대로 유효 */
-  --color-primary-tint: #eff6ff;   /* 탭 hover 배경 (1차 값 유지) */
-  --color-urgent: #d0101b;         /* KFIU 깃발 빨강 원색(실측) — 보더 등 UI 전용, 텍스트 금지 */
-  --color-urgent-strong: #9c0d14;  /* KFIU 빨강 동일 색상군 파생 — 긴급 텍스트·긴급 배지 배경 */
-  --color-urgent-tint: #fef2f2;    /* 긴급 배너 배경 (1차 값 유지) */
-  --color-accent: #ec6d1e;         /* 코스콤 오렌지 원색(실측) — 로고·장식 전용, 텍스트/의미 UI 금지 */
-  --color-accent-strong: #7a3806;  /* 오렌지 동일 색상군 파생 — accent 텍스트·아이콘 */
-  --color-accent-tint: #fdf0e7;    /* 온누리 가이드 카드(§9) 배경 */
-  --color-border-strong: #6b7280;  /* 의미 있는 UI 경계(입력 필드 등)·보조 아이콘 */
-  --color-border-soft: #e5e7eb;    /* 장식용 구분선 전용 — 의미 전달 UI에 사용 금지 */
+  /* ---- 색상 (17) — §16 변경 0건. 사용처 0 토큰도 정의는 보존(§16.2) ---- */
+  --color-bg: #ffffff;
+  --color-surface: #f9fafb;        /* L2 면 — 값 유지(어둡게 하면 보조 텍스트가 AAA 미달, §16.18) */
+  --color-ink: #1a1a1a;
+  --color-ink-muted: #4b5563;      /* 보조 텍스트 하한(7.56) */
+  --color-primary: #093389;
+  --color-primary-strong: #093389; /* primary 와 동일 값 — 기존 사용처 유지 목적 */
+  --color-primary-tint: #eff6ff;
+  --color-primary-soft: #d9e9ff;
+  --color-primary-bright: #2e7df7; /* §16 사용처 0 — CI 실측 기록 보존(지우지 말 것) */
+  --color-urgent: #d0101b;         /* §16 사용처 0 — 동일 */
+  --color-urgent-strong: #9c0d14;
+  --color-urgent-tint: #fef2f2;
+  --color-accent: #ec6d1e;         /* §16 사용처 0 — 동일 */
+  --color-accent-strong: #7a3806;
+  --color-accent-tint: #fdf0e7;
+  --color-border-strong: #6b7280;  /* 컨트롤 경계(4.83 UI) */
+  --color-border-soft: #e5e7eb;    /* 장식 구분선 전용(hr·admin) */
 
-  /* ---- v2 모던 개편 추가 (2026-08-16 3차 — §11). 기존 토큰 값 변경 0건 ---- */
-  --color-primary-soft: #d9e9ff;   /* 라이트블루 서피스(레퍼런스 실측) — 날짜 배지 기본형·마감 스트립 배경 */
-  --color-primary-bright: #2e7df7; /* 밝은 블루(레퍼런스 실측) — 장식 도형·아이콘 배경 전용(3.89:1), 텍스트 조합 전면 금지 */
-
+  /* ---- 폰트 — 변경 0 ---- */
   --font-sans: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
-  /* §12.3: 디스플레이 서체 — 짧은 대형 표제·숫자 전용(§12.2 배분표). 폴백은 Pretendard → 시스템 한글 */
   --font-display: "Gmarket Sans", "Pretendard Variable", Pretendard,
     -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
 
-  --text-hero: 2.5rem;             /* 40px 히어로 대형 타이포 (모바일) */
-  --text-hero--line-height: 1.2;
-  --text-hero--font-weight: 800;
-  --text-hero--letter-spacing: -0.02em;
-  --text-hero-lg: 3.5rem;          /* 56px 히어로 (md+, md:text-hero-lg) */
-  --text-hero-lg--line-height: 1.15;
-  --text-hero-lg--font-weight: 800;
-  --text-hero-lg--letter-spacing: -0.02em;
-  --tracking-heading: -0.01em;     /* display·h1·h2 한글 자간 보정 (본문·caption은 0 유지) */
-
-  --radius-card: 1.5rem;           /* 24px 카드·히어로(모바일)·온누리 카드 */
-  --radius-panel: 2rem;            /* 32px 히어로 패널 (md+) */
-  --radius-badge: 0.75rem;         /* 12px 날짜 배지·입력 필드(v2) */
-
-  --shadow-card: 0 4px 20px rgb(9 51 137 / 0.08);
-  --shadow-card-hover: 0 8px 28px rgb(9 51 137 / 0.12);
-
-  /* ---- 타이포그래피 스케일 (5단계) ---- */
-  /* letter-spacing 모디파이어는 §11.2 "display·h1·h2 자간 --tracking-heading(-0.01em)" 규정의
-     구현 — 토큰 레벨에 내장해 컴포넌트 클래스 변경 없이 전면 적용 (§11.2 취지) */
-  --text-display: 2.5rem;                 /* 40px 페이지 대제목 */
-  --text-display--line-height: 1.3;
+  /* ---- 타이포 스케일 (§16.3) ---- */
+  --text-hero: 2.5rem;                    /* 40px 히어로 표제(모바일) */
+  --text-hero--line-height: 1.12;
+  --text-hero--font-weight: 700;          /* 800→700: Gmarket 은 700 까지만 서빙(§16.3.1) */
+  --text-hero--letter-spacing: -0.03em;
+  --text-hero-lg: 4rem;                   /* 64px 히어로 표제(md+) */
+  --text-hero-lg--line-height: 1.06;
+  --text-hero-lg--font-weight: 700;
+  --text-hero-lg--letter-spacing: -0.03em;
+  --text-display: 2.5rem;                 /* 40px 상세 페이지 제목(md+) */
+  --text-display--line-height: 1.15;
   --text-display--font-weight: 700;
-  --text-display--letter-spacing: -0.01em;
-  --text-h1: 2rem;                        /* 32px 섹션 제목 */
-  --text-h1--line-height: 1.3;
+  --text-display--letter-spacing: -0.02em;
+  --text-title: 1.75rem;                  /* 28px 상세 페이지 제목(모바일) — 신규 */
+  --text-title--line-height: 1.25;
+  --text-title--font-weight: 700;
+  --text-title--letter-spacing: -0.02em;
+  --text-h1: 2.25rem;                     /* 36px 섹션 제목(md+) */
+  --text-h1--line-height: 1.2;
   --text-h1--font-weight: 700;
-  --text-h1--letter-spacing: -0.01em;
-  --text-h2: 1.5rem;                      /* 24px 소제목·카드 제목 */
+  --text-h1--letter-spacing: -0.02em;
+  --text-h2: 1.5rem;                      /* 24px 섹션 제목(모바일)·소제목 */
   --text-h2--line-height: 1.3;
-  --text-h2--font-weight: 600;
+  --text-h2--font-weight: 700;            /* 600→700 */
   --text-h2--letter-spacing: -0.01em;
-  --text-body: 1.125rem;                  /* 18px 본문 기본 */
+  --text-lead: 1.25rem;                   /* 20px 카드 제목(md+)·부문구·본문 h3 — 신규 */
+  --text-lead--line-height: 1.55;
+  --text-lead--font-weight: 600;
+  --text-lead--letter-spacing: -0.01em;
+  --text-body: 1.125rem;                  /* 18px 본문 — 하한, 변경 금지 */
   --text-body--line-height: 1.7;
-  --text-caption: 0.9375rem;              /* 15px 보조 정보 — 이보다 작은 텍스트 금지 */
+  --text-caption: 0.9375rem;              /* 15px 보조 — 하한, 변경 금지 */
   --text-caption--line-height: 1.5;
+  --tracking-heading: -0.01em;            /* 스케일 밖 커스텀 대형 텍스트 보조(사용처 0) */
 
-  /* ---- 간격·레이아웃 (3) ---- */
-  --spacing-touch: 2.75rem;   /* 44px 최소 터치 대상 (min-h-touch / min-w-touch) */
-  --container-prose: 42rem;   /* 672px 본문 줄 길이 상한 (한글 35~40자) */
-  --container-page: 48rem;    /* 768px 페이지 콘텐츠 컨테이너 상한 */
+  /* ---- radius (§16.4) ---- */
+  --radius-badge: 0.75rem;   /* 12px 인셋 썸네일·작은 배지·admin 패널 */
+  --radius-card: 1rem;       /* 16px 목록 카드·첨부 행·방명록 항목·입력 필드 */
+  --radius-panel: 1.5rem;    /* 24px 큰 블록·히어로(모바일) */
+  --radius-panel-lg: 2rem;   /* 32px 히어로(md+)·푸터 상단 — 신규 */
+
+  /* ---- 그림자 (§16.5) — 순수 장식, 대비 요건 무관 ---- */
+  --shadow-card: 0 1px 2px rgb(9 51 137 / 0.04), 0 10px 24px -6px rgb(9 51 137 / 0.10);
+  --shadow-card-hover: 0 2px 4px rgb(9 51 137 / 0.06), 0 16px 32px -8px rgb(9 51 137 / 0.16);
+  --shadow-hero: 0 24px 56px -20px rgb(9 51 137 / 0.35);  /* 신규 — 히어로 패널 부양 */
+
+  /* ---- 모션 (§16.6) ---- */
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);  /* 클래스: ease-out-soft */
+
+  /* ---- 간격·레이아웃 (§16.7) ---- */
+  --spacing-touch: 2.75rem;      /* 44px 최소 터치 대상 */
+  --spacing-section: 4.5rem;     /* 72px 대섹션 간(모바일) — 신규 */
+  --spacing-section-lg: 7.5rem;  /* 120px 대섹션 간(md+) — 신규 */
+  --container-prose: 42rem;      /* 672px 본문 줄 길이 상한(한글 약 37자) */
+  --container-page: 60rem;       /* 960px 페이지 컨테이너 — 48rem 에서 변경 */
+  --container-admin: 48rem;      /* 768px admin 전용 — 종전 page 값 보존(§16.14) */
 }
 
 html {
   font-size: 100%;
   color: var(--color-ink);
   background: var(--color-bg);
+}
+
+/* 앵커 이동을 부드럽게 — 모션 축소 요청 사용자에게는 적용하지 않는다 (§16.6.1) */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* 모션 축소 요청 시 전 트랜지션·애니메이션 무효화 (§16.6.1 — 필수) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
