@@ -5,6 +5,15 @@
 계약의 단일 출처: `/Users/canduk/IdeaProjects/koscomlabor/src/lib/api/guestbook.ts`
 이 명세의 모든 응답 shape은 위 파일의 타입과 **문자 단위로** 대조했다 (각 절의 대조표 참조).
 
+**개정 이력**
+
+| 날짜 | 개정 | 영향 절 |
+|------|------|---------|
+| 2026-08-16 | Part 1 방명록 (§1–9) | — |
+| 2026-08-16 | Part 2 게시물 DB 전환 + Admin (§10–17) | 신설 |
+| 2026-08-17 | 관리자 비밀번호 변경 (`admin_credentials`, `POST /admin/password`) | §10.4, §12.1-a, §12.3, §12.4, §18 |
+| 2026-08-17 | **게시물 세 번째 분류 `education`(노동교육) 추가** — 하위 호환(추가만, 기존 동작 불변) | §10.1, §11.1, §11.4, §13.1, **§19 신설** |
+
 ---
 
 ## 1. 아키텍처 결정 기록
@@ -418,7 +427,8 @@ T02/T14/T27 실응답 모두: 필드 정확히 `id`, `author`, `body`, `createdA
 ```sql
 CREATE TABLE posts (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  category      text NOT NULL CHECK (category IN ('notice','news')),
+  -- 2026-08-17: 'education' 추가 (마이그레이션 1755300000004). 현재 유효 도메인은 3값 — §19
+  category      text NOT NULL CHECK (category IN ('notice','news','education')),
   type          text NOT NULL CHECK (type IN ('link','article')),
   title         varchar(300)  NOT NULL,          -- 링크형: 메타데이터 자동 추출 후 admin이 수정 가능
   body          text,                            -- 작성형: markdown 필수 / 링크형: 선택(한줄 코멘트)
@@ -442,6 +452,8 @@ CREATE INDEX idx_posts_list ON posts (category, urgent DESC, published_at DESC, 
 
 - 링크형의 출처 = URL 자체 (§14 게시 정책). `source` 컬럼은 링크형에서 사용하지 않음(NULL)
 - 정렬 규약: **urgent 우선 → published_at 내림차순** (기존 디자인 스펙 §5 계승, 서버가 정렬 책임)
+- **분류(category) 도메인**: `notice` \| `news` \| `education`. 세 분류는 스키마·검증·정렬·CRUD 를 **완전히 공유**하며, 유일한 비대칭은 `posts_news_article_needs_source` 뿐이다 (news+article 에만 출처 강제 — education 은 강제하지 않음, 근거 §19.2)
+- 위 SQL 은 **현재 유효 스키마**다. 실제 적용은 두 파일로 나뉘어 있다 — `1755300000001_create-posts.sql`(원본, `notice`/`news`) + `1755300000004_add-education-category.sql`(제약 교체). 신규 환경을 0001 부터 순서대로 올리면 위와 같은 상태가 된다
 
 ### 10.2 `post_attachments` 테이블
 
@@ -496,7 +508,7 @@ CREATE TABLE admin_credentials (
 
 | 파라미터 | 규칙 |
 |---|---|
-| `category` | 필수. `notice` \| `news` |
+| `category` | 필수. `notice` \| `news` \| `education` (2026-08-17 education 추가 — §19). 그 외 값·누락은 `400 VALIDATION_ERROR` `category 는 notice, news, education 중 하나여야 합니다 (필수).` |
 | `urgent` | 선택. `true`면 urgent 글만 (히어로/긴급 배너 바인딩: `?category=notice&urgent=true&limit=1`) |
 | `limit`/`offset` | 방명록과 동일 (limit 1–100 기본 50, offset ≥ 0) |
 
@@ -531,7 +543,7 @@ CREATE TABLE admin_credentials (
 |---|---|---|
 | `slug: string` | `id: string` (uuid) | 상세 라우트 `/notices/[slug]` → `/notices/[id]` |
 | `dateIso`/`dateLabel`/`dateValue` | `publishedAt` 하나 | 표시 포맷·정렬값은 프론트 파생 계층(date.ts) 책임 — API는 정본만 제공 |
-| `category: "notice"\|"news"\|"page"` | `"notice"\|"news"` | `page`는 DB 전환 대상 아님 (파일 유지) |
+| `category: "notice"\|"news"\|"page"` | `"notice"\|"news"\|"education"` | `page`는 DB 전환 대상 아님 (파일 유지). `education` 은 2026-08-17 신설 (§19) |
 | `urgent`, `deadline`, `source`, `title`, `body` | 동명 필드 | deadline은 `YYYY-MM-DD` 문자열 유지 |
 | (없음) | `type`, `url`, `attachments` | 신규 — 링크 카드/첨부 UI 필요 |
 | `verified` frontmatter | (없음) | §14 게시 정책으로 대체 |
@@ -636,9 +648,11 @@ CREATE TABLE admin_credentials (
 | `POST /admin/posts` | 생성. body = `{ category, type, title, body?, url?, source?, urgent?, deadline? }` — publishedAt 은 서버 자동 기록(수정 불가, §15-6 판정). 10.1 제약을 서버 검증(길이·필수 조합·URL 형식)으로 선행 | `201` Post 상세 shape |
 | `PATCH /admin/posts/:id` | 부분 수정 (전달된 필드만). type 변경 시 제약 재검증 | `200` Post 상세 |
 | `DELETE /admin/posts/:id` | soft delete (`deleted_at`) — 첨부도 목록에서 숨김(파일은 보존) | `200 { deleted, id }` |
-| `GET /admin/posts?category=&limit=&offset=` | 삭제 포함 전체 목록 (`deletedAt` 필드 노출) — 관리 화면용 | `200` 배열 |
+| `GET /admin/posts?category=&limit=&offset=` | 삭제 포함 전체 목록 (`deletedAt` 필드 노출) — 관리 화면용. `category` 는 **선택**이고 생략 시 전 분류 | `200` 배열 |
 
 검증 수치(안): title 1–300자, body ≤ 50,000자, source ≤ 200자, url ≤ 2,000자·http/https만.
+
+`category` 허용값은 공개 API 와 동일하게 `notice` \| `news` \| `education` 이다 (`POST`/`PATCH` 본문, `GET /admin/posts` 쿼리 모두). 위반 시 `400 VALIDATION_ERROR` `category 는 notice, news, education 중 하나여야 합니다.` (공개 목록과 달리 `(필수)` 접미사가 없다 — admin 목록에서는 생략이 합법이기 때문).
 
 ### 13.2 링크 메타데이터 추출 `POST /admin/posts/preview-link`
 
@@ -773,3 +787,56 @@ body `{ "url": "https://..." }` → 응답 `200 { "title": "...", "siteName": ".
 - **마이그레이션 up → down → up 왕복** 정상 (롤백 근거)
 - **회귀**: 방명록·게시물·admin CRUD·health 전부 이전과 동일 shape
 - `tsc --noEmit` strict 통과, 빌드 통과
+
+## 19. 게시물 세 번째 분류 `education`(노동교육) 추가 (2026-08-17)
+
+근거: `_workspace/00_input/requirements-home-sections.md` **"노동교육 요건 개정"**. 노동교육 링크를 관리자가 admin 화면에서 직접 등록·수정·삭제할 수 있어야 한다는 사용자 요청("게시물을 수정가능한 형태로 하면 나중에 수정할게")에 따라, 정적 상수 배열 방식을 폐기하고 공지·소식과 나란한 **세 번째 게시물 분류**로 만든다.
+
+### 19.1 변경 요약 (계약 관점)
+
+| 항목 | 변경 전 | 변경 후 |
+|---|---|---|
+| `posts.category` 도메인 | `notice` \| `news` | `notice` \| `news` \| **`education`** |
+| `GET /posts?category=` | 2값 | 3값 (필수 유지) |
+| `GET /admin/posts?category=` | 2값 + 생략 | 3값 + 생략 |
+| `POST`/`PATCH /admin/posts` 본문 `category` | 2값 | 3값 |
+| 에러 문구 (전 경로) | `category 는 notice 또는 news 여야 합니다.` | `category 는 notice, news, education 중 하나여야 합니다.` |
+| 응답 shape | — | **변경 없음.** 필드 추가·삭제·타입 변경 전무. `category` 가 가질 수 있는 문자열 값만 늘어났다 |
+
+**별도 테이블을 만들지 않은 이유**: 기존 posts 파이프라인이 노동교육에 필요한 것을 이미 전부 갖고 있다 — 링크형 타입, 제목·URL·출처, 게시일 정렬, admin CRUD, soft delete, 첨부. `education_links` 테이블 신설은 같은 기능의 중복 구현이 된다.
+
+### 19.2 `education` 에 `source` 를 강제하지 않는다 (결정·근거)
+
+`posts_news_article_needs_source` 제약은 조건절이 `category = 'news'` 로 한정돼 있어 education 행에는 **애초에 적용되지 않는다.** 이 제약을 education 까지 확대할지 검토했고 **확대하지 않기로 판정**했다 (리더 의견 일치).
+
+1. 노동교육 자료에는 지부가 **자체 제작**한 것이 섞일 수 있고, 그때 인용할 외부 출처가 존재하지 않는다. 강제하면 자체 자료를 올릴 수 없게 된다
+2. 초기 콘텐츠는 전부 링크형인데 **링크형의 출처는 URL 자체**다 (§14-2 게시 정책). 링크형에 `source` 를 요구하는 것은 정책과 모순된다
+3. news 에 출처를 강제하는 원래 취지는 "외부 조직의 소식을 옮길 때 출처를 밝힌다"이며, 교육자료 큐레이션에는 그대로 적용되지 않는다
+
+따라서 **DB 제약·서버 검증 모두 news 에만 비대칭으로 남는다.** 서버 검증(`postValidate.ts`)의 조건과 DB 제약의 조건은 문자 그대로 동일해야 한다 (한쪽만 바꾸면 500 이 난다).
+
+### 19.3 하위 호환 (구버전 프론트 안전성)
+
+`education` 은 **추가일 뿐**이므로 기존 notice/news 의 동작·응답·정렬은 어떤 것도 바뀌지 않는다. API 를 프론트보다 먼저 배포해도 안전하다:
+
+- 구버전 프론트의 `parsePostSummary`(`src/lib/api/posts.ts`)는 `category` 가 `notice`/`news` 가 아니면 `null` 을 반환한다. 그러나 구버전 프론트는 **`category=notice` 와 `category=news` 만 요청**한다 (`src/app/page.tsx:30` 의 `loadCategory(category: "notice" | "news")` — 실측 확인). 서버는 요청한 분류만 반환하므로 education 게시물이 구버전 파서에 도달하는 경로가 없다
+- 유일한 이론적 경로는 `/notices/<education 게시물의 uuid>` 를 직접 입력하는 경우인데, uuid 추측이 필요하고 결과도 기존 "응답 형식 오류" 처리로 수렴한다 (크래시 아님)
+- 반대 방향(프론트 먼저 배포)은 **불가**: education 을 요청하면 구버전 API 가 400 을 준다. **배포 순서는 API → 프론트** (07 §10.5)
+
+### 19.4 분류 리터럴의 단일 출처화 (구현 메모)
+
+이전에는 `"notice" | "news"` 리터럴이 4개 파일 12곳에 흩어져 있었다. 한 곳만 빠뜨리면 "등록은 되는데 목록에 안 나오는" 부분 고장이 나므로, `server/src/lib/postValidate.ts` 에 단일 출처를 두고 나머지를 전부 파생시켰다.
+
+```ts
+export const POST_CATEGORIES = ["notice", "news", "education"] as const;
+export type PostCategory = (typeof POST_CATEGORIES)[number];
+export function isPostCategory(value: unknown): value is PostCategory
+export const POST_CATEGORY_ERROR          // "category 는 notice, news, education 중 하나여야 합니다."
+export const POST_CATEGORY_REQUIRED_ERROR // 위 + " (필수)" — 공개 목록용
+```
+
+**다음에 분류를 또 늘릴 때 고칠 곳은 두 개뿐이다**: 위 배열 + 새 마이그레이션(CHECK 제약). 타입·런타임 검증·에러 문구는 자동으로 따라온다. 각 파일에 리터럴을 다시 쓰지 말 것.
+
+### 19.5 로컬 실측
+
+curl 원문과 판정표는 **07 문서 §10.4**. 요약: 마이그레이션 up→down→up 왕복, education CRUD 전 과정(생성·공개 목록·공개 상세·admin 목록·수정·분류 전환·soft delete), 잘못된 category 거부 6종, notice/news 회귀 — **전 케이스 PASS**. `npm run typecheck`·`npm run build` 통과.

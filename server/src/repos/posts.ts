@@ -3,7 +3,7 @@
  * 정렬 규약: urgent DESC → published_at DESC → id DESC (서버 책임).
  */
 import type pg from "pg";
-import type { PostInput } from "../lib/postValidate.js";
+import type { PostCategory, PostInput } from "../lib/postValidate.js";
 
 export interface AttachmentRow {
   id: string;
@@ -15,7 +15,7 @@ export interface AttachmentRow {
 
 export interface PostSummaryRow {
   id: string;
-  category: "notice" | "news";
+  category: PostCategory;
   type: "link" | "article";
   title: string;
   url: string | null;
@@ -38,7 +38,7 @@ export interface AdminPostRow extends PostDetailRow {
 
 interface DbPostRow {
   id: string;
-  category: "notice" | "news";
+  category: PostCategory;
   type: "link" | "article";
   title: string;
   body: string | null;
@@ -121,7 +121,7 @@ export class PostsRepository {
   }
 
   async listPublic(
-    category: "notice" | "news",
+    category: PostCategory,
     urgentOnly: boolean,
     limit: number,
     offset: number,
@@ -160,7 +160,7 @@ export class PostsRepository {
   }
 
   async listAdmin(
-    category: "notice" | "news" | null,
+    category: PostCategory | null, // null = 전 분류
     limit: number,
     offset: number,
   ): Promise<{ posts: AdminPostRow[]; total: number }> {

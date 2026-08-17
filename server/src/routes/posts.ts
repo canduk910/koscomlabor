@@ -7,6 +7,7 @@ import path from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { errorBody } from "../lib/errors.js";
 import { dispositionFor } from "../lib/fileTypes.js";
+import { POST_CATEGORY_REQUIRED_ERROR, isPostCategory } from "../lib/postValidate.js";
 import type { SlidingWindowLimiter } from "../lib/rateLimit.js";
 import type { AttachmentsRepository } from "../repos/attachments.js";
 import type { PostsRepository } from "../repos/posts.js";
@@ -110,10 +111,8 @@ export function registerPublicPostRoutes(app: FastifyInstance, deps: PublicPostD
 
       const query = request.query as Record<string, unknown>;
       const category = query["category"];
-      if (category !== "notice" && category !== "news") {
-        return reply
-          .status(400)
-          .send(errorBody("VALIDATION_ERROR", "category 는 notice 또는 news 여야 합니다 (필수)."));
+      if (!isPostCategory(category)) {
+        return reply.status(400).send(errorBody("VALIDATION_ERROR", POST_CATEGORY_REQUIRED_ERROR));
       }
       const rawUrgent = query["urgent"];
       if (rawUrgent !== undefined && rawUrgent !== "true" && rawUrgent !== "false") {

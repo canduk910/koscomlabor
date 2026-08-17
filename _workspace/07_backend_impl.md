@@ -550,3 +550,306 @@ POST /admin/logout                  → 200
 **프로덕션에서 비밀번호 변경은 수행하지 않았다** — 새 비밀번호는 사용자가 정할 값이다.
 `passwordIsInitial` 이 `true` 이므로 관리 화면에 경고 배너가 떠 있다. 사용자가 UI 에서 변경한
 뒤 `/root/koscomlabor-api/ADMIN_PASSWORD.initial` 을 삭제하면 된다.
+
+## 10. 게시물 세 번째 분류 `education`(노동교육) 추가 (2026-08-17) — 구현 완료, **프로덕션 미적용**
+
+근거: `_workspace/00_input/requirements-home-sections.md` "노동교육 요건 개정". 명세는 06 §19.
+**이 작업 범위는 서버·DB·문서까지이고, 프로덕션 적용은 리더가 수행한다** (§10.5 절차).
+
+### 10.1 변경 파일
+
+| 파일 | 변경 |
+|------|------|
+| `server/migrations/1755300000004_add-education-category.sql` | **신규.** `posts_category_check` 를 DROP → 3값으로 ADD. Down 은 2값으로 복원 |
+| `server/src/lib/postValidate.ts` | 분류 **단일 출처** 신설 (`POST_CATEGORIES`/`PostCategory`/`isPostCategory`/에러 문구 2종). `PostInput.category` 를 `PostCategory` 로. 검증부를 `isPostCategory` 로 교체 |
+| `server/src/routes/posts.ts` | 공개 목록 category 검증 → `isPostCategory` + `POST_CATEGORY_REQUIRED_ERROR` |
+| `server/src/routes/admin.ts` | admin 목록 category 검증 → `isPostCategory` + `POST_CATEGORY_ERROR`, 지역 타입 `PostCategory \| null` |
+| `server/src/repos/posts.ts` | 타입 시그니처 4곳 (`PostSummaryRow`·`DbPostRow`·`listPublic`·`listAdmin`) → `PostCategory` |
+| `_workspace/06_backend_api_spec.md` | §10.1·§11.1·§11.4·§13.1 갱신, §19 신설, 개정 이력 |
+
+**프론트(`src/`)는 건드리지 않았다** — web-developer 병렬 작업 영역.
+
+### 10.2 `notice`/`news` 하드코딩 전수 조사
+
+`grep -rn "notice" server/src` + `grep -rn "news" server/src` 로 **12곳 전부** 확인·수정했다.
+한 곳이라도 빠지면 "등록은 되는데 목록에 안 나오는" 부분 고장이 되므로, 개별 수정 대신
+**리터럴을 한 곳으로 모으고 나머지를 파생**시켰다 (06 §19.4).
+
+| 파일:라인(수정 전) | 내용 | 처리 |
+|---|---|---|
+| `lib/postValidate.ts:7` | `PostInput.category` 타입 | `PostCategory` |
+| `lib/postValidate.ts:52` | 생성·수정 검증 조건 | `isPostCategory()` |
+| `lib/postValidate.ts:53` | 에러 문구 | `POST_CATEGORY_ERROR` (3값 나열) |
+| `lib/postValidate.ts:112` | `category === "news" && type === "article"` 출처 강제 | **의도적 유지** (06 §19.2) |
+| `routes/posts.ts:113` | 공개 목록 쿼리 검증 | `isPostCategory()` |
+| `routes/posts.ts:116` | 에러 문구 `…notice 또는 news…(필수)` | `POST_CATEGORY_REQUIRED_ERROR` |
+| `routes/admin.ts:320` | 지역 변수 타입 | `PostCategory \| null` |
+| `routes/admin.ts:322` | admin 목록 쿼리 검증 | `isPostCategory()` |
+| `routes/admin.ts:323` | 에러 문구 | `POST_CATEGORY_ERROR` |
+| `repos/posts.ts:18` | `PostSummaryRow.category` | `PostCategory` |
+| `repos/posts.ts:41` | `DbPostRow.category` | `PostCategory` |
+| `repos/posts.ts:124` | `listPublic(category)` | `PostCategory` |
+| `repos/posts.ts:163` | `listAdmin(category)` | `PostCategory \| null` |
+
+수정 후 재조사 결과 `server/src` 에 남은 분류 리터럴은 **`POST_CATEGORIES` 배열 선언 1줄과
+news 출처 규칙 1줄뿐**이다 (둘 다 의도된 것).
+
+### 10.3 제약 이름 — 추측하지 않고 실측했다
+
+0001 은 `category` 에 **이름 없는 인라인 CHECK** 를 썼으므로 이름은 PostgreSQL 이 자동 생성한다.
+로컬 전용 DB(`edu_check`)에 0001–0003 을 올린 뒤 조회해 확정했다.
+
+```sql
+SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint
+ WHERE conrelid = 'posts'::regclass AND contype = 'c';
+-- posts_category_check | CHECK ((category = ANY (ARRAY['notice'::text, 'news'::text])))
+```
+
+교체 후에도 **같은 이름을 유지**했다 (up→down 왕복 시 스키마가 원본과 완전히 동일해지도록).
+`DROP CONSTRAINT` 에 `IF EXISTS` 를 **쓰지 않았다** — 이름이 다르면 크게 실패해야 한다.
+`IF EXISTS` 였다면 구 제약이 남은 채 새 제약만 추가돼 education INSERT 가 계속 거부되는
+부분 고장이 된다. 마이그레이션은 트랜잭션이므로 실패해도 DB 는 무변경이다.
+
+**변경하지 않은 것** (확인만):
+- `posts_news_article_needs_source` — 조건이 `category = 'news'` 로 한정돼 education 에 무관. 존치 근거는 06 §19.2
+- `posts_link_needs_url` / `posts_article_needs_body` — `type` 만 보므로 education 에도 올바르게 적용
+- `idx_posts_list (category, urgent DESC, published_at DESC, id DESC) WHERE deleted_at IS NULL` — `pg_indexes` 로 정의 무변경 확인. 분류 추가는 컬럼값 도메인이 넓어질 뿐이라 인덱스와 무관
+
+### 10.4 로컬 실측 (2026-08-17, macOS + PostgreSQL 16.15 + Node 26) — 전 케이스 PASS
+
+**검증 환경 격리**: 개발 DB `guestbook` 을 오염시키지 않으려고 전용 DB `edu_check` 를 만들어
+검증하고 끝나고 drop 했다. `server/.env` 도 수정하지 않고 스크래치패드에 별도 env 파일
+(포트 3399, 일회용 시크릿)을 만들어 썼다. 종료 후 `dropdb edu_check` 완료, `guestbook` 무변경 확인.
+
+**① 마이그레이션 up / down 왕복**
+
+```
+$ node --env-file=<scratch>/edu.env node_modules/node-pg-migrate/bin/node-pg-migrate.js \
+    up -m migrations --migration-file-language sql
+### MIGRATION 1755300000004_add-education-category (UP) ###   → Migrations complete!
+
+$ psql -d edu_check -tA -c "SELECT pg_get_constraintdef(oid) FROM pg_constraint
+                             WHERE conname='posts_category_check';"
+CHECK ((category = ANY (ARRAY['notice'::text, 'news'::text, 'education'::text])))
+```
+
+| 케이스 | 기대 | 실측 | 판정 |
+|---|---|---|---|
+| UP 적용 | 제약 3값 | 위 출력 | PASS |
+| 다른 CHECK 4종 | 무변경 | `posts_article_needs_body`·`posts_link_needs_url`·`posts_news_article_needs_source`·`posts_type_check` 정의 동일 | PASS |
+| `idx_posts_list` | 무변경 | 정의 문자열 동일 | PASS |
+| **education 행이 남은 상태에서 DOWN** | **실패해야 함** | `ERROR: check constraint "posts_category_check" of relation "posts" is violated by some row` → 롤백, 제약·`pgmigrations` 무변경 | PASS (위험 재현 확인) |
+| education 행 정리 후 DOWN | 2값으로 복원 | `CHECK ((category = ANY (ARRAY['notice'::text, 'news'::text])))` | PASS |
+| DOWN 상태에서 education INSERT | DB 거부 | `ERROR: new row for relation "posts" violates check constraint "posts_category_check"` | PASS |
+| 재 UP | 3값 복귀 | 동일 | PASS |
+
+**② education CRUD (curl 원문)**
+
+```bash
+API=http://127.0.0.1:3399
+AUTH=(-H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json")
+
+# [C1] 생성 — 링크형, source 없음
+curl -s -X POST "$API/admin/posts" "${AUTH[@]}" \
+  -d '{"category":"education","type":"link","title":"노동교육 영상 1",
+       "url":"https://www.youtube.com/watch?v=EDUTEST01"}'
+201 {"id":"fd7fd831-40a2-4bdb-a2f9-9672f8ab194d","category":"education","type":"link",
+     "title":"노동교육 영상 1","url":"https://www.youtube.com/watch?v=EDUTEST01","source":null,
+     "urgent":false,"deadline":null,"publishedAt":"2026-08-17T04:46:58.212Z","attachments":[],
+     "body":null,"createdAt":"2026-08-17T04:46:58.212Z","updatedAt":"2026-08-17T04:46:58.212Z",
+     "deletedAt":null}
+
+# [C2] 공개 목록
+curl -s -D- "$API/posts?category=education"
+HTTP/1.1 200 OK   x-total-count: 1
+[{"id":"fd7fd831-…","category":"education","type":"link","title":"노동교육 영상 1",
+  "url":"https://www.youtube.com/watch?v=EDUTEST01","source":null,"urgent":false,
+  "deadline":null,"publishedAt":"2026-08-17T04:46:58.212Z","attachments":[]}]
+
+# [C3] 공개 상세
+curl -s "$API/posts/fd7fd831-…"
+200 {… ,"attachments":[],"body":null}
+
+# [C4] admin 목록
+curl -s -D- -H "Authorization: Bearer $TOKEN" "$API/admin/posts?category=education"
+HTTP/1.1 200 OK   x-total-count: 1   (createdAt/updatedAt/deletedAt 포함)
+
+# [C5] 수정 (관리자가 직접 고칠 수 있어야 한다는 요구의 핵심)
+curl -s -X PATCH "$API/admin/posts/fd7fd831-…" "${AUTH[@]}" \
+  -d '{"title":"노동교육 영상 1 (수정)","url":"https://www.youtube.com/watch?v=EDUTEST02"}'
+200 {… "title":"노동교육 영상 1 (수정)","url":"https://www.youtube.com/watch?v=EDUTEST02",
+     "publishedAt":"2026-08-17T04:46:58.212Z",   ← 불변
+     "updatedAt":"2026-08-17T04:47:20.700Z"}     ← 갱신
+
+# [C6] 분류 전환 education → notice → education
+curl -s -X PATCH … -d '{"category":"notice"}'      200 (category:"notice")
+curl -s -X PATCH … -d '{"category":"education"}'   200
+
+# [C15] 정렬 (urgent 우선 → publishedAt DESC)
+curl -s "$API/posts?category=education"
+  urgent=true  2026-08-17T04:47:54.600Z 자체 제작 교육자료
+  urgent=false 2026-08-17T04:46:58.212Z 노동교육 영상 1 (수정)
+
+# [C16] soft delete
+curl -s -X DELETE "$API/admin/posts/fd7fd831-…" -H "Authorization: Bearer $TOKEN"
+200 {"deleted":true,"id":"fd7fd831-…"}
+curl -s -D- "$API/posts?category=education"   → x-total-count: 1  (2건 중 1건으로 감소)
+curl -s "$API/posts/fd7fd831-…"               → 404 {"error":{"code":"NOT_FOUND", …}}
+curl -s -H "Authorization: Bearer $TOKEN" "$API/admin/posts?category=education"
+  자체 제작 교육자료      deletedAt=null
+  노동교육 영상 1 (수정)  deletedAt=2026-08-17T04:48:10.579Z     ← admin 에는 남음
+curl -s -X DELETE …(재삭제)  → 404 "해당 게시물이 없거나 이미 삭제되었습니다."
+```
+
+**③ 잘못된 category 거부 (6종)**
+
+```
+GET  /posts?category=edu       → 400 {"error":{"code":"VALIDATION_ERROR",
+                                   "message":"category 는 notice, news, education 중 하나여야 합니다 (필수)."}}
+GET  /posts  (category 누락)   → 400 동일 문구
+GET  /posts?category=page      → 400 동일 문구   ← page 는 파일 기반 전용, DB 분류 아님
+GET  /admin/posts?category=edu → 400 {"…":"category 는 notice, news, education 중 하나여야 합니다."}  ((필수) 없음)
+POST /admin/posts category=edukation → 400 동일
+POST /admin/posts category 누락      → 400 동일
+```
+
+**④ education 의 제약 대칭성**
+
+| 케이스 | 기대 | 실측 | 판정 |
+|---|---|---|---|
+| education + link + url 누락 | 400 | `링크형 게시물은 url 이 필수입니다.` | PASS |
+| **education + article + source 없음** | **201 허용** | 201 생성 (`source:null`) | PASS (06 §19.2 결정대로) |
+| news + article + source 없음 | 400 유지 | `금융노조 소식(작성형)은 출처(source)가 필수입니다.` | PASS (회귀 없음) |
+
+**⑤ 기존 notice/news 회귀**
+
+```
+POST /admin/posts (notice+article, source 없이, urgent/deadline 포함) → 201  (기존과 동일하게 허용)
+GET  /posts?category=notice               → 200  x-total-count: 1
+GET  /posts?category=notice&urgent=true   → 200  x-total-count: 1
+GET  /posts?category=news                 → 200  x-total-count: 0
+GET  /admin/posts        (분류 미지정)     → 200  x-total-count: 3   ← 전 분류 합산, education 포함
+GET  /admin/posts?category=notice          → 200  x-total-count: 1
+GET  /guestbook                            → 200
+GET  /admin/posts (무인증)                 → 401
+```
+
+**⑥ 품질**: `npm run typecheck` (strict, `noUncheckedIndexedAccess`·`exactOptionalPropertyTypes`) 통과,
+`npm run build` 통과.
+
+### 10.5 프로덕션 배포 절차
+
+전제: `/root/koscomlabor-api/` (compose + `app/` + `.env`), 프로덕션 DB 는 마이그레이션
+0000–0003 까지 적용된 상태(§9.10). 이번엔 **신규 테이블이 아니라 기존 테이블의 제약 교체**다.
+
+> **순서 고정 — 마이그레이션이 API 재기동보다 먼저.** 반대로 하면 새 API 가 education 을 받아
+> 놓고 DB 가 거부해 500 이 난다. 아래 순서면 무중단에 가깝다 (api 재생성 몇 초).
+> `ALTER TABLE … ADD CONSTRAINT` 는 기존 행 전체를 검증하지만 posts 는 소규모라 즉시 끝난다.
+
+```bash
+# ① 로컬에서 소스 동기화
+rsync -az --delete --exclude node_modules --exclude dist --exclude .env --exclude uploads \
+  server/ root@101.79.31.30:/root/koscomlabor-api/app/
+
+# ② 서버에서 — 백업 먼저 (롤백 대비)
+ssh root@101.79.31.30
+cd /root/koscomlabor-api
+docker exec koscomlabor-db pg_dump -Fc -U guestbook_app guestbook \
+  > /root/backups/pre_education_$(date +%Y%m%d_%H%M).dump
+
+# ②-1 **제약 이름 사전 확인 (이번 배포 고유 관문 — 반드시 수행)**
+#     posts_category_check 가 아니면 ③이 실패한다. 그때는 적용을 멈추고 리더에게 보고할 것.
+docker exec koscomlabor-db psql -U guestbook_app -d guestbook -c \
+  "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint
+    WHERE conrelid='posts'::regclass AND contype='c' ORDER BY conname;"
+# 기대: posts_category_check | CHECK ((category = ANY (ARRAY['notice'::text, 'news'::text])))
+
+# ③ 마이그레이션 이미지 재빌드 후 적용 (profile 서비스는 일반 build 대상이 아님 — §7.3-2)
+docker compose --profile tools build migrate
+docker compose --profile tools run --rm migrate      # 1755300000004 적용
+
+# ④ 적용 확인 — 3값이 됐는지
+docker exec koscomlabor-db psql -U guestbook_app -d guestbook -tAc \
+  "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='posts_category_check';"
+# 기대: CHECK ((category = ANY (ARRAY['notice'::text, 'news'::text, 'education'::text])))
+
+# ⑤ API 이미지 재빌드 + 재기동
+docker compose build api
+docker compose up -d api
+
+# ⑥ 기동 확인
+docker logs --tail 30 koscomlabor-api                # "Server listening"
+docker exec onnuri-caddy wget -qO- http://koscomlabor-api:3001/health
+```
+
+**⑦ 스모크 (프로덕션).** 생성한 id 를 반드시 기록해 두었다가 `WHERE id IN (...)` 로 정리한다
+(조건 없는 DELETE 금지 — CLAUDE.md 규칙).
+
+```
+GET  /posts?category=education            → 200 [] + X-Total-Count: 0   (아직 데이터 없음)
+GET  /posts?category=edu                  → 400 "…notice, news, education 중 하나여야 합니다 (필수)."
+GET  /posts?category=notice               → 200 (기존 건수 그대로 — 회귀 없음)
+GET  /posts?category=news                 → 200 (기존 건수 그대로)
+POST /admin/posts (education 1건)         → 201  ← id 기록
+GET  /posts?category=education            → 200 1건
+DELETE /admin/posts/<기록한 id>            → 200
+```
+
+**주의:**
+- **초기 데이터(노동교육 링크 5건)는 이 작업에 포함되지 않는다.** fact-verifier 검증 게이트를
+  통과 중이며, **승인된 건만** 리더가 별도로 등록한다
+- **배포 순서는 API → 프론트.** 반대로 하면 신버전 프론트가 `category=education` 을 요청하는데
+  구버전 API 가 400 을 준다. API 를 먼저 배포해도 **구버전 프론트는 정상 동작**한다 —
+  구버전 프론트는 notice/news 만 요청하므로 education 이 그 파서에 도달할 경로가 없다 (06 §19.3)
+- 프론트의 `PostCategory` 확장·`/education/[id]` 라우트·admin 분류 선택지는 web-developer 영역
+
+### 10.6 롤백
+
+| 상황 | 조치 |
+|---|---|
+| 코드만 되돌림 (제약은 3값 유지) | 이전 이미지로 `docker compose up -d api`. 구버전 코드는 education 을 받지 않을 뿐이고 **DB 는 넓은 제약이라 문제없다.** 단 이미 등록된 education 게시물은 조회 경로가 사라져 admin 목록(분류 미지정)에만 보인다 |
+| **스키마까지 되돌림** | **education 게시물을 먼저 정리해야 한다.** 아래 참조 |
+| DB 손상 | ②의 `pre_education_*.dump` 로 `pg_restore --clean --if-exists` (2.5절) |
+
+**스키마 롤백이 그냥 되지 않는 이유 (실측 확인).** CHECK 제약은 soft delete 여부와 무관하게
+**테이블의 모든 행**에 적용된다. `category='education'` 인 행이 하나라도 남아 있으면
+(`deleted_at` 이 채워진 행 포함) down 마이그레이션이
+
+```
+ERROR: check constraint "posts_category_check" of relation "posts" is violated by some row
+```
+
+로 실패한다. 트랜잭션이므로 **DB 는 무변경으로 안전**하지만 롤백은 진행되지 않는다.
+
+```bash
+# ① 대상 확인 (필수 — 건수를 먼저 보고한다)
+docker exec koscomlabor-db psql -U guestbook_app -d guestbook -c \
+  "SELECT id, title, deleted_at FROM posts WHERE category = 'education';"
+
+# ② 보존이 필요하면 백업을 먼저 뜬다 (education 행은 이 시점에 소멸한다)
+docker exec koscomlabor-db pg_dump -Fc -U guestbook_app guestbook \
+  > /root/backups/pre_education_rollback_$(date +%Y%m%d_%H%M).dump
+
+# ③ 첨부가 달려 있으면 FK 때문에 ④가 막히므로 첨부부터 (WHERE 절 필수)
+docker exec koscomlabor-db psql -U guestbook_app -d guestbook -c \
+  "DELETE FROM post_attachments WHERE post_id IN (SELECT id FROM posts WHERE category = 'education');"
+
+# ④ education 게시물 삭제 (WHERE 절 필수 — 조건 없는 DELETE 금지)
+docker exec koscomlabor-db psql -U guestbook_app -d guestbook -c \
+  "DELETE FROM posts WHERE category = 'education';"
+
+# ⑤ down 마이그레이션
+docker compose --profile tools run --rm migrate \
+  npx node-pg-migrate down -m migrations --migration-file-language sql
+```
+
+기존 notice/news 데이터·방명록·첨부에는 어떤 영향도 없다 (제약 도메인만 좁아진다).
+
+### 10.7 미결 사항
+
+- **프로덕션 적용은 리더가 수행** (이 작업 범위는 코드·마이그레이션·문서까지). 프로덕션에 쓰기 작업 없음
+- 노동교육 초기 데이터 5건은 **fact-verifier 승인 후 리더가 등록**. 백엔드는 스키마·검증·명세까지만
+- 프론트 대응(`PostCategory` 3값 확장 + `parsePostSummary` 판정, `/education/[id]` 라우트,
+  admin `PostForm` 분류 선택지, 메인 노동교육 섹션)은 web-developer 영역. **프론트가
+  `education` 을 파서에 등록하지 않으면 목록 응답 전체가 `invalidResponse` 로 떨어진다** —
+  QA 는 `src/lib/api/posts.ts` 의 `parsePostSummary` 조건절을 반드시 교차 확인할 것

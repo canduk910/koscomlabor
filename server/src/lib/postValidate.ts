@@ -1,10 +1,32 @@
 /**
- * 게시물 입력 검증 (명세 06 §13.1 수치 — 리더 승인).
+ * 게시물 분류 도메인 + 입력 검증 (명세 06 §13.1 수치 — 리더 승인).
  * publishedAt 은 입력으로 받지 않는다 (자동 기록, §15-6 판정).
  */
 
+/**
+ * 허용 분류 — **단일 출처**. DB 제약 posts_category_check 와 짝을 이룬다
+ * (마이그레이션 1755300000004). 분류를 늘릴 때는 이 배열과 마이그레이션 둘만 고치면 되고,
+ * 타입·검증·에러 문구는 전부 여기서 파생된다.
+ *
+ * 이렇게 모아둔 이유: 이전에 분류 리터럴이 4개 파일에 흩어져 있어, 한 곳만 빠뜨리면
+ * "등록은 되는데 목록에 안 나오는" 부분 고장이 났다. 리터럴을 각 파일에 다시 쓰지 말 것.
+ */
+export const POST_CATEGORIES = ["notice", "news", "education"] as const;
+
+export type PostCategory = (typeof POST_CATEGORIES)[number];
+
+export function isPostCategory(value: unknown): value is PostCategory {
+  return typeof value === "string" && (POST_CATEGORIES as readonly string[]).includes(value);
+}
+
+/** 에러 문구도 목록에서 파생 — 분류를 늘리면 문구가 자동으로 따라온다 */
+const CATEGORY_VALUES_TEXT = POST_CATEGORIES.join(", ");
+export const POST_CATEGORY_ERROR = `category 는 ${CATEGORY_VALUES_TEXT} 중 하나여야 합니다.`;
+/** 공개 목록처럼 category 가 필수인 경로용 */
+export const POST_CATEGORY_REQUIRED_ERROR = `category 는 ${CATEGORY_VALUES_TEXT} 중 하나여야 합니다 (필수).`;
+
 export interface PostInput {
-  category: "notice" | "news";
+  category: PostCategory;
   type: "link" | "article";
   title: string;
   body: string | null;
@@ -49,8 +71,8 @@ export function validatePostInput(payload: unknown): PostValidation {
   }
 
   const category = record["category"];
-  if (category !== "notice" && category !== "news") {
-    return { ok: false, message: "category 는 notice 또는 news 여야 합니다." };
+  if (!isPostCategory(category)) {
+    return { ok: false, message: POST_CATEGORY_ERROR };
   }
   const type = record["type"];
   if (type !== "link" && type !== "article") {
@@ -109,6 +131,9 @@ export function validatePostInput(payload: unknown): PostValidation {
   if (type === "article" && body.value === null) {
     return { ok: false, message: "작성형 게시물은 body 가 필수입니다." };
   }
+  // news+article 에만 출처를 강제한다. education 은 제외 — 지부 자체 제작 교육자료에는
+  // 인용할 외부 출처가 없을 수 있고, 링크형의 출처는 URL 자체다 (§14, 리더 판단).
+  // DB 제약 posts_news_article_needs_source 와 조건이 정확히 같아야 한다.
   if (category === "news" && type === "article" && source.value === null) {
     return { ok: false, message: "금융노조 소식(작성형)은 출처(source)가 필수입니다." };
   }

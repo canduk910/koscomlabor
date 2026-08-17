@@ -12,7 +12,12 @@ import { SESSION_COOKIE, authenticateAdmin } from "../lib/adminGuard.js";
 import { errorBody } from "../lib/errors.js";
 import { resolveAllowedType, sanitizeFilename } from "../lib/fileTypes.js";
 import { LinkFetchError, fetchLinkPreview } from "../lib/linkPreview.js";
-import { validatePostInput } from "../lib/postValidate.js";
+import {
+  POST_CATEGORY_ERROR,
+  type PostCategory,
+  isPostCategory,
+  validatePostInput,
+} from "../lib/postValidate.js";
 import type { SlidingWindowLimiter } from "../lib/rateLimit.js";
 import type { AttachmentsRepository } from "../repos/attachments.js";
 import type { AdminCredentials, AdminCredentialsRepository } from "../repos/credentials.js";
@@ -317,10 +322,10 @@ export function registerAdminRoutes(app: FastifyInstance, deps: AdminRouteDeps):
   app.get("/admin/posts", { preHandler: requireAdmin }, async (request, reply) => {
     const query = request.query as Record<string, unknown>;
     const rawCategory = query["category"];
-    let category: "notice" | "news" | null = null;
+    let category: PostCategory | null = null; // 미지정 = 전 분류
     if (rawCategory !== undefined) {
-      if (rawCategory !== "notice" && rawCategory !== "news") {
-        return reply.status(400).send(errorBody("VALIDATION_ERROR", "category 는 notice 또는 news 여야 합니다."));
+      if (!isPostCategory(rawCategory)) {
+        return reply.status(400).send(errorBody("VALIDATION_ERROR", POST_CATEGORY_ERROR));
       }
       category = rawCategory;
     }
