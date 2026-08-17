@@ -53,10 +53,29 @@ export function HeroPanel({ post }: { post: PostListItem | null }) {
           </p>
         </>
       ) : (
-        /* §16.11.1 모드 2 — 리더 확정: 단문 한 줄(신규 카피 창작 금지, 기존 사용자 지정 문구) */
-        <p className="font-display text-hero text-white md:text-hero-lg">
-          코스콤 조합원을 위한 정보 공유
-        </p>
+        /*
+         * §17.1 모드 2 — 투쟁 안내 진입점.
+         * 문구는 사용자 지정 문자열 그대로(신규 카피 창작 금지). 이전 문구
+         * "코스콤 조합원을 위한 정보 공유"는 1280px 에서 넘쳐 "유" 한 글자가 둘째 줄로
+         * 고립되던 결함이 있었고(배포 화면 실측), 교체로 해소된다.
+         * 요소는 <p> 유지 — <h2> 로 올리면 헤딩 아웃라인 `h1 지부명 → h2×4 섹션`
+         * 목차가 깨진다(§15.9.1). CTA 는 모드 1 과 동일 클래스·동일 라벨 재사용.
+         * `nowrap` 금지: 360·768px 에서는 2줄이 정상이며 어절 경계에서 끊긴다.
+         */
+        <>
+          <p className="font-display text-hero text-white md:text-hero-lg">
+            26년 임단협 투쟁 안내
+          </p>
+          <p className="mt-8 md:mt-10">
+            <Link
+              href={ROUTES.bargaining}
+              className="font-display ease-out-soft inline-flex min-h-touch items-center gap-2 rounded-full bg-white px-7 text-body font-medium tracking-[-0.01em] text-primary transition-colors duration-150 hover:bg-primary-soft focus-visible:outline-3 focus-visible:outline-white focus-visible:outline-offset-2"
+            >
+              자세히 보기
+              <ArrowRightIcon className="size-5" />
+            </Link>
+          </p>
+        </>
       )}
     </section>
   );

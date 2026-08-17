@@ -45,6 +45,11 @@ const POST_DETAIL_PATHS: Record<PostCategory, (id: string) => string> = {
 
 export const ROUTES = {
   home: "/",
+  /**
+   * 26년 임단협 투쟁 안내 (§17) — 게시물 분류가 아니라 정적 페이지다.
+   * 8페이지 구조 문서이고 투쟁 종료 후 폐기·보존 판단이 별도로 필요해 코드로 관리한다.
+   */
+  bargaining: "/bargaining-2026",
   /** 메인페이지의 특정 섹션 앵커 (§15.9.2 — 상세 페이지 "목록으로 돌아가기" 복귀 지점) */
   homeSection: (id: HomeSectionId): string => `/#${id}`,
   /** 공지사항 상세 (DB 전환 — id는 uuid, §15-7) */
