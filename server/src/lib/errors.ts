@@ -15,6 +15,17 @@ export type ErrorCode =
    */
   | "INVALID_CREDENTIALS"
   | "NOT_FOUND"
+  /**
+   * 요청이 형식상 유효하지만 **서버의 현재 상태와 충돌**해 적용할 수 없음 (HTTP 409).
+   * 현재 `POST /admin/posts/reorder` 전용 — 보낸 `ids` 가 해당 분류의 활성 게시물 집합과
+   * 일치하지 않는 경우(다른 창에서 글이 추가·삭제된 뒤 낡은 목록으로 덮어쓰기 시도).
+   * VALIDATION_ERROR 와 분리한 이유: 입력이 틀린 것이 아니라 **목록이 낡은 것**이므로
+   * 프론트의 대응이 다르다 — 필드 인라인 에러가 아니라 "목록 재조회 후 재시도"다.
+   *
+   * ⚠ 프론트 `src/lib/api/http.ts` 의 `CODE_TO_REASON` 에 `CONFLICT: "conflict"` 를
+   *   등록하지 않으면 `?? "network"` 폴백으로 **연결 실패로 오분류**된다 (07 §11.8).
+   */
+  | "CONFLICT"
   | "PAYLOAD_TOO_LARGE"
   | "RATE_LIMITED"
   | "LINK_FETCH_FAILED"

@@ -13,6 +13,7 @@
 | 2026-08-16 | Part 2 게시물 DB 전환 + Admin (§10–17) | 신설 |
 | 2026-08-17 | 관리자 비밀번호 변경 (`admin_credentials`, `POST /admin/password`) | §10.4, §12.1-a, §12.3, §12.4, §18 |
 | 2026-08-17 | **게시물 세 번째 분류 `education`(노동교육) 추가** — 하위 호환(추가만, 기존 동작 불변) | §10.1, §11.1, §11.4, §13.1, **§19 신설** |
+| 2026-08-17 | **게시물 수동 정렬(`sort_order`) + YouTube 썸네일 서버 캐싱(`thumbnail_key`)** — 하위 호환(컬럼 2개 nullable 추가, 응답 필드 추가, 기존 필드 불변) | §10.1, §11.1, §11.2, §13.1, **§20 신설** |
 
 ---
 
@@ -440,18 +441,23 @@ CREATE TABLE posts (
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now(),
   deleted_at    timestamptz,                     -- soft delete
+  -- 2026-08-17 추가 (마이그레이션 1755300000005) — 둘 다 nullable, 상세는 §20
+  sort_order    integer,                         -- 수동 표시 순서. NULL = 지정 없음
+  thumbnail_key text,                            -- 서버 캐싱한 썸네일 파일명. NULL = 없음
   CONSTRAINT posts_link_needs_url     CHECK (type <> 'link'    OR url  IS NOT NULL),
   CONSTRAINT posts_article_needs_body CHECK (type <> 'article' OR body IS NOT NULL),
   CONSTRAINT posts_news_article_needs_source
     CHECK (NOT (category = 'news' AND type = 'article') OR source IS NOT NULL)
 );
 
-CREATE INDEX idx_posts_list ON posts (category, urgent DESC, published_at DESC, id DESC)
+-- 2026-08-17: sort_order 를 반영해 재생성 (§20.1)
+CREATE INDEX idx_posts_list
+  ON posts (category, urgent DESC, sort_order ASC NULLS LAST, published_at DESC, id DESC)
   WHERE deleted_at IS NULL;
 ```
 
 - 링크형의 출처 = URL 자체 (§14 게시 정책). `source` 컬럼은 링크형에서 사용하지 않음(NULL)
-- 정렬 규약: **urgent 우선 → published_at 내림차순** (기존 디자인 스펙 §5 계승, 서버가 정렬 책임)
+- 정렬 규약 (2026-08-17 개정 — §20.2): **urgent 우선 → sort_order 오름차순(NULLS LAST) → published_at 내림차순 → id 내림차순.** 서버가 정렬 책임을 지며 공개·admin 전 목록에 동일 적용한다
 - **분류(category) 도메인**: `notice` \| `news` \| `education`. 세 분류는 스키마·검증·정렬·CRUD 를 **완전히 공유**하며, 유일한 비대칭은 `posts_news_article_needs_source` 뿐이다 (news+article 에만 출처 강제 — education 은 강제하지 않음, 근거 §19.2)
 - 위 SQL 은 **현재 유효 스키마**다. 실제 적용은 두 파일로 나뉘어 있다 — `1755300000001_create-posts.sql`(원본, `notice`/`news`) + `1755300000004_add-education-category.sql`(제약 교체). 신규 환경을 0001 부터 순서대로 올리면 위와 같은 상태가 된다
 
@@ -521,11 +527,14 @@ CREATE TABLE admin_credentials (
   "urgent": false, "deadline": "2026-09-01 | null",
   "publishedAt": "2026-08-16T02:00:00.000Z",
   "attachments": [ { "id": "uuid", "filename": "공문.pdf", "mimeType": "application/pdf",
-                     "sizeBytes": 123456, "url": "/files/<attachmentId>/공문.pdf" } ]
+                     "sizeBytes": 123456, "url": "/files/<attachmentId>/공문.pdf" } ],
+  "thumbnailUrl": "/thumbnails/ATbGKR-Agmk-maxresdefault.jpg | null"
 }
 ```
 
-`body`는 목록에서 제외 (상세에서만). `attachments[].url`은 API 도메인 상대 경로 — 프론트가 base URL을 붙임.
+`body`는 목록에서 제외 (상세에서만). `attachments[].url`·`thumbnailUrl`은 API 도메인 상대 경로 — 프론트가 base URL을 붙임.
+
+**`thumbnailUrl`** (2026-08-17 추가 — §20.4/§20.6): 링크형 YouTube 게시물의 서버 캐싱 썸네일. 그 외에는 `null`. **`sortOrder` 는 공개 응답에 없다** (admin 전용 — §20.6).
 
 ### 11.2 `GET /posts/:id`
 
@@ -648,7 +657,8 @@ CREATE TABLE admin_credentials (
 | `POST /admin/posts` | 생성. body = `{ category, type, title, body?, url?, source?, urgent?, deadline? }` — publishedAt 은 서버 자동 기록(수정 불가, §15-6 판정). 10.1 제약을 서버 검증(길이·필수 조합·URL 형식)으로 선행 | `201` Post 상세 shape |
 | `PATCH /admin/posts/:id` | 부분 수정 (전달된 필드만). type 변경 시 제약 재검증 | `200` Post 상세 |
 | `DELETE /admin/posts/:id` | soft delete (`deleted_at`) — 첨부도 목록에서 숨김(파일은 보존) | `200 { deleted, id }` |
-| `GET /admin/posts?category=&limit=&offset=` | 삭제 포함 전체 목록 (`deletedAt` 필드 노출) — 관리 화면용. `category` 는 **선택**이고 생략 시 전 분류 | `200` 배열 |
+| `GET /admin/posts?category=&limit=&offset=` | 삭제 포함 전체 목록 (`deletedAt`·`sortOrder` 필드 노출) — 관리 화면용. `category` 는 **선택**이고 생략 시 전 분류 | `200` 배열 |
+| `POST /admin/posts/reorder` | 분류 내 수동 정렬 (2026-08-17 신설 — §20.3) | `200 { ok, category, updated }` |
 
 검증 수치(안): title 1–300자, body ≤ 50,000자, source ≤ 200자, url ≤ 2,000자·http/https만.
 
@@ -840,3 +850,191 @@ export const POST_CATEGORY_REQUIRED_ERROR // 위 + " (필수)" — 공개 목록
 ### 19.5 로컬 실측
 
 curl 원문과 판정표는 **07 문서 §10.4**. 요약: 마이그레이션 up→down→up 왕복, education CRUD 전 과정(생성·공개 목록·공개 상세·admin 목록·수정·분류 전환·soft delete), 잘못된 category 거부 6종, notice/news 회귀 — **전 케이스 PASS**. `npm run typecheck`·`npm run build` 통과.
+
+## 20. 게시물 수동 정렬 + YouTube 썸네일 서버 캐싱 (2026-08-17)
+
+근거: `_workspace/00_input/requirements-sort-thumbnail.md` (사용자 요청 "노동교육 순서 고정되게 정렬기능도 추가하고 썸네일도 넣었으면 좋겠어. 혹시 유투브의 썸네일을 넣을 수는 없어?").
+확정 계약: `_workspace/00_input/contract-sort-thumbnail.md` §1–§7 (백엔드 범위), §8 (프론트 범위).
+구현·실측: 07 문서 §11.
+
+**발단.** 노동교육 5건을 게시할 때 정렬 수단이 `published_at DESC` 뿐이어서 학습 순서를 맞추려고 **역순 등록**이라는 우회를 썼고, "사용자가 admin 에서 글을 추가하면 맨 위로 올라가 순서가 깨진다"는 한계를 그대로 안고 있었다 (07 §10.9). 그 근본 해결이다.
+
+### 20.1 스키마 변경 (마이그레이션 `1755300000005_add-sort-order-and-thumbnail.sql`)
+
+```sql
+ALTER TABLE posts ADD COLUMN sort_order    integer;   -- NULL = 수동 지정 없음
+ALTER TABLE posts ADD COLUMN thumbnail_key text;      -- NULL = 썸네일 없음
+
+DROP INDEX idx_posts_list;
+CREATE INDEX idx_posts_list
+  ON posts (category, urgent DESC, sort_order ASC NULLS LAST, published_at DESC, id DESC)
+  WHERE deleted_at IS NULL;
+```
+
+- **둘 다 nullable.** 기존 행은 전부 NULL 이므로 하위 호환이 보장된다 (§20.7)
+- `sort_order` 에 CHECK 제약을 **걸지 않았다**: 값의 연속성(1..n)은 `POST /admin/posts/reorder` 가 트랜잭션으로 보장하고, DB 제약을 더하면 계약 밖 실패 모드(500)와 데이터 보정 시 방해가 생긴다
+- PostgreSQL 은 `ASC` 의 기본 NULL 순서가 NULLS LAST 여서 저장된 인덱스 정의는 `sort_order` 로 정규화된다(실측). 마이그레이션에 명시한 이유는 ORDER BY 절과 문자 단위로 대조되게 하려는 것
+- **인덱스가 정렬을 제공한다**(실측 근거 07 §11.5 ②): 같은 쿼리가 `Index Scan using idx_posts_list` + **Sort 노드 없음**. 정렬 절을 다른 것으로 바꾸면 `Sort` 노드가 나타난다 (대조군)
+- **Down 은 데이터를 소멸시킨다** — 지정한 순서와 썸네일 키가 사라진다. 마이그레이션 파일 주석과 07 §11.9 에 경고를 남겼다
+
+### 20.2 정렬 규칙 (전 분류·전 목록 공통)
+
+```sql
+ORDER BY urgent DESC, sort_order ASC NULLS LAST, published_at DESC, id DESC
+```
+
+| 우선순위 | 기준 | 의미 |
+|---|---|---|
+| 1 | `urgent DESC` | **긴급 공지는 수동 순서보다 위** (기존 동작 보존) |
+| 2 | `sort_order ASC NULLS LAST` | 순서를 지정한 글이 미지정 글보다 **위** |
+| 3 | `published_at DESC` | 미지정 글끼리는 기존과 동일하게 게시일 역순 |
+| 4 | `id DESC` | 동시각 타이브레이커 (기존과 동일) |
+
+- 적용 범위: **공개 목록(`GET /posts`)·공개 상세·admin 목록(`GET /admin/posts`)** 전부. 마감 스트립은 프론트가 `GET /posts` 결과에서 파생하므로 별도 쿼리가 없다 (전수 조사 07 §11.4)
+- **admin 목록의 정렬이 바뀌었다**: 이전 `published_at DESC, id DESC` → 위 규칙. 규칙이 갈리면 관리자가 자기가 지정한 순서를 확인할 수 없다. 응답 shape 변경은 아니다
+- **단서 — 분류 미지정 admin 목록**: `sort_order` 는 분류별로 1..n 이므로 전 분류 조회에서는 순위가 분류를 넘어 교차한다(notice#1 · news#1 · education#1 이 인접). 순서 조작은 분류를 지정한 화면에서 하는 것이 전제다 (계약 §8 의 admin UI 도 분류별로 동작)
+- **부수 효과 (의도된 것)**: 새 글은 `sort_order = NULL` 로 생성되므로 순서를 지정해 둔 글들 **아래**에 붙는다. 07 §10.9 의 "글을 추가하면 학습 순서가 깨진다"가 구조적으로 해소된다 (실측 07 §11.5 R6)
+
+### 20.3 `POST /admin/posts/reorder` — 순서 지정 (신설)
+
+인증: 기존 `requireAdmin` (세션 쿠키 또는 정적 Bearer). rate limit: `/admin/*` 공통(실패 인증만 카운트).
+
+**요청 본문**
+
+```jsonc
+{ "category": "notice" | "news" | "education", "ids": ["<uuid>", "<uuid>", ...] }
+```
+
+`ids` 배열의 순서대로 `sort_order` 를 **1, 2, 3 … n** 으로 지정한다.
+
+**검증 (이 순서로 구현·실측됨 — QA 는 순서까지 교차 검증할 것)**
+
+| # | 조건 | 상태 | code | message |
+|---|------|------|------|---------|
+| 1 | `category` 가 유효 분류가 아님(누락 포함) | 400 | `VALIDATION_ERROR` | `category 는 notice, news, education 중 하나여야 합니다.` (기존 문구 재사용) |
+| 2 | `ids` 가 배열이 아니거나 원소가 UUID 형식이 아님 | 400 | `VALIDATION_ERROR` | `ids 는 UUID 배열이어야 합니다.` |
+| 3 | `ids` 에 중복이 있음 | 400 | `VALIDATION_ERROR` | `ids 에 중복된 항목이 있습니다.` |
+| 4 | `ids` 가 해당 분류 **활성 게시물 전체의 순열이 아님** | 409 | `CONFLICT` | `목록이 변경되었습니다. 새로고침 후 다시 시도해 주세요.` |
+
+**#4 가 핵심 안전장치다 (낙관적 동시성 제어).** 서버가 트랜잭션 안에서 해당 분류의 활성(`deleted_at IS NULL`) 게시물 id 집합을 `FOR UPDATE` 로 잠근 뒤 `ids` 와 **완전 일치(같은 원소·같은 개수)** 를 확인한다. 불일치면 아무것도 쓰지 않고 거부한다 — 다른 창에서 글이 추가·삭제된 뒤 낡은 목록으로 덮어써 순서가 누락·중복되는 것을 막는다.
+
+**원자성**: 조회·검증·갱신 전체가 하나의 트랜잭션이다. 갱신은 건별 `UPDATE … WHERE id = $1 AND category = $3 AND deleted_at IS NULL` 로 대상을 특정한다 (분류 전체를 무조건 UPDATE 하지 않는다 — 스킬 §3).
+
+**200 성공 응답** (`additionalProperties: false` 직렬화 스키마 적용)
+
+```jsonc
+{ "ok": true, "category": "education", "updated": 5 }
+```
+
+**세부 규약 (실측 확인 — 07 §11.5)**
+
+- 활성 0건 분류에 `ids: []` → `200 { updated: 0 }` (빈 집합의 순열은 빈 배열)
+- soft delete 된 글의 id 를 포함하면 → `409` (활성 집합에 없음)
+- 대문자 UUID 는 소문자로 정규화해 비교·갱신한다 (PostgreSQL uuid 출력이 항상 소문자여서, 정규화 없이는 같은 uuid 가 #4 에서 불일치로 오판된다)
+- `updated_at` 은 **갱신하지 않는다**: `sort_order` 는 내용이 아니라 표시 메타데이터이고, 순서를 한 번 바꿀 때마다 분류 전체의 "최근 수정"이 갱신되면 그 값이 무의미해진다
+- `ids` 개수 상한을 별도로 두지 않았다 — 전역 `bodyLimit` 16KB 가 uuid 약 430개에서 이미 막는다
+
+**새 에러 code `CONFLICT`** 를 `server/src/lib/errors.ts` 의 `ErrorCode` 에 추가했다. ⚠ 프론트 `src/lib/api/http.ts` 의 `CODE_TO_REASON` 에 `CONFLICT: "conflict"` 를 등록하지 않으면 `?? "network"` 폴백으로 **연결 실패로 오분류**된다 (web-developer 영역 — 07 §11.8).
+
+### 20.4 썸네일 취득·저장 (서버)
+
+**왜 서버가 중계하는가.** `i.ytimg.com` 을 프론트에서 직접 로드하면 메인페이지를 여는 **모든 조합원의 IP·User-Agent·접속 시각·Referer 가 구글로 전송**된다. 이 프로젝트는 원문 IP 를 로그에 남기지 않고 방명록 IP 도 HMAC 해시 + 90일 후 NULL 처리하는 기준을 세워 두었다(07 §2.5). 서버가 한 번 받아 저장하면 **조합원 IP 는 구글에 닿지 않는다** — 서버 IP 하나만, 게시물 등록 시점에 한 번 닿는다.
+
+**대상**: `type = "link"` 이고 URL 이 YouTube 영상인 게시물. **생성(POST)·수정(PATCH) 시 동기 수행.**
+
+**videoId 추출** — 인식 형태(그 외는 썸네일 없음):
+
+| 형태 | 예 |
+|---|---|
+| `youtube.com/watch?v={id}` | `www.` / `m.` / `music.` 서브도메인 포함 |
+| `youtu.be/{id}` | 단축 링크 |
+| `youtube.com/shorts/{id}` | Shorts |
+| `youtube.com/embed/{id}`, `youtube.com/live/{id}` | (계약 명시 외 — 같은 videoId 체계라 무해하게 추가) |
+
+`id` 는 정확히 `[A-Za-z0-9_-]{11}`. **정규식을 통과한 값만 URL·파일명 조립에 쓴다.**
+
+**취득 순서**
+
+1. `https://i.ytimg.com/vi/{id}/maxresdefault.jpg` (1280×720)
+2. 실패 시 `https://i.ytimg.com/vi/{id}/mqdefault.jpg` (320×180)
+3. **`hqdefault` 는 쓰지 않는다** — 480×360 4:3 레터박스라 16:9 카드에 검은 띠가 생긴다
+
+`maxresdefault` 는 항상 존재하지 않는다. 리더 실측(게시된 5건)을 백엔드가 독립 재확인했다 — `Vj3lQ7Y71PU` 만 `maxres=404`, `mq=200`. **폴백이 실제로 필요하다** (07 §11.5 ①).
+
+**보안 (SSRF 방어)**
+
+| 방어선 | 구현 |
+|---|---|
+| 호스트 고정 | `i.ytimg.com` **하드코딩**. 사용자 입력은 videoId 뿐이며 정규식 통과값만 경로에 들어간다. **사용자 URL 을 그대로 fetch 하지 않는다** |
+| 리다이렉트 | **미추종** — 3xx 는 그 변형의 실패로 처리 (실측: 301 → `http-301`) |
+| TLS | 인증서 검증(기본값)이 실질적 최종 방어선 — DNS 가 오염돼도 공격자는 `i.ytimg.com` 의 유효 인증서를 제시할 수 없다 |
+| 피어 IP | 접속한 피어가 공인 IP 인지 재확인 (`lib/ipGuard.ts` 재사용). 사설 대역이면 즉시 절단 |
+| 타임아웃 | 연결 3초 / **두 변형 합계 6초** 예산 (게시 응답을 오래 붙잡지 않기 위해 linkPreview 의 8초보다 짧게) |
+| 크기 | 최대 **2MB**, 초과 시 폐기하고 다음 변형으로 |
+| 내용 검사 | 응답이 실제 JPEG 인지 **매직 바이트(`FF D8 FF`)로 검증**. Content-Type 은 믿지 않는다 (`lib/fileTypes.ts` 계승) |
+
+**저장**
+
+- 경로: `{UPLOAD_DIR}/thumbnails/` — 첨부와 분리한다 (첨부는 조합원 대상 문서, 썸네일은 **파생 캐시**)
+- 파일명(= `thumbnail_key`): `{videoId}-{variant}.jpg` (예: `Vj3lQ7Y71PU-mqdefault.jpg`). **서버가 만든 값만 경로에 쓴다**
+- 파일 모드 `0o600`, 디렉토리는 필요 시 생성
+- **디스크 캐시 우선**: 같은 키의 파일이 이미 있으면 네트워크 요청 없이 재사용한다 (키가 videoId+변형에 고정이라 내용이 바뀌지 않는다 — `immutable` 헤더의 근거와 동일). 여러 게시물이 같은 영상을 걸어도 한 번만 받는다
+
+**실패 처리**
+
+- **썸네일 취득 실패가 게시를 막지 않는다** (§13.2 링크 프리뷰와 동일 원칙). `thumbnail_key = NULL` 로 두고 게시는 `201`/`200` 으로 성공시키며, 실패는 `request.log.warn` 으로만 남긴다 (URL 원문은 로그에 싣지 않는다)
+- YouTube 영상 URL 이 아닌 경우는 **정상 경로**이므로 로그를 남기지 않는다 (대부분의 링크가 여기 해당 — 로그 노이즈 방지)
+- 비동기 백그라운드 처리는 하지 않는다 (계약 §4: 일관성·에러 추적 우선). 타임아웃이 짧아 최악의 지연이 한정된다 (실측: 양 변형 404 → 0.38초)
+
+**URL 변경 시**: PATCH 로 URL 이 바뀌면 **재취득**. 링크형→작성형 전환 시 `thumbnail_key = NULL`. 이전 파일은 지우지 않는다(캐시이며 키가 videoId 기반이라 재사용된다).
+**계약보다 한 걸음 더**: URL 이 그대로여도 `thumbnail_key` 가 NULL 이면 재시도한다 — 일시적 실패를 관리자가 "다시 저장"만으로 복구할 수 있다.
+
+### 20.5 `GET /thumbnails/:key` — 썸네일 제공 (신설 공개 라우트)
+
+| 항목 | 규약 |
+|---|---|
+| key 검증 | `^[A-Za-z0-9_-]{11}-(maxresdefault\|mqdefault)\.jpg$` 불일치 → `400 VALIDATION_ERROR` |
+| 없음 | `404 NOT_FOUND` |
+| 성공 | `200` + `Content-Type: image/jpeg` + `Content-Length` + `Cache-Control: public, max-age=31536000, immutable` + `X-Content-Type-Options: nosniff` |
+| rate limit | 기존 `filesLimiter`(IP 당 분당 120회) **공유** |
+
+- **경로 조작이 구조적으로 불가능하다.** 위 문자 집합에는 `/`·`\`·`.` 연속이 없어 `..`·절대경로·중첩 디렉토리를 **표현할 수 없다**. `/files/:id/:name` 이 DB 조회로만 storage_key 를 해석해 사용자 입력을 경로에서 배제한 것과 같은 원칙이다. 그 위에 "해석된 경로가 썸네일 디렉토리를 벗어나지 않는가"를 한 번 더 확인한다(다중 방어 — 정규식이 완화되는 미래 변경 대비)
+- **rate limit 근거 (계약 §5 가 판단을 요구한 항목)**: 썸네일은 첨부와 같은 "불변 정적 자산" 부류이고 정책을 나눌 이유가 없다. 한 페이지의 썸네일은 최대 5장이며 `immutable` 1년 캐시라 재방문 시 요청이 발생하지 않으므로 120회/분은 충분히 여유롭다. 버킷을 나누면 정책이 둘로 갈려 운영 시 어느 쪽이 막혔는지 판별이 어려워진다. 실측: 공유 버킷에서 120회 후 `429 RATE_LIMITED` + `Retry-After`
+- `immutable` 이 안전한 근거: 키가 videoId+변형에 고정 = 내용 불변 (첨부의 storage_key 와 동일 논리)
+
+### 20.6 응답 필드 추가 (계약 §6)
+
+기존 필드는 **하나도 바뀌지 않았다.** 아래가 추가분이다.
+
+| 응답 | 추가 필드 | 타입 |
+|---|---|---|
+| 공개 목록 `GET /posts` · 공개 상세 `GET /posts/:id` | `thumbnailUrl` | `string \| null` (`/thumbnails/<key>` 상대 경로) |
+| admin 목록 `GET /admin/posts` · 생성/수정 응답 | `thumbnailUrl` + **`sortOrder`** | `string \| null`, `integer \| null` |
+
+- `sortOrder` 는 **공개 응답에 넣지 않는다** — 정렬은 서버 책임이고, 노출하면 프론트가 재정렬하려는 유혹이 생긴다 (실측으로 부재 확인)
+- 응답 스키마(serializer)에 필드를 추가하지 않으면 `additionalProperties: false` 때문에 **직렬화 단계에서 조용히 사라진다.** `postSummaryProperties`(공개)와 `adminPostSchema`(admin) 양쪽을 갱신했다
+- **프론트 파서 요구사항 (web-developer)**: `thumbnailUrl`·`sortOrder` 가 없거나 타입이 다르면 **`null` 로 간주**하고 `invalidResponse` 로 떨어뜨리지 말 것 (구버전 API 와의 공존 방어)
+
+### 20.7 하위 호환
+
+**API 를 프론트보다 먼저 배포해도 안전하다.**
+
+- 두 컬럼 모두 nullable, 기존 행은 NULL → 기존 정렬·응답이 그대로 유지된다(순서를 지정하기 전까지는 결과 순서도 이전과 동일)
+- 구버전 프론트의 `parsePostSummary`(`src/lib/api/posts.ts`)는 **알지 못하는 필드를 무시**한다 (필드별 명시 검증 후 known 필드만 조립) — `thumbnailUrl` 추가로 깨지지 않는다
+- 반대 방향(프론트 먼저)은 **불가**: 신버전 프론트가 `POST /admin/posts/reorder` 를 호출하면 구버전 API 가 404 를 준다. **배포 순서는 API → 프론트** (07 §11.7)
+
+### 20.8 소급 적용 스크립트 (계약 §7)
+
+`server/scripts/backfill-thumbnails.mjs` — 이미 게시된 링크형 게시물(노동교육 5건 + 금융노조 소식 링크형)에 썸네일을 소급 적용한다.
+
+- 대상: `type = 'link' AND url IS NOT NULL AND thumbnail_key IS NULL AND deleted_at IS NULL`
+- `DATABASE_URL` 과 `UPLOAD_DIR` 을 환경변수로 받는다
+- **멱등**: 이미 키가 있는 행은 조회되지 않고, 디스크에 파일이 남아 있으면 네트워크 없이 키를 재사용한다
+- 건별 성공·실패를 출력하고 실패해도 나머지를 계속 처리한다
+- `UPDATE posts SET thumbnail_key = $2 WHERE id = $1 AND thumbnail_key IS NULL` — **대상 특정 필수 규칙 준수**
+- `--dry-run` 은 DB 를 변경하지 않는다(디스크 캐시는 채운다 — 어느 변형이 쓰일지 보고하려면 취득이 필요)
+- **취득 로직을 스크립트에 복사하지 않았다.** `dist/lib/youtubeThumbnail.js` 를 import 한다 — 복사해 두면 한쪽만 고쳐졌을 때 "API 로 올린 글과 backfill 한 글의 썸네일이 다른" 부분 고장이 된다
+
+### 20.9 로컬 실측
+
+curl 원문·판정표는 **07 문서 §11.5**. 요약: 마이그레이션 up→down→up 왕복, 정렬 규칙(urgent·sort_order·NULLS LAST 조합), reorder 200/400×6/409×4 전 분기 + 동시 실행, 썸네일 취득 성공·404 폴백·비YouTube·매직바이트 위조·2MB 초과·리다이렉트·사설 피어, `/thumbnails/:key` 정상·404·400·경로조작 10종, backfill 멱등성, notice/news/education·방명록·첨부 회귀 — **전 케이스 PASS**. `npm run typecheck`·`npm run build` 통과.

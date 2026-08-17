@@ -15,10 +15,12 @@ import { LinkFetchError, fetchLinkPreview } from "../lib/linkPreview.js";
 import {
   POST_CATEGORY_ERROR,
   type PostCategory,
+  type PostInput,
   isPostCategory,
   validatePostInput,
 } from "../lib/postValidate.js";
 import type { SlidingWindowLimiter } from "../lib/rateLimit.js";
+import { acquireThumbnail, extractYouTubeVideoId } from "../lib/youtubeThumbnail.js";
 import type { AttachmentsRepository } from "../repos/attachments.js";
 import type { AdminCredentials, AdminCredentialsRepository } from "../repos/credentials.js";
 import type { PostsRepository } from "../repos/posts.js";
@@ -64,14 +66,37 @@ const adminPostSchema = {
     createdAt: { type: "string" },
     updatedAt: { type: "string" },
     deletedAt: { type: ["string", "null"] },
+    /**
+     * 계약 §6 — **admin 응답 전용**. 공개 응답(postSummary/postDetail)에는 없다.
+     * `additionalProperties: false` 이므로 이 줄이 없으면 직렬화 단계에서 조용히 사라진다.
+     * (`thumbnailUrl` 은 postDetailSchema 에서 상속된다)
+     */
+    sortOrder: { type: ["integer", "null"] },
   },
   required: [
     ...(postDetailSchema as { required: string[] }).required,
     "createdAt",
     "updatedAt",
     "deletedAt",
+    "sortOrder",
   ],
 };
+
+/** POST /admin/posts/reorder 성공 응답 스키마 (계약 §3) */
+const reorderSchema = {
+  type: "object",
+  properties: {
+    ok: { type: "boolean" },
+    category: { type: "string" },
+    updated: { type: "integer" },
+  },
+  required: ["ok", "category", "updated"],
+  additionalProperties: false,
+};
+
+const REORDER_IDS_ERROR = "ids 는 UUID 배열이어야 합니다.";
+const REORDER_DUPLICATE_ERROR = "ids 에 중복된 항목이 있습니다.";
+const REORDER_CONFLICT_MESSAGE = "목록이 변경되었습니다. 새로고침 후 다시 시도해 주세요.";
 
 export interface AdminRouteDeps {
   config: AppConfig;
@@ -317,6 +342,39 @@ export function registerAdminRoutes(app: FastifyInstance, deps: AdminRouteDeps):
     },
   );
 
+  /**
+   * 썸네일 키 결정 (계약 §4). 생성·수정 **양쪽에서 동기 호출**한다.
+   *
+   * 규칙:
+   * - 링크형이 아니거나 url 이 없으면 `null` (링크형→작성형 전환 시 썸네일 해제)
+   * - YouTube 영상 URL 이 아니면 `null` (로그 없음 — 대부분의 링크가 여기 해당하는 정상 경로)
+   * - URL 이 그대로이고 이미 키가 있으면 **재취득하지 않고 그 키를 유지**
+   * - 그 외(신규 / URL 변경 / 이전 시도 실패로 키가 NULL)는 취득 시도
+   *
+   * **실패는 게시를 막지 않는다** (06 §13.2 링크 프리뷰와 동일 원칙) — `null` 을 반환하고
+   * warn 로그만 남긴다. 비동기 백그라운드 처리는 하지 않는다 (계약 §4: 일관성·에러 추적 우선).
+   * 타임아웃이 짧게(연결 3초/전체 6초) 잡혀 있어 최악의 경우에도 응답 지연이 한정된다.
+   */
+  async function resolveThumbnailKey(
+    request: FastifyRequest,
+    route: string,
+    input: PostInput,
+    existing: { url: string | null; thumbnailKey: string | null } | null,
+  ): Promise<string | null> {
+    if (input.type !== "link" || input.url === null) return null;
+    if (extractYouTubeVideoId(input.url) === null) return null;
+    if (existing !== null && existing.thumbnailKey !== null && existing.url === input.url) {
+      return existing.thumbnailKey;
+    }
+    const result = await acquireThumbnail(input.url, config.uploadDir);
+    if (result.key === null) {
+      // 실패 사유만 남긴다 (URL 원문은 싣지 않는다 — 로그 최소주의)
+      request.log.warn({ route, reason: result.reason }, "thumbnail acquisition failed");
+      return null;
+    }
+    return result.key;
+  }
+
   /* ---------- 게시물 CRUD (§13.1) ---------- */
 
   app.get("/admin/posts", { preHandler: requireAdmin }, async (request, reply) => {
@@ -344,8 +402,12 @@ export function registerAdminRoutes(app: FastifyInstance, deps: AdminRouteDeps):
     async (request, reply) => {
       const validation = validatePostInput(request.body);
       if (!validation.ok) return reply.status(400).send(errorBody("VALIDATION_ERROR", validation.message));
-      const created = await posts.create(validation.value);
-      request.log.info({ route: "admin-post-create", postId: created.id }, "post created");
+      const thumbnailKey = await resolveThumbnailKey(request, "admin-post-create", validation.value, null);
+      const created = await posts.create(validation.value, thumbnailKey);
+      request.log.info(
+        { route: "admin-post-create", postId: created.id, thumbnail: thumbnailKey !== null },
+        "post created",
+      );
       return reply.status(201).send(created);
     },
   );
@@ -390,9 +452,17 @@ export function registerAdminRoutes(app: FastifyInstance, deps: AdminRouteDeps):
       }
       const validation = validatePostInput(merged);
       if (!validation.ok) return reply.status(400).send(errorBody("VALIDATION_ERROR", validation.message));
-      const updated = await posts.update(id, validation.value);
+      // URL 이 바뀌면 재취득, 그대로면 기존 키 유지 (계약 §4). sort_order 는 update() 가 건드리지 않는다
+      const thumbnailKey = await resolveThumbnailKey(request, "admin-post-update", validation.value, {
+        url: existing.url,
+        thumbnailKey: existing.thumbnail_key,
+      });
+      const updated = await posts.update(id, validation.value, thumbnailKey);
       if (updated === null) return reply.status(404).send(errorBody("NOT_FOUND", "해당 게시물이 없습니다."));
-      request.log.info({ route: "admin-post-update", postId: id }, "post updated");
+      request.log.info(
+        { route: "admin-post-update", postId: id, thumbnail: thumbnailKey !== null },
+        "post updated",
+      );
       return reply.status(200).send(updated);
     },
   );
@@ -407,6 +477,70 @@ export function registerAdminRoutes(app: FastifyInstance, deps: AdminRouteDeps):
     if (!deleted) return reply.status(404).send(errorBody("NOT_FOUND", "해당 게시물이 없거나 이미 삭제되었습니다."));
     return reply.status(200).send({ deleted: true, id });
   });
+
+  /* ---------- 수동 정렬 (계약 §3, 명세 06 §20.3) ---------- */
+
+  /**
+   * POST /admin/posts/reorder — `ids` 순서대로 `sort_order` 를 1..n 으로 지정한다.
+   *
+   * 검증 순서는 계약 §3 표 그대로다 (#1 category → #2 ids 형식 → #3 중복 → #4 순열).
+   * QA 가 이 순서로 교차 검증하므로 순서를 바꾸지 말 것.
+   *
+   * **#4(409 CONFLICT)가 핵심 안전장치다.** 낙관적 동시성 제어 — 저장소의 트랜잭션 안에서
+   * 활성 게시물 집합과 완전 일치를 확인한다. 상세 근거는 `repos/posts.ts` 의 reorder().
+   */
+  app.post(
+    "/admin/posts/reorder",
+    {
+      preHandler: requireAdmin,
+      schema: { response: { 200: reorderSchema, "4xx": errorSchema, "5xx": errorSchema } },
+    },
+    async (request, reply) => {
+      const body = request.body as Record<string, unknown> | null;
+
+      // #1 category
+      const category = body?.["category"];
+      if (!isPostCategory(category)) {
+        return reply.status(400).send(errorBody("VALIDATION_ERROR", POST_CATEGORY_ERROR));
+      }
+
+      // #2 ids 형식 — 배열이고 모든 원소가 UUID
+      const rawIds = body?.["ids"];
+      if (!Array.isArray(rawIds)) {
+        return reply.status(400).send(errorBody("VALIDATION_ERROR", REORDER_IDS_ERROR));
+      }
+      const ids: string[] = [];
+      for (const item of rawIds) {
+        if (typeof item !== "string" || !UUID_PATTERN.test(item)) {
+          return reply.status(400).send(errorBody("VALIDATION_ERROR", REORDER_IDS_ERROR));
+        }
+        // PostgreSQL 의 uuid 출력은 항상 소문자다. 대문자로 온 같은 uuid 를 #3·#4 에서 다른
+        // 값으로 오판하지 않도록 정규화한다 (DB 비교는 uuid 타입이라 대소문자 무관)
+        ids.push(item.toLowerCase());
+      }
+
+      // #3 중복
+      if (new Set(ids).size !== ids.length) {
+        return reply.status(400).send(errorBody("VALIDATION_ERROR", REORDER_DUPLICATE_ERROR));
+      }
+
+      // #4 순열 검증 + 원자적 갱신 (하나의 트랜잭션)
+      const result = await posts.reorder(category, ids);
+      if (!result.ok) {
+        request.log.warn(
+          { route: "admin-posts-reorder", category, requested: ids.length, result: "conflict" },
+          "reorder rejected",
+        );
+        return reply.status(409).send(errorBody("CONFLICT", REORDER_CONFLICT_MESSAGE));
+      }
+
+      request.log.info(
+        { route: "admin-posts-reorder", category, updated: result.updated },
+        "posts reordered",
+      );
+      return reply.status(200).send({ ok: true, category, updated: result.updated });
+    },
+  );
 
   /* ---------- 링크 메타데이터 (§13.2, SSRF 방어) ---------- */
 

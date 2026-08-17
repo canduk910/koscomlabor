@@ -2,6 +2,7 @@
 
 작성일: 2026-08-16 (공개 배포 반영 갱신) | 작성자: backend-developer | 기준 명세: `_workspace/06_backend_api_spec.md`
 상태: **API 공개 완료 — https://union-api.koscomlabor.cloud (TLS 유효, 스모크 통과). 프론트 배포는 6절**
+최신 작업: **§11 수동 정렬(`sort_order`) + YouTube 썸네일 서버 캐싱 — 구현·로컬 실측 완료, 프로덕션 미적용**
 
 ---
 
@@ -911,3 +912,512 @@ education 전용 정렬 규칙)은 후속 과제다 (디자이너 스펙 §15.6R
 - `오바마 대통령이 말하는 노조` 는 원출처 미표기 개인 채널 재업로드로 **예고 없이 삭제될 수
   있다.** 링크 정기 점검 대상 (fact-verifier §8-#3-3)
 - 5건의 자막(캡션) 제공 여부 미확인 (접근성)
+
+## 11. 게시물 수동 정렬 + YouTube 썸네일 서버 캐싱 (2026-08-17) — 구현 완료, **프로덕션 미적용**
+
+근거: `_workspace/00_input/requirements-sort-thumbnail.md` / 확정 계약 `_workspace/00_input/contract-sort-thumbnail.md` §1–§7. 명세는 06 §20.
+**이 작업 범위는 서버·DB·스크립트·문서까지이고, 프로덕션 적용은 리더가 수행한다** (§11.7 절차). 프로덕션에 쓰기 작업은 하지 않았다.
+
+### 11.1 변경 파일
+
+| 파일 | 변경 |
+|------|------|
+| `server/migrations/1755300000005_add-sort-order-and-thumbnail.sql` | **신규.** `sort_order`·`thumbnail_key` 컬럼 추가 + `idx_posts_list` 재생성. Down 은 인덱스 원복 + 컬럼 DROP (데이터 소멸 경고 주석) |
+| `server/src/lib/youtubeThumbnail.ts` | **신규.** videoId 추출, 썸네일 취득(SSRF 방어·매직 바이트 검증·변형 폴백), 디스크 캐시, key/URL 규약 단일 출처 |
+| `server/src/lib/errors.ts` | `ErrorCode` 에 `CONFLICT` 추가 (근거 주석 + 프론트 미등록 리스크 경고) |
+| `server/src/repos/posts.ts` | 정렬 규칙 단일 출처 `ORDER_BY` 상수 신설, 목록 쿼리 2곳 교체, `POST_COLUMNS`·`DbPostRow` 에 컬럼 2개, `thumbnailUrl`(공개)·`sortOrder`(admin) 직렬화, `create`/`update` 에 `thumbnailKey` 인자, **`reorder()` 트랜잭션 신설** |
+| `server/src/routes/posts.ts` | 공개 응답 스키마에 `thumbnailUrl` 추가, **`GET /thumbnails/:key` 신설** |
+| `server/src/routes/admin.ts` | admin 스키마에 `sortOrder` 추가, `resolveThumbnailKey()` 헬퍼(생성·수정 공용), **`POST /admin/posts/reorder` 신설**, reorder 응답 스키마 |
+| `server/scripts/backfill-thumbnails.mjs` | **신규.** 소급 적용(멱등, `--dry-run`, `WHERE id = $1`) |
+| `server/Dockerfile` | build·prod 스테이지에 `COPY scripts ./scripts` 추가 (§11.3 — 기존 누락 결함 동시 수정) |
+| `_workspace/06_backend_api_spec.md` | §10.1·§11.1·§11.2·§13.1 갱신, **§20 신설**, 개정 이력 |
+
+**프론트(`src/`)는 건드리지 않았다** — web-developer 영역(계약 §8). `_workspace/02·03·04·05` 문서도 읽기만 했다.
+
+### 11.2 계약 대비 차이 (전부 계약을 좁히지 않는 방향의 추가)
+
+| 항목 | 계약 | 구현 | 사유 |
+|---|---|---|---|
+| videoId 인식 형태 | watch / youtu.be / shorts | + `embed/{id}`, `live/{id}`, `music.youtube.com` | 같은 11자 videoId 체계이고 정규식 관문은 동일하다. 인식 못 하면 썸네일만 없으므로 확장이 무해하다 |
+| PATCH 재취득 조건 | "URL 이 바뀌면 재취득" | + `thumbnail_key` 가 NULL 이면 URL 이 같아도 재시도 | 일시적 실패를 관리자가 "다시 저장"만으로 복구할 수 있게 한다. 성공 시에는 재취득하지 않으므로 비용 증가 없음 |
+| 타임아웃 | "짧게" | 연결 3초 / 두 변형 합계 6초 | linkPreview 는 8초지만 게시 응답을 붙잡으므로 더 짧게. 양 변형 404 실측 0.38초 |
+| 2MB 초과 시 | "폐기" | 폐기 후 **다음 변형 시도** | 계약의 "실패 시 mqdefault" 취지와 일치. mqdefault 가 2MB 를 넘을 일은 없다 |
+| 피어 IP 검사 | (없음) | 접속 피어가 공인 IP 인지 확인 | 호스트가 하드코딩이라 SSRF 표면은 0 이지만, `ipGuard` 재사용 6줄로 DNS 오염 시나리오까지 닫힌다 |
+| `updated_at` on reorder | (미규정) | **갱신하지 않음** | 순서는 내용이 아니다. 갱신하면 분류 전체의 "최근 수정"이 무의미해진다 |
+| 대문자 UUID | (미규정) | 소문자 정규화 후 비교·갱신 | 정규화 없이는 같은 uuid 가 #4 에서 불일치로 오판된다 (PostgreSQL uuid 출력은 항상 소문자) |
+
+계약을 **바꾼 것은 없다.** 위는 모두 계약이 침묵한 지점의 결정이며, 응답 shape·에러 code·상태 코드·문구는 계약과 문자 단위로 일치한다.
+
+### 11.3 `Dockerfile` 의 `scripts/` 누락 — 기존 결함 발견·수정
+
+썸네일 소급 적용 스크립트를 프로덕션에서 실행할 경로를 확인하다가 발견했다.
+
+**문제.** `Dockerfile` 의 build·prod 스테이지가 `src`·`migrations`·`tsconfig.json` 만 COPY 하고 **`scripts/` 를 COPY 하지 않았다.** 따라서 §9.7 에 적어 둔 비밀번호 분실 복구 절차
+
+```bash
+printf '%s' "$NEWPW" | docker compose --profile tools run --rm -T migrate node scripts/set-password.mjs
+```
+
+는 컨테이너 안에 파일이 없어 `Cannot find module /app/scripts/set-password.mjs` 로 **실패한다.** 프로덕션에서 한 번도 실행된 적이 없어 드러나지 않았다 (§9.10 적용 기록에 이 명령은 없다).
+
+**조치.** build 스테이지(복구 스크립트용)와 prod 스테이지(backfill 용) 양쪽에 `COPY scripts ./scripts` 를 추가했다. 다음 `docker compose build` 로 함께 반영되므로 추가 절차는 없다.
+
+**backfill 은 `migrate` 서비스가 아니라 `api` 컨테이너에서 실행해야 한다.** `migrate` 서비스에는 `uploads` 볼륨이 마운트되어 있지 않아, 거기서 실행하면 썸네일 파일이 컨테이너 임시 파일시스템에 쓰이고 `--rm` 과 함께 **유실**된다(DB 에는 키가 남아 404 가 되는 최악의 조합). `api` 컨테이너는 `uploads` 볼륨·`UPLOAD_DIR`·`DATABASE_URL` 을 모두 갖고 있고 `pg` 는 프로덕션 의존성이다.
+
+### 11.4 `ORDER BY` 전수 조사
+
+`grep -rn "ORDER BY" server/src server/scripts server/migrations` 로 **전수 조사**했다. 한 곳이라도 빠지면 "admin 에서는 순서대로인데 메인은 다른" 부분 고장이 되므로, 개별 수정 대신 **정렬 규칙을 상수 하나로 모으고 목록 쿼리가 그것을 참조**하게 했다.
+
+| 위치(수정 전) | 내용 | 처리 |
+|---|---|---|
+| `repos/posts.ts:134` | 공개 목록 `urgent DESC, published_at DESC, id DESC` | **`ORDER_BY` 상수로 교체** (신규 규칙) |
+| `repos/posts.ts:173` | admin 목록 `published_at DESC, id DESC` | **`ORDER_BY` 상수로 교체** (urgent·sort_order 가 새로 반영됨) |
+| `repos/posts.ts:78` | 첨부 목록 `created_at ASC` | **의도적 유지** — 게시물 목록이 아니라 한 게시물의 첨부 표시 순서(업로드 순) |
+| `db.ts:40` | 방명록 목록 `created_at DESC, id DESC` | **무관** — posts 테이블이 아니다 (Part 1 계약) |
+| (신규) `scripts/backfill-thumbnails.mjs:59` | 소급 적용 처리 순서 | 표시 순서와 무관한 배치 처리 순서 |
+
+**게시물 목록 쿼리는 위 2곳이 전부다.** 마감 스트립은 별도 쿼리 없이 프론트가 `GET /posts` 결과에서 파생한다 (`src/app/page.tsx:72` → `selectUpcomingDeadlines`, `src/components/home/DeadlineStrip.tsx` — 읽기 확인). 따라서 서버 정렬 규칙 하나로 마감 스트립까지 함께 따라온다.
+
+수정 후 재조사 결과 `server/src` 에 남은 게시물 목록 `ORDER BY` 리터럴은 **`ORDER_BY` 상수 선언 1줄뿐**이다.
+
+### 11.5 로컬 실측 (2026-08-17, macOS + PostgreSQL 16.15 + Node 22) — 전 케이스 PASS
+
+**검증 환경 격리**: 개발 DB `guestbook` 과 `server/.env` 를 건드리지 않았다. 전용 DB `sort_thumb_check` 를 만들어 검증하고 끝나고 `dropdb` 했다. env 는 스크래치패드에 별도 파일(포트 3401, 일회용 시크릿, `UPLOAD_DIR` 도 스크래치패드)을 만들어 썼다. 종료 후 확인: `sort_thumb_check` 잔존 0, `server/.env` mtime 무변경, `server/uploads/` 무변경(빈 디렉토리 유지).
+
+**① 마이그레이션 up / down 왕복 + 인덱스**
+
+```
+$ node --env-file=<scratch>/sortthumb.env node_modules/node-pg-migrate/bin/node-pg-migrate.js \
+    up -m migrations --migration-file-language sql
+### MIGRATION 1755300000005_add-sort-order-and-thumbnail (UP) ###   → Migrations complete!
+
+$ psql -d sort_thumb_check -tA -c "SELECT column_name, data_type, is_nullable FROM information_schema.columns
+                                    WHERE table_name='posts' AND column_name IN ('sort_order','thumbnail_key');"
+sort_order|integer|YES
+thumbnail_key|text|YES
+
+$ psql -d sort_thumb_check -tA -c "SELECT indexdef FROM pg_indexes WHERE indexname='idx_posts_list';"
+CREATE INDEX idx_posts_list ON public.posts USING btree
+  (category, urgent DESC, sort_order, published_at DESC, id DESC) WHERE (deleted_at IS NULL)
+   ↑ ASC NULLS LAST 는 PostgreSQL 의 ASC 기본값이라 정의에 표기되지 않는다 (동일 의미)
+```
+
+| 케이스 | 기대 | 실측 | 판정 |
+|---|---|---|---|
+| UP 적용 | 컬럼 2개 nullable | 위 출력 | PASS |
+| 다른 CHECK 5종 | 무변경 | `posts_article_needs_body`·`posts_category_check`(3값)·`posts_link_needs_url`·`posts_news_article_needs_source`·`posts_type_check` 정의 동일 | PASS |
+| DOWN | 컬럼 0개 + 인덱스 원본 복원 | 컬럼 count 0, `(category, urgent DESC, published_at DESC, id DESC)` = 0001 정의와 동일 | PASS |
+| 재 UP | 신규 인덱스 복귀 | 동일 | PASS |
+
+**② 쿼리 플랜 (계약 §1 이 요구한 근거)**
+
+```
+$ psql -d sort_thumb_check -c "EXPLAIN SELECT id, category, …, sort_order, thumbnail_key FROM posts
+    WHERE deleted_at IS NULL AND category='education'
+    ORDER BY urgent DESC, sort_order ASC NULLS LAST, published_at DESC, id DESC LIMIT 50 OFFSET 0;"
+ Limit  (cost=0.14..8.16 rows=1 width=1179)
+   ->  Index Scan using idx_posts_list on posts  (cost=0.14..8.16 rows=1 width=1179)
+         Index Cond: (category = 'education'::text)
+   ← **Sort 노드 없음** = 인덱스가 정렬을 그대로 제공한다
+
+$ 대조군 — 정렬 절만 다르게:
+$ psql … "EXPLAIN SELECT id FROM posts WHERE deleted_at IS NULL AND category='education' ORDER BY title;"
+ Sort  (cost=8.17..8.17 rows=1 width=532)
+   Sort Key: title
+   ->  Index Scan using idx_posts_list on posts …
+   ← 인덱스가 커버하지 못하는 정렬에는 Sort 노드가 나타난다 (①의 Sort 부재가 우연이 아님을 확인)
+```
+
+`enable_seqscan=off` 를 걸지 않은 상태에서도 플래너가 인덱스를 선택했다.
+
+**③ 썸네일 취득 (curl 원문)**
+
+```bash
+API=http://127.0.0.1:3401
+AUTH=(-H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json")
+
+# [T1] maxresdefault 존재
+curl -s -X POST "$API/admin/posts" "${AUTH[@]}" \
+  -d '{"category":"education","type":"link","title":"노동조합이란 무엇인가",
+       "url":"https://www.youtube.com/watch?v=ATbGKR-Agmk"}'
+201 {"id":"45e75857-…","category":"education","type":"link","title":"노동조합이란 무엇인가",
+     "url":"https://www.youtube.com/watch?v=ATbGKR-Agmk","source":null,"urgent":false,"deadline":null,
+     "publishedAt":"2026-08-17T11:11:42.681Z","attachments":[],
+     "thumbnailUrl":"/thumbnails/ATbGKR-Agmk-maxresdefault.jpg",   ← 추가 필드
+     "body":null,"createdAt":"…","updatedAt":"…","deletedAt":null,"sortOrder":null}   ← 추가 필드
+
+# [T2] maxresdefault 404 → mqdefault 폴백 (youtu.be 형태)
+curl -s -X POST "$API/admin/posts" "${AUTH[@]}" \
+  -d '{"category":"education","type":"link","title":"오바마 대통령이 말하는 노조",
+       "url":"https://youtu.be/Vj3lQ7Y71PU"}'
+201 { … "thumbnailUrl":"/thumbnails/Vj3lQ7Y71PU-mqdefault.jpg" … }
+
+# 저장 결과 — 모드 0600, 첨부와 분리된 thumbnails/ 하위
+$ ls -l <UPLOAD_DIR>/thumbnails/
+-rw-------  73512  ATbGKR-Agmk-maxresdefault.jpg
+-rw-------  11282  Vj3lQ7Y71PU-mqdefault.jpg
+$ file …/ATbGKR-Agmk-maxresdefault.jpg   → JPEG image data, …, 1280x720   (16:9)
+$ file …/Vj3lQ7Y71PU-mqdefault.jpg       → JPEG image data, …,  320x180   (16:9)
+$ xxd -l 3 -p …/*.jpg                    → ffd8ff  (양쪽 모두 JPEG SOI)
+```
+
+**리더 실측 재확인 (독립 검증)** — 게시된 5건 전수:
+
+```
+ATbGKR-Agmk  maxres=200  mq=200
+-WrzgLtvuPU  maxres=200  mq=200
+jeK7W_SADUs  maxres=200  mq=200
+Vj3lQ7Y71PU  maxres=404  mq=200     ← 폴백이 실제로 필요하다 (리더 실측과 일치)
+OFfbgB5dOIA  maxres=200  mq=200
+```
+
+| 케이스 | 기대 | 실측 | 판정 |
+|---|---|---|---|
+| `watch?v=` / `youtu.be/` / `shorts/` 형태 | 인식 | 3형태 모두 키 생성 | PASS |
+| `m.youtube.com/watch?v=` | 인식 | 키 생성 (backfill 경로에서 확인) | PASS |
+| 비YouTube 링크 (`kfiu.or.kr/board/1234`) | `null`, 로그 없음 | `thumbnailUrl:null`, warn 0건 | PASS |
+| 작성형(article) | `null` | `thumbnailUrl:null` | PASS |
+| `?v=short` (11자 아님) | `null`, URL 조립 안 함 | `thumbnailUrl:null` | PASS |
+| `?v=../../etc/passwd` | `null` | `thumbnailUrl:null` (정규식 관문에서 차단) | PASS |
+| **존재하지 않는 videoId `ZZZZZZZZZZZ`** (양 변형 404) | **게시는 성공** | `201` + `thumbnailUrl:null` + warn 1건, 소요 **0.381초** | PASS |
+| 같은 videoId 재사용 (작성형→링크형 복귀) | 네트워크 없이 캐시 재사용 | 0.100초 (첫 취득의 1/10 이하) | PASS |
+
+warn 로그 원문 (URL 원문·개인정보 없음):
+
+```json
+{"level":40,"route":"admin-post-create","reason":"maxresdefault:http-404,mqdefault:http-404",
+ "msg":"thumbnail acquisition failed"}
+```
+
+**④ 썸네일 보안 (호스트가 하드코딩이라 API 로 도달할 수 없는 경로 — 하네스 검증)**
+
+`dist/lib/youtubeThumbnail.js` 를 스크래치패드에 복사한 뒤 **상수만 바꿔** 같은 코드 경로를 실행했다(수정 대상: `THUMBNAIL_HOST` / `path` / `MAX_BYTES` / `port`). 리포지토리 소스는 변경하지 않았고 하네스는 검증 후 삭제했다.
+
+| 케이스 | 바꾼 상수 | 실측 결과 | 판정 |
+|---|---|---|---|
+| 200 이지만 JPEG 아님 (HTML) | host=`example.com`, path=`/` | `key=null reason=maxresdefault:not-jpeg,mqdefault:not-jpeg` | PASS (Content-Type 아니라 내용으로 판정) |
+| 2MB 상한 초과 | `MAX_BYTES=1000` (실제 73KB 취득) | `reason=…:too-large` | PASS |
+| 3xx 리다이렉트 | host=`wikipedia.org`, path=`/` (301) | `reason=…:http-301` (추종 안 함) | PASS |
+| 사설 IP 피어 | host=`127.0.0.1`, port=8443 + 로컬 리스너 | `reason=…:non-public-peer` (TLS 핸드셰이크 전 절단) | PASS |
+| 위 4종 모두 | — | `out/` 에 **파일 0개** (실패 시 저장 없음) | PASS |
+
+**⑤ 정렬 규칙 (curl 원문)**
+
+```bash
+# [R2] 학습 순서 명시 지정 — 역순 등록 우회 없이
+curl -s -X POST "$API/admin/posts/reorder" "${AUTH[@]}" \
+  -d '{"category":"education","ids":["45e75857-…","5b341281-…","dc472784-…","6b945b0c-…","41bd1cb4-…"]}'
+HTTP/1.1 200 OK
+{"ok":true,"category":"education","updated":5}
+
+# [R3] 공개 목록 — 지정 순서대로, thumbnailUrl 포함, sortOrder 는 없음
+curl -s "$API/posts?category=education"
+  노동조합이란 무엇인가        | /thumbnails/ATbGKR-Agmk-maxresdefault.jpg | sortOrder 포함: False
+  오바마 대통령이 말하는 노조   | /thumbnails/Vj3lQ7Y71PU-mqdefault.jpg     | sortOrder 포함: False
+  shorts 형태               | /thumbnails/jeK7W_SADUs-maxresdefault.jpg | sortOrder 포함: False
+  짧은 id                   | null                                      | sortOrder 포함: False
+  경로조작 시도              | null                                      | sortOrder 포함: False
+
+# [R4] admin 목록 — 같은 순서 + sortOrder 노출 (공개/admin 정렬 일치 확인)
+curl -s -H "Authorization: Bearer $TOKEN" "$API/admin/posts?category=education"
+  1 노동조합이란 무엇인가 / 2 오바마 … / 3 shorts 형태 / 4 짧은 id / 5 경로조작 시도
+
+# [R5] urgent 가 sort_order 보다 우선 — sortOrder=5 인 글을 urgent 로
+curl -s -X PATCH "$API/admin/posts/41bd1cb4-…" "${AUTH[@]}" -d '{"urgent":true}'
+curl -s "$API/posts?category=education"
+  urgent=True  경로조작 시도          ← sortOrder 5 인데 맨 위 (기존 동작 보존)
+  urgent=False 노동조합이란 무엇인가   ← 이하 sort_order 순
+  urgent=False 오바마 … / shorts 형태 / 짧은 id
+
+# [R6] 새 글은 맨 아래 (sort_order NULL + NULLS LAST) — 07 §10.9 문제의 구조적 해소
+curl -s -X POST "$API/admin/posts" "${AUTH[@]}" \
+  -d '{"category":"education","type":"article","title":"나중에 추가한 새 글","body":"본문"}'
+curl -s "$API/posts?category=education"
+  1. urgent=True  경로조작 시도
+  2..5. (sort_order 1–4 지정 글)
+  6. urgent=False 나중에 추가한 새 글     ← **학습 순서가 깨지지 않는다**
+```
+
+| 케이스 | 기대 | 실측 | 판정 |
+|---|---|---|---|
+| 공개 목록 = 지정 순서 | 일치 | 일치 | PASS |
+| admin 목록 = 공개 목록 순서 | 일치 | 일치 (규칙 공유) | PASS |
+| urgent 우선 | 수동 순서보다 위 | 위 | PASS |
+| 미지정 글 = 게시일 역순 | 기존 동작 | 기존 동작 | PASS |
+| 새 글이 지정 글 아래 | NULLS LAST | 맨 아래 | PASS |
+| 공개 응답에 `sortOrder` 부재 | 없어야 함 | 없음 | PASS |
+
+**⑥ `POST /admin/posts/reorder` 전 분기**
+
+```
+# #1 category (400 VALIDATION_ERROR)
+{"category":"edu","ids":[]}                 → 400 "category 는 notice, news, education 중 하나여야 합니다."
+{"ids":[]}                (category 누락)    → 400 동일
+# #2 ids 형식 (400)
+{"category":"education"}  (ids 누락)         → 400 "ids 는 UUID 배열이어야 합니다."
+{"category":"education","ids":"abc"}         → 400 동일
+{"category":"education","ids":["not-a-uuid"]}→ 400 동일
+{"category":"education","ids":[1,2]}         → 400 동일
+# #3 중복 (400) — 순열 검증보다 먼저
+{"category":"education","ids":["45e…","45e…"]} → 400 "ids 에 중복된 항목이 있습니다."
+# #4 순열 아님 (409 CONFLICT)
+개수 부족(1건)                                → 409 "목록이 변경되었습니다. 새로고침 후 다시 시도해 주세요."
+없는 uuid 포함                                → 409 동일
+빈 배열(활성 6건 존재)                          → 409 동일
+다른 분류 id 로 시도                            → 409 동일
+삭제된 글의 id 포함                             → 409 동일
+낡은 목록(5건)으로 시도 — 그 사이 1건 추가됨        → 409 동일  ← 계약이 막으려던 바로 그 사고
+# 검증 순서
+{"category":"edu","ids":["nope"]}            → 400 category 문구  ← #1 이 #2 보다 먼저
+# 정상 분기
+활성 0건 분류 + ids=[]                        → 200 {"ok":true,"category":"news","updated":0}
+대문자 UUID 5건                               → 200 {"updated":5} (정규화 확인)
+무인증                                        → 401 UNAUTHORIZED
+```
+
+**409 후 DB 무변경 확인** (부분 적용이 없어야 한다):
+
+```
+$ psql -tA -c "SELECT coalesce(sort_order::text,'NULL'), title FROM posts
+                WHERE category='education' ORDER BY sort_order NULLS LAST;"
+1|노동조합이란 무엇인가 / 2|오바마 … / 3|shorts 형태 / 4|짧은 id / 5|경로조작 시도 / NULL|나중에 추가한 새 글
+   ← 409 를 받은 요청은 아무것도 쓰지 않았다
+```
+
+**동시 실행 (원자성·순열 무결성)** — 서로 반대 순서인 reorder 2건을 동시 전송:
+
+```
+A: 200 {"ok":true,"category":"education","updated":7}
+B: 200 {"ok":true,"category":"education","updated":7}
+최종 sort_order: 1..7 연속, 중복 없음 (판정 쿼리: count(DISTINCT sort_order)=count(*) AND min=1 AND max=count → "연속·유일 OK")
+   ← FOR UPDATE 로 직렬화되어 두 순서가 섞이지 않는다
+```
+
+**⑦ `GET /thumbnails/:key`**
+
+```
+# 정상
+$ curl -s -D- -o served.jpg "$API/thumbnails/ATbGKR-Agmk-maxresdefault.jpg"
+HTTP/1.1 200 OK
+content-type: image/jpeg
+content-length: 73512
+cache-control: public, max-age=31536000, immutable
+x-content-type-options: nosniff
+$ cmp served.jpg <UPLOAD_DIR>/thumbnails/ATbGKR-Agmk-maxresdefault.jpg   → 바이트 동일
+
+# 형식 맞지만 파일 없음 → 404
+$ curl -s "$API/thumbnails/AAAAAAAAAAA-maxresdefault.jpg"
+404 {"error":{"code":"NOT_FOUND","message":"썸네일을 찾을 수 없습니다."}}
+
+# key 형식 위반 → 400
+hqdefault.jpg                     → 400      ATbGKR-Agmk-hqdefault.jpg      → 400  ← hqdefault 는 애초에 불가
+ATbGKR-Agmk-maxresdefault.png     → 400      short-mqdefault.jpg            → 400
+ATbGKR-Agmk-maxresdefault.jpg.jpg → 400
+
+# 경로 조작 10종 — 어느 것도 파일에 닿지 않는다
+../../../etc/passwd                               → 404 (라우터 미매칭 — 핸들러에 도달조차 안 함)
+..%2F..%2Fetc%2Fpasswd                            → 400 VALIDATION_ERROR
+%2e%2e%2f%2e%2e%2fetc%2fpasswd                    → 400
+ATbGKR-Agmk-maxresdefault.jpg/../../../etc/passwd → 404
+..;/etc/passwd                                    → 404
+..%2F..%2Fuploads%2Fthumbnails%2FATbGKR-…jpg      → 400 {"error":{"code":"VALIDATION_ERROR",
+                                                          "message":"썸네일 key 형식이 올바르지 않습니다."}}
+
+# rate limit (filesLimiter 공유) — 125회 연속
+200: 119건 / 429: 6건, retry-after: 4
+429 {"error":{"code":"RATE_LIMITED","message":"요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요."}}
+   ← 119 인 것은 앞선 /files 요청 1건이 같은 버킷을 이미 소비했기 때문 (분당 120 정확)
+```
+
+**⑧ PATCH 시 썸네일 수명주기**
+
+| 케이스 | 기대 | 실측 | 판정 |
+|---|---|---|---|
+| 제목만 변경 | 키·sortOrder 유지, 재취득 없음 | `ATbGKR-Agmk-maxresdefault.jpg`, `sortOrder:5` 유지 | PASS |
+| URL 변경 (`-WrzgLtvuPU`) | 재취득 | `-WrzgLtvuPU-maxresdefault.jpg` | PASS |
+| 링크형 → 작성형 | `thumbnail_key = NULL` | `thumbnailUrl:null`, `sortOrder:5` 유지 | PASS |
+| 작성형 → 링크형 복귀 | 디스크 캐시 재사용 | 동일 키, 0.100초 | PASS |
+| 비YouTube URL 로 변경 | 해제 | `thumbnailUrl:null` | PASS |
+| 위 전 과정에서 `sort_order` | 보존 | `5` 유지 (DB 직접 확인) | PASS |
+
+**⑨ 소급 적용 스크립트 (멱등성)**
+
+```
+# 사전 조건: 마이그레이션 이전 게시 상태 재현 (thumbnail_key NULL + 캐시 파일 제거)
+$ ... node scripts/backfill-thumbnails.mjs --dry-run
+대상 후보 6건 (thumbnail_key 가 비어 있는 활성 링크형 게시물)
+  [dry-run] 449c0bf0-… (education) → OFfbgB5dOIA-maxresdefault.jpg (fetch)
+  [건너뜀]  41bd1cb4-… (education) — YouTube 영상 URL 아님
+  [건너뜀]  6b945b0c-… (education) — YouTube 영상 URL 아님
+  [dry-run] 5b341281-… (education) → Vj3lQ7Y71PU-mqdefault.jpg (fetch)     ← 404 폴백도 동작
+  [건너뜀]  45e75857-… (education) — YouTube 영상 URL 아님
+  [dry-run] 176badc1-… (news)      → Vj3lQ7Y71PU-mqdefault.jpg (cache)     ← 같은 영상 재사용
+완료 — 대상 6건 / 적용 3건 / 건너뜀 3건 / 실패 0건 (dry-run: DB 무변경)
+$ psql -tAc "SELECT count(*) FROM posts WHERE thumbnail_key IS NOT NULL;"  → 1  (변경 없음)
+
+$ ... node scripts/backfill-thumbnails.mjs           # 실제 적용
+완료 — 대상 6건 / 적용 3건 / 건너뜀 3건 / 실패 0건        exit=0
+
+$ ... node scripts/backfill-thumbnails.mjs           # 재실행 (멱등)
+대상 후보 3건 … 완료 — 대상 3건 / 적용 0건 / 건너뜀 3건 / 실패 0건    exit=0
+   ← 채워진 3건은 후보에서 사라진다. 남은 3건은 YouTube 가 아닌 링크(영구 건너뜀)
+```
+
+**⑩ 회귀 (기존 기능)**
+
+```
+GET  /health                       → 200      GET /guestbook                → 200
+GET  /posts?category=notice        → 200      POST /guestbook               → 201
+GET  /posts?category=news          → 200      GET /admin/me (bearer)        → 200
+GET  /posts?category=education     → 200 (X-Total-Count: 6)
+GET  /posts?category=edu           → 400      GET /posts (category 누락)     → 400
+GET  /posts/<uuid아님>              → 400      GET /admin/posts (무인증)      → 401
+GET  /files/<없는id>/x.pdf          → 404
+첨부 업로드 → 201 attachment shape / 서빙 → 200   (uploads/ 루트와 thumbnails/ 공존 확인)
+```
+
+응답 키 집합 대조 (직렬화 스키마 누락 여부 확인):
+
+```
+공개 목록  : attachments category deadline id publishedAt source thumbnailUrl title type urgent url
+공개 상세  : 위 + body
+admin     : 위 + createdAt deletedAt sortOrder updatedAt
+   ← thumbnailUrl 은 공개·admin 모두, sortOrder 는 admin 만 (계약 §6 준수)
+```
+
+**⑪ 개인정보·시크릿 로그 점검** (서버 로그 전문 grep, 전부 0건): 정적 토큰 문자열, `argon2`, 평문 비밀번호, 방명록 본문, 클라이언트 IP. 로그의 유일한 `127.0.0.1` 은 기동 시 바인딩 주소(`Server listening at http://127.0.0.1:3401`)다.
+
+**⑫ 품질**: `npm run typecheck` (strict, `noUncheckedIndexedAccess`·`exactOptionalPropertyTypes`) 통과, `npm run build` 통과. 타입 우회(`any`·근거 없는 `as`) 없음.
+
+### 11.6 배포 전 확인 사항 — 아웃바운드 네트워크
+
+썸네일 취득은 **API 컨테이너에서 `i.ytimg.com:443` 으로 나가는 HTTPS 요청**을 필요로 한다. 현재 프로덕션에서 아웃바운드 HTTPS 는 이미 쓰이고 있지만(`POST /admin/posts/preview-link` 의 링크 프리뷰), `i.ytimg.com` 도달 여부는 프로덕션에서 확인된 바 없다. **적용 절차 ⑦-0 에서 먼저 확인한다.** 막혀 있어도 게시는 정상 동작하고 썸네일만 비는 설계이므로(§20.4) 서비스 위험은 없다.
+
+### 11.7 프로덕션 배포 절차
+
+전제: `/root/koscomlabor-api/` (compose + `app/` + `.env`), 프로덕션 DB 는 마이그레이션 0000–0004 까지 적용된 상태(§10.8). 이번엔 **컬럼 2개 추가 + 인덱스 재생성**이다.
+
+> **순서 고정 — 마이그레이션이 API 재기동보다 먼저.** 반대로 하면 새 API 가 `sort_order`/`thumbnail_key` 를 SELECT 하는데 컬럼이 없어 **모든 게시물 조회가 500** 이 된다(이번 변경에서 가장 큰 위험). 아래 순서면 무중단에 가깝다(api 재생성 몇 초).
+> `ALTER TABLE … ADD COLUMN` (기본값 없는 nullable)은 테이블 재작성이 없어 즉시 끝난다. `DROP INDEX`/`CREATE INDEX` 는 짧은 락을 잡지만 posts 는 소규모다.
+> **구버전 코드는 새 컬럼이 있어도 정상 동작한다** — 마이그레이션만 먼저 적용해 둔 중간 상태가 안전하다.
+
+```bash
+# ① 로컬에서 소스 동기화
+rsync -az --delete --exclude node_modules --exclude dist --exclude .env --exclude uploads \
+  server/ root@101.79.31.30:/root/koscomlabor-api/app/
+
+# ② 서버에서 — 백업 먼저 (롤백 대비)
+ssh root@101.79.31.30
+cd /root/koscomlabor-api
+docker exec koscomlabor-db pg_dump -Fc -U guestbook_app guestbook \
+  > /root/backups/pre_sortthumb_$(date +%Y%m%d_%H%M).dump
+
+# ②-1 현재 인덱스 정의 사전 확인 (③이 DROP 할 대상)
+docker exec koscomlabor-db psql -U guestbook_app -d guestbook -tAc \
+  "SELECT indexdef FROM pg_indexes WHERE indexname='idx_posts_list';"
+# 기대: CREATE INDEX idx_posts_list ON public.posts USING btree
+#         (category, urgent DESC, published_at DESC, id DESC) WHERE (deleted_at IS NULL)
+# 다르면 적용을 멈추고 리더에게 보고할 것 (마이그레이션의 DROP INDEX 가 전제로 삼는 값이다)
+
+# ③ 마이그레이션 이미지 재빌드 후 적용 (profile 서비스는 일반 build 대상이 아님 — §7.3-2)
+docker compose --profile tools build migrate
+docker compose --profile tools run --rm migrate      # 1755300000005 적용
+
+# ④ 적용 확인 — 컬럼 2개 + 새 인덱스
+docker exec koscomlabor-db psql -U guestbook_app -d guestbook -tAc \
+  "SELECT column_name, is_nullable FROM information_schema.columns
+    WHERE table_name='posts' AND column_name IN ('sort_order','thumbnail_key');"
+# 기대: sort_order|YES  /  thumbnail_key|YES
+docker exec koscomlabor-db psql -U guestbook_app -d guestbook -tAc \
+  "SELECT indexdef FROM pg_indexes WHERE indexname='idx_posts_list';"
+# 기대: … (category, urgent DESC, sort_order, published_at DESC, id DESC) WHERE (deleted_at IS NULL)
+#   ("ASC NULLS LAST" 는 PostgreSQL 기본값이라 표기되지 않는다 — 정상)
+
+# ⑤ API 이미지 재빌드 + 재기동 (scripts/ COPY 도 이때 함께 반영된다 — §11.3)
+docker compose build api
+docker compose up -d api
+
+# ⑥ 기동 확인
+docker logs --tail 30 koscomlabor-api                # "Server listening"
+docker exec onnuri-caddy wget -qO- http://koscomlabor-api:3001/health
+```
+
+**⑦ 스모크 (프로덕션).** 생성한 id 를 반드시 기록해 두었다가 `WHERE id IN (...)` 로 정리한다 (조건 없는 DELETE 금지 — CLAUDE.md 규칙).
+
+```bash
+# ⑦-0 아웃바운드 도달 확인 (§11.6) — 막혀 있으면 썸네일만 비고 게시는 정상
+docker compose exec api node -e \
+ "require('https').get({host:'i.ytimg.com',path:'/vi/ATbGKR-Agmk/maxresdefault.jpg'},r=>{console.log(r.statusCode);r.destroy();}).on('error',e=>console.log('ERR',e.message))"
+# 기대: 200
+
+# ⑦-1 회귀 (기존 필드 불변 + 새 필드 등장)
+GET  /posts?category=education      → 200, 5건, 각 원소에 "thumbnailUrl" 존재(초기엔 null), "sortOrder" 부재
+GET  /posts?category=notice / news  → 200 (기존 건수 그대로)
+GET  /guestbook                     → 200
+GET  /admin/posts?category=education → 200, "sortOrder":null 노출
+
+# ⑦-2 썸네일 소급 적용 — **api 컨테이너에서** (uploads 볼륨이 여기 있다 — §11.3)
+docker compose exec api node scripts/backfill-thumbnails.mjs --dry-run   # 먼저 무엇이 바뀌는지 본다
+docker compose exec api node scripts/backfill-thumbnails.mjs             # 적용 (노동교육 5건 + 소식 링크형)
+GET  /posts?category=education      → 200, thumbnailUrl 이 채워짐
+GET  /thumbnails/<받은 key>          → 200 image/jpeg   ← Caddy 는 경로 제한 없이 전량 프록시하므로 설정 변경 불필요
+
+# ⑦-3 정렬 적용 — 노동교육 학습 순서를 명시 고정 (역순 등록 우회 해제)
+#     현재 표시 순서대로 id 를 모은 뒤 그 배열을 그대로 보낸다 (지금 순서 = 의도한 학습 순서)
+GET  /admin/posts?category=education     → id 5개를 표시 순서로 수집
+POST /admin/posts/reorder                → 200 {"ok":true,"category":"education","updated":5}
+GET  /posts?category=education           → 순서 동일 확인 (이제 published_at 우연에 의존하지 않는다)
+
+# ⑦-4 (선택) 정렬 스모크: 새 글 1건 생성 → 맨 아래에 붙는지 확인 → 기록한 id 로 DELETE
+```
+
+**주의:**
+- **배포 순서는 마이그레이션 → API → 프론트.** 프론트를 먼저 배포하면 `POST /admin/posts/reorder` 가 404 다. API 를 먼저 배포해도 **구버전 프론트는 정상 동작**한다 (새 필드를 무시한다 — 06 §20.7)
+- 프론트의 순서 조작 UI(위/아래 이동 버튼)·썸네일 카드 렌더·`http.ts` 의 `conflict` reason 등록은 web-developer 영역 (계약 §8)
+- `⑦-3` 을 하지 않으면 노동교육 순서는 여전히 `published_at` 역순 우연에 의존한다. **적용 절차의 일부로 반드시 수행할 것**
+- 썸네일 파일은 기존 `uploads` 명명 볼륨의 `thumbnails/` 하위에 쌓인다 (5건 약 300KB) — 볼륨 용량 영향은 무시할 수준
+
+### 11.8 프론트 미등록 리스크 (web-developer 인계 — 배포 전 확인 필요)
+
+**`src/lib/api/http.ts` 의 `CODE_TO_REASON` 에 `CONFLICT: "conflict"` 를 등록하지 않으면 409 응답이 `?? "network"` 폴백으로 떨어져 "서버에 연결하지 못했습니다" 류의 잘못된 문구가 뜬다.** `ApiFailureReason` 에 `"conflict"` 추가도 함께 필요하다.
+
+실측 확인(2026-08-17, 읽기): `src/lib/api/http.ts:76–86` 의 `CODE_TO_REASON` 에 `CONFLICT` **없음**, `STATUS_TO_REASON`(88–94)에도 `409` **없음**. 즉 현재 프론트 상태로는 409 가 `network` 로 오분류된다. 직전 회차(`INVALID_CREDENTIALS`, §9.8)와 **같은 유형의 리스크**이며 그때는 QA 교차 확인으로 해소됐다. QA 는 이 두 곳을 반드시 확인할 것.
+
+사용자에게 보여야 하는 문구는 계약 §8 이 고정했다 — **"목록이 변경되었습니다. 새로고침 후 다시 시도해 주세요."** 를 표시하고 **목록을 재조회**한다. 낡은 순서로 재시도하게 두면 409 가 반복된다.
+
+### 11.9 롤백
+
+| 상황 | 조치 |
+|---|---|
+| 코드만 되돌림 (컬럼 유지) | 이전 이미지로 `docker compose up -d api`. 구버전 코드는 두 컬럼을 읽지 않으므로 **정상 동작한다.** 단 정렬은 `urgent → published_at` 으로 돌아가고(인덱스는 넓은 정의라 무해), `thumbnailUrl` 이 사라져 프론트 썸네일이 빈다. 지정한 `sort_order` 값은 DB 에 그대로 남아 재배포 시 되살아난다 |
+| **스키마까지 되돌림** | `docker compose --profile tools run --rm migrate npx node-pg-migrate down -m migrations --migration-file-language sql` → 컬럼 2개 DROP + 인덱스 원복. **지정한 순서와 썸네일 키가 영구 소멸한다** (아래 보존 절차) |
+| DB 손상 | ②의 `pre_sortthumb_*.dump` 로 `pg_restore --clean --if-exists` (2.5절) |
+
+**down 은 education 때와 달리 그냥 성공한다** (CHECK 제약 교체가 아니라 컬럼 삭제이므로 기존 행 검증이 없다). 그래서 **사고로 실행되기 쉽다** — 실행 전에 값을 보존할 것:
+
+```bash
+# ① 소멸할 값 백업 (되돌린 뒤 재적용하려면 이 출력이 유일한 근거다)
+docker exec koscomlabor-db psql -U guestbook_app -d guestbook -c \
+  "SELECT id, category, sort_order, thumbnail_key FROM posts
+    WHERE sort_order IS NOT NULL OR thumbnail_key IS NOT NULL ORDER BY category, sort_order;"
+
+# ② DB 전체 백업
+docker exec koscomlabor-db pg_dump -Fc -U guestbook_app guestbook \
+  > /root/backups/pre_sortthumb_rollback_$(date +%Y%m%d_%H%M).dump
+
+# ③ down
+docker compose --profile tools run --rm migrate \
+  npx node-pg-migrate down -m migrations --migration-file-language sql
+```
+
+썸네일 **파일**은 `uploads` 볼륨의 `thumbnails/` 에 남으므로, 재적용 시 `backfill-thumbnails.mjs` 가 네트워크 없이 키를 복구한다. `sort_order` 는 복구 수단이 없으므로 ①의 출력이 유일한 근거다. 기존 게시물 내용·방명록·첨부에는 어떤 영향도 없다.
+
+### 11.10 미결 사항
+
+- **프로덕션 적용은 리더가 수행** (이 작업 범위는 코드·마이그레이션·스크립트·문서까지). 프로덕션에 읽기·쓰기 어떤 접근도 하지 않았다
+- **`⑦-3` 정렬 명시 적용을 빠뜨리면 이번 작업의 목적(노동교육 순서 고정)이 달성되지 않는다.** 마이그레이션·코드만 올라가고 `sort_order` 가 전부 NULL 이면 동작은 이전과 완전히 동일하다
+- **프론트 `CODE_TO_REASON` 미등록** — §11.8. web-developer 작업 전까지 409 가 `network` 로 오분류된다
+- **아웃바운드 도달 미확인** — `i.ytimg.com` 접근 가능 여부는 프로덕션에서 확인되지 않았다 (§11.6, 절차 ⑦-0). 실패해도 게시는 정상이며 썸네일만 빈다
+- **`uploads` 볼륨 백업은 여전히 DB 만 대상**이다 (`deploy/backup.sh` 는 pg_dump 만). 썸네일은 `backfill` 로 언제든 재생성되는 파생 캐시라 백업이 불필요하지만, **첨부 파일은 여전히 백업 대상이 아니다** — 06 §13.3 이 예정했던 uploads tar 백업이 미구현 상태다. 이번 작업 범위 밖이며 별도 과제로 남긴다
+- **`Vj3lQ7Y71PU`(오바마 영상)는 원출처 미표기 재업로드로 예고 없이 삭제될 수 있다** (§10.9 후속 점검 항목). 영상이 삭제되면 이미 캐싱한 썸네일은 **계속 표시된다** — 링크는 죽었는데 썸네일은 살아 있는 상태가 되므로, 링크 정기 점검 시 함께 확인할 것
+- 디자이너 재판정 대기: 썸네일 카드 프레임 일관성(요구사항 문서의 쟁점 ③). 백엔드는 16:9 이미지만 제공하며 표시 규격은 디자이너·web-developer 영역
