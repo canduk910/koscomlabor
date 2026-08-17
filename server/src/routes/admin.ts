@@ -15,6 +15,7 @@ import { LinkFetchError, fetchLinkPreview } from "../lib/linkPreview.js";
 import { validatePostInput } from "../lib/postValidate.js";
 import type { SlidingWindowLimiter } from "../lib/rateLimit.js";
 import type { AttachmentsRepository } from "../repos/attachments.js";
+import type { AdminCredentials, AdminCredentialsRepository } from "../repos/credentials.js";
 import type { PostsRepository } from "../repos/posts.js";
 import type { SessionsRepository } from "../repos/sessions.js";
 import { parseListQuery, postDetailSchema } from "./posts.js";
@@ -22,6 +23,34 @@ import { parseListQuery, postDetailSchema } from "./posts.js";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10MB (§15-5)
 const MAX_FILES_PER_POST = 5;
+/** 비밀번호 길이 규칙 (§12.4) — 하한은 scripts/hash-password.mjs 와 동일 기준 */
+const PASSWORD_MIN_LENGTH = 12;
+const PASSWORD_MAX_LENGTH = 200;
+
+/** GET /admin/me 응답 스키마 — 명세 외 필드 직렬화 차단 (§12.1) */
+const adminMeSchema = {
+  type: "object",
+  properties: {
+    ok: { type: "boolean" },
+    method: { type: "string" },
+    expiresAt: { type: ["string", "null"] },
+    passwordIsInitial: { type: "boolean" },
+  },
+  required: ["ok", "method", "expiresAt", "passwordIsInitial"],
+  additionalProperties: false,
+};
+
+/** POST /admin/password 성공 응답 스키마 (§12.4) */
+const passwordChangeSchema = {
+  type: "object",
+  properties: {
+    ok: { type: "boolean" },
+    changedAt: { type: "string" },
+    sessionsRevoked: { type: "integer" },
+  },
+  required: ["ok", "changedAt", "sessionsRevoked"],
+  additionalProperties: false,
+};
 
 const adminPostSchema = {
   ...(postDetailSchema as { type: string; properties: Record<string, unknown>; required: string[] }),
@@ -44,6 +73,7 @@ export interface AdminRouteDeps {
   posts: PostsRepository;
   attachments: AttachmentsRepository;
   sessions: SessionsRepository;
+  credentials: AdminCredentialsRepository;
   adminLimiter: SlidingWindowLimiter;
   loginLimiter: SlidingWindowLimiter;
   errorSchema: object;
@@ -51,7 +81,17 @@ export interface AdminRouteDeps {
 }
 
 export function registerAdminRoutes(app: FastifyInstance, deps: AdminRouteDeps): void {
-  const { config, posts, attachments, sessions, adminLimiter, loginLimiter, errorSchema, tooManyRequests } = deps;
+  const {
+    config,
+    posts,
+    attachments,
+    sessions,
+    credentials,
+    adminLimiter,
+    loginLimiter,
+    errorSchema,
+    tooManyRequests,
+  } = deps;
 
   const cookieOptions = {
     httpOnly: true,
@@ -79,6 +119,21 @@ export function registerAdminRoutes(app: FastifyInstance, deps: AdminRouteDeps):
     }
   }
 
+  /**
+   * 활성 비밀번호 해시 조회. **DB 행이 권위 값**이고, 행이 없는 예외 상황(마이그레이션 직후
+   * 시드 전 등)에서만 env 시드 해시로 폴백한다 — 행 부재로 관리자가 잠기지 않게 하는 방어선.
+   * 폴백 사실은 경고 로그로 남기되 해시 값은 절대 로깅하지 않는다.
+   */
+  async function resolveCredentials(request: FastifyRequest): Promise<AdminCredentials> {
+    const active = await credentials.getActive();
+    if (active !== null) return active;
+    request.log.warn(
+      { route: "admin-credentials", result: "row-missing-fallback-to-env" },
+      "admin_credentials row missing; using env seed hash",
+    );
+    return { passwordHash: config.adminPasswordHash, updatedAt: null };
+  }
+
   /* ---------- 인증 (§12) ---------- */
 
   app.post("/admin/login", async (request, reply) => {
@@ -92,9 +147,11 @@ export function registerAdminRoutes(app: FastifyInstance, deps: AdminRouteDeps):
       return reply.status(400).send(errorBody("VALIDATION_ERROR", "password 는 필수 문자열입니다."));
     }
 
+    // 활성 해시는 DB 에서 매 요청 조회한다 (런타임 변경 즉시 반영 — §12.3)
+    const active = await resolveCredentials(request);
     let valid = false;
     try {
-      valid = await argon2.verify(config.adminPasswordHash, password);
+      valid = await argon2.verify(active.passwordHash, password);
     } catch {
       valid = false;
     }
@@ -122,16 +179,138 @@ export function registerAdminRoutes(app: FastifyInstance, deps: AdminRouteDeps):
     return reply.clearCookie(SESSION_COOKIE, cookieOptions).status(200).send({ ok: true });
   });
 
-  app.get("/admin/me", { preHandler: requireAdmin }, async (request, reply) => {
-    const token = request.cookies[SESSION_COOKIE];
-    if (typeof token === "string" && token.length > 0) {
-      const session = await sessions.validate(token);
-      if (session !== null) {
-        return reply.status(200).send({ ok: true, method: "session", expiresAt: session.expiresAt.toISOString() });
+  app.get(
+    "/admin/me",
+    {
+      preHandler: requireAdmin,
+      schema: { response: { 200: adminMeSchema, "4xx": errorSchema, "5xx": errorSchema } },
+    },
+    async (request, reply) => {
+      // passwordIsInitial: 시드 비밀번호를 아직 한 번도 바꾸지 않았는가 (admin UI 경고 배너용)
+      const active = await resolveCredentials(request);
+      const passwordIsInitial = active.updatedAt === null;
+
+      const token = request.cookies[SESSION_COOKIE];
+      if (typeof token === "string" && token.length > 0) {
+        const session = await sessions.validate(token);
+        if (session !== null) {
+          return reply.status(200).send({
+            ok: true,
+            method: "session",
+            expiresAt: session.expiresAt.toISOString(),
+            passwordIsInitial,
+          });
+        }
       }
-    }
-    return reply.status(200).send({ ok: true, method: "bearer", expiresAt: null });
-  });
+      return reply
+        .status(200)
+        .send({ ok: true, method: "bearer", expiresAt: null, passwordIsInitial });
+    },
+  );
+
+  /**
+   * POST /admin/password — 비밀번호 변경 (§12.4).
+   * 인증(requireAdmin)만으로는 부족하고 **현재 비밀번호를 본문으로 재확인**한다
+   * (자리를 비운 브라우저·탈취된 세션으로 비밀번호가 바뀌는 것을 막는다).
+   * 검증 순서는 명세 §12.4 표 그대로 — QA 가 이 순서로 교차 검증한다.
+   */
+  app.post(
+    "/admin/password",
+    {
+      preHandler: requireAdmin,
+      schema: { response: { 200: passwordChangeSchema, "4xx": errorSchema, "5xx": errorSchema } },
+    },
+    async (request, reply) => {
+      // #0 rate limit — 로그인과 동일 버킷(분당 5회/시간당 10회)을 공유한다.
+      //    여기서는 검사만 하고, 기록은 #4(현재 비밀번호 불일치)에서만 한다.
+      const decision = loginLimiter.check(request.ip);
+      if (!decision.allowed) return tooManyRequests(reply, decision.retryAfterSeconds);
+
+      const body = request.body as Record<string, unknown> | null;
+      const currentPassword = body?.["currentPassword"];
+      const newPassword = body?.["newPassword"];
+
+      // #1 형식·길이 상한
+      const isValidString = (value: unknown): value is string =>
+        typeof value === "string" && value.length > 0 && value.length <= PASSWORD_MAX_LENGTH;
+      if (!isValidString(currentPassword) || !isValidString(newPassword)) {
+        return reply
+          .status(400)
+          .send(
+            errorBody(
+              "VALIDATION_ERROR",
+              `currentPassword 와 newPassword 는 1자 이상 ${PASSWORD_MAX_LENGTH}자 이하의 문자열이어야 합니다.`,
+            ),
+          );
+      }
+
+      // #2 길이 하한
+      if (newPassword.length < PASSWORD_MIN_LENGTH) {
+        return reply
+          .status(400)
+          .send(errorBody("VALIDATION_ERROR", `새 비밀번호는 ${PASSWORD_MIN_LENGTH}자 이상이어야 합니다.`));
+      }
+
+      // #3 현재 비밀번호와 동일
+      if (newPassword === currentPassword) {
+        return reply
+          .status(400)
+          .send(errorBody("VALIDATION_ERROR", "새 비밀번호가 현재 비밀번호와 같습니다."));
+      }
+
+      // #4 현재 비밀번호 재확인
+      const active = await resolveCredentials(request);
+      let currentValid = false;
+      try {
+        currentValid = await argon2.verify(active.passwordHash, currentPassword);
+      } catch {
+        currentValid = false;
+      }
+      if (!currentValid) {
+        loginLimiter.record(request.ip); // 실패만 대입 카운트에 반영
+        request.log.warn(
+          { route: "admin-password-change", result: "current-password-mismatch" },
+          "admin password change rejected",
+        );
+        // UNAUTHORIZED 가 아니라 INVALID_CREDENTIALS — requireAdmin 의 401(인증 수단 무효)과
+        // 구분해야 프론트가 "로그인 화면 전환" vs "필드 인라인 에러"를 분기할 수 있다 (계약 개정 1)
+        return reply
+          .status(401)
+          .send(errorBody("INVALID_CREDENTIALS", "현재 비밀번호가 일치하지 않습니다."));
+      }
+
+      const newHash = await argon2.hash(newPassword, { type: argon2.argon2id });
+      const changedAt = await credentials.update(newHash);
+
+      // 만료 세션을 먼저 정리해 sessionsRevoked 가 "실제로 살아 있던 다른 세션 수"가 되게 한다
+      await sessions.pruneExpired();
+      const sessionToken = request.cookies[SESSION_COOKIE];
+      let method: "session" | "bearer";
+      let sessionsRevoked: number;
+      if (
+        typeof sessionToken === "string" &&
+        sessionToken.length > 0 &&
+        (await sessions.validate(sessionToken)) !== null
+      ) {
+        // 현재 브라우저 세션은 유지하고 나머지 기기만 로그아웃
+        method = "session";
+        sessionsRevoked = await sessions.destroyOthers(sessionToken);
+      } else {
+        // Bearer(복구 경로) 호출 — 유지할 현재 세션이 없으므로 전 세션 무효화
+        method = "bearer";
+        sessionsRevoked = await sessions.destroyAll();
+      }
+
+      // 평문·해시는 로그에 남기지 않는다
+      request.log.info(
+        { route: "admin-password-change", method, sessionsRevoked },
+        "admin password changed",
+      );
+      return reply
+        .status(200)
+        .send({ ok: true, changedAt: changedAt.toISOString(), sessionsRevoked });
+    },
+  );
 
   /* ---------- 게시물 CRUD (§13.1) ---------- */
 

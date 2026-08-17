@@ -437,3 +437,76 @@ npm run build      → 통과 (/ 정적 프리렌더 ○ Static)
 - verified+urgent 파일 존재 시: 긴급 배너 렌더(`aria-label="긴급 공지"`), 배지·`YYYY.MM.DD` 표기·목록 노출 확인
 - `verified: false` 파일: 목록에서 제외됨 확인 (게이트 동작)
 - 콘텐츠 0건 복원 후: 배너 미렌더·빈 상태 표시 확인
+
+---
+
+## 17. 관리자 비밀번호 변경 — 프론트엔드 (2026-08-17, 리더 지시)
+
+근거: `_workspace/00_input/requirements-password-change.md`, `_workspace/00_input/contract-password-change.md`(확정 계약 + 개정 1), 스펙 `_workspace/02_designer_spec.md` §14.8.
+백엔드(`server/`)는 병렬 구현 — 본 절은 프론트 변경분만 다룬다(`server/`·06·07 문서 무수정).
+
+### 변경 파일
+
+| 파일 | 구분 | 내용 |
+|------|------|------|
+| `src/lib/api/http.ts` | 수정 | `ApiFailureReason` 에 `"invalid-credentials"`, `CODE_TO_REASON` 에 `INVALID_CREDENTIALS` 등록 (계약 개정 1) |
+| `src/lib/api/admin.ts` | 수정 | `AdminMe`·`PasswordChangeResult` 인터페이스, `adminMe()` 반환 타입 변경, `adminChangePassword()` 신설, `PASSWORD_MIN_LENGTH`/`PASSWORD_MAX_LENGTH` 상수 |
+| `src/components/admin/styles.ts` | 수정 | `ADMIN_LABEL_CLASS`·`ADMIN_HINT_CLASS`·`ADMIN_FIELD_ERROR_CLASS` 3건 추가 (§14.8.7 문자열 그대로) |
+| `src/components/admin/PasswordChangeForm.tsx` | **신규** | 인라인 비밀번호 변경 패널 (§14.8.3~§14.8.6) |
+| `src/components/admin/AdminApp.tsx` | 수정 | 초기 비밀번호 경고 배너, 헤더 진입점, 패널 슬롯 공유·상호 배타, 성공/취소/세션만료 처리 |
+| `src/components/admin/PostForm.tsx` | 수정 | 로컬 `LABEL_CLASS` → 공유 `ADMIN_LABEL_CLASS` import (문자열 동일 — 시각 회귀 0) |
+
+신규 색 토큰·`globals.css` 변경 0건. 신규 버튼 상수 0건(배너 CTA·제출 = `ADMIN_PRIMARY_BUTTON_CLASS`, 취소·헤더 진입점 = `ADMIN_SECONDARY_BUTTON_CLASS`).
+
+### 계약 준수 (문자 단위)
+
+- 엔드포인트 `POST /admin/password`, 본문 `{ currentPassword, newPassword }`, 기존 `requestJson`(=`credentials: "include"`) 경유.
+- `adminMe` 하위 호환 방어: `passwordIsInitial` 비boolean → `false`(배너 미표시가 안전한 기본값), `method` 비`session`/`bearer` → `"session"`, `expiresAt` 비문자열 → `null`. **`invalidResponse` 로 올리지 않는다** — 구버전 API 와 공존 가능해야 하고, 여기서 실패하면 세션 확인 전체가 무너진다.
+- `adminChangePassword`: `ok !== true` 또는 `changedAt` 비문자열 → `invalidResponse("비밀번호 변경 응답 형식이 올바르지 않습니다.")`. `sessionsRevoked` 비정수 → `0`.
+- 에러 → UI 매핑(계약 §3 표): `invalid-credentials`=현재 비밀번호 필드 인라인 에러+포커스 / `unauthorized`=세션 만료 → 로그인 화면 / `validation`=서버 message 를 폼 하단에 / `rate-limited`·그 외=지정 문구.
+- 클라 검증 문구는 계약 §2 #2·#3 의 서버 message 와 문자 단위 동일(`새 비밀번호는 12자 이상이어야 합니다.` / `새 비밀번호가 현재 비밀번호와 같습니다.`). 12·200 은 `PASSWORD_MIN_LENGTH`/`PASSWORD_MAX_LENGTH` 상수에서 문자열을 조립하므로 `maxLength`·검증·문구가 항상 같은 값을 가리킨다.
+
+### 스펙 준수 포인트 (§14.8)
+
+- 배너: `<section aria-labelledby>` + `<h2>`, **라이브 리전 미사용**(최초 렌더 포함 → 중복 안내), 닫기 버튼 없음, accent(오렌지) 계열 — 클래스 문자열은 §14.8.2 골격 그대로.
+- 패널: 모달 아님. `PostForm` 과 **같은 슬롯**(`rounded-badge mt-4 border border-border-soft p-4` + `<h3>`)에서 **상호 배타** — `openPasswordPanel()`은 `editing=null`, `openPostForm()`은 패널을 닫는다.
+- 제출 버튼은 `busy` 일 때만 `disabled`. **`opacity` 처리 없음** — 흰 텍스트 on `#093389` 대비가 무너지기 때문. 처리 중 표현은 라벨(`변경 중…`) + `<form aria-busy>`. `disabled:cursor-not-allowed`만 추가(§14.8.6 허용 범위).
+- 에러 표시 시점: 타이핑 중 신규 에러 없음 → 표시 중인 에러만 갱신·해제. blur 는 값이 비어있지 않을 때만. "현재 비밀번호 빈 값"은 submit 전용. "새 비밀번호=현재 비밀번호"는 두 필드가 모두 채워진 상태에서 현재/새 어느 쪽 blur 에도 새 비밀번호 필드에 표시.
+- submit 검증 순서 = 계약 §2 순서(현재 → 12자 → 동일 → 불일치), 위반 시 서버 요청 없이 첫 위반 필드로 포커스.
+- `aria-describedby` 는 존재하는 id 만 공백 결합(`[hintId, errorId].filter(...)`), 에러가 떠도 힌트는 유지.
+- 성공: 패널 닫기(언마운트 → 평문 폐기) → 배너 제거 → **기존 상위 `role="status"` 알림 줄**에 문구(토스트 신설 없음) → 포커스는 **헤더 "비밀번호 변경" 버튼**으로 고정 복귀. 문구는 `sessionsRevoked > 0` 2갈래.
+- 헤더: `새 게시물` → `비밀번호 변경` → `로그아웃` 순, 컨테이너 `flex gap-2` → `flex flex-wrap gap-2`(360px 3버튼 줄바꿈).
+
+### 기술적 결정
+
+1. **`passwordIsInitial` 재조회 트리거(`meToken`)** — 기존 `adminMe()` 효과는 마운트 1회만 돌았다. 최초 진입에 세션이 없으면 `phase="login"` 이 되고, 로그인 성공 후에는 `/admin/me` 를 다시 부르지 않아 **배너가 가장 필요한 신규 로그인 직후에 배너를 못 띄운다.** 그래서 `onLoggedIn` 에서 `meToken` 을 올려 같은 효과를 재실행한다. 단 **재실행분은 `phase` 를 바꾸지 않는다**(`if (meToken === 0)`) — 로그인 직후의 일시적 통신 실패로 로그인 화면으로 되돌리면 회귀다. 세션이 실제로 무효라면 이어지는 목록 조회가 기존 로직대로 로그인 화면으로 전환한다.
+2. **성공 후 `/admin/me` 재호출 대신 로컬 `setPasswordIsInitial(false)`** — 계약 §1 상 한 번 변경하면 영구 `false` 이므로 서버 왕복이 새 정보를 주지 않는다. 배너가 즉시 사라지는 것이 성공의 2차 확인 신호이기도 하다(§14.8.6).
+3. **`PasswordField` 내부 서브컴포넌트** — 라벨·힌트·에러·`aria-invalid`·`aria-describedby` 연결을 한 곳에서 보장한다. `ref` 는 `inputRef` **일반 prop** 으로 전달해 `forwardRef` 없이 타입 안전을 유지했다.
+4. **평문 취급** — 세 값 전부 `PasswordChangeForm` 로컬 state 에만 존재한다. 상위(`AdminApp`)로 올리지 않고, 로그·URL·스토리지 어디에도 쓰지 않는다. 패널을 닫으면 언마운트로 폐기된다.
+5. **`LoginForm` 라벨도 `ADMIN_LABEL_CLASS` 로 교체**(요청 범위 외 1줄) — 인라인 문자열이 새 공유 상수와 **완전히 동일**(`mb-2 block text-body font-semibold text-ink`)해 렌더 결과가 바뀌지 않고, 같은 디렉터리에 중복 리터럴을 남기지 않기 위함. 시각 회귀 0.
+6. `any`·`as` 캐스팅·`@ts-ignore` 0건. `sessionsRevoked` 는 `typeof === "number" && Number.isInteger` 로 좁혀 캐스팅 없이 처리.
+
+### 스펙과의 차이 1건 (리더·디자이너 확인 요망 — 계약 우선 적용)
+
+- 스펙 §14.8.5 "서버 에러 매핑" 표는 `unauthorized` 를 **현재 비밀번호 필드 에러**로 규정하고, 같은 절 말미에 "세션 만료와 구분되지 않는다"는 경계면 주의를 달고 있다. 이는 **계약 개정 1 이전 상태**의 기술이다. 개정 1이 `INVALID_CREDENTIALS` 를 분리했으므로 구현은 **계약 §3 표**를 따랐다: `invalid-credentials` → 필드 에러+포커스, `unauthorized` → 로그인 화면 전환. 리더 지시서와도 일치한다. 스펙 §14.8.5 표 본문은 개정 반영이 필요하다(문서 수정 권한 밖이라 미수정).
+  - **후속 (리더, 2026-08-17):** 스펙 §14.8.5 를 리더가 갱신 완료했다 — 에러 매핑 표를
+    `invalid-credentials`(필드 에러+포커스) / `unauthorized`(로그인 화면 전환) 2행으로 분리하고,
+    말미의 "구분 불가" 경계면 주의는 "개정 1 로 해소됨" 기록으로 대체했다. 이 항목은 종결.
+
+### 자가 검증 (2026-08-17)
+
+```
+npx next typegen                    → 통과
+npx tsc --noEmit                    → 통과 (오류 0)
+npm run lint                        → 통과 (오류·경고 0)
+NEXT_PUBLIC_API_BASE_URL=<더미> npm run build → 통과 (/admin ○ 정적, 라우트 구성 변화 없음)
+```
+
+- 빌드 CSS 실측: `.border-accent-strong` / `.bg-accent-tint` / `.text-accent-strong` / `.md:px-5` / `.md:shrink-0` / `.disabled:cursor-not-allowed:disabled` 전부 생성 확인(배너에서 처음 쓰는 `border-accent-strong` 포함).
+- 검증 함수 로직 표 대조(6케이스: 빈 폼 / 12자 미만 / 현재와 동일 / 확인 불일치 / 현재만 빈값 / 정상) — submit 에러 집합·첫 포커스 필드, live(blur·타이핑) 에러 집합이 §14.8.5 규정과 일치.
+
+### 미검증 (QA 대상)
+
+- **서버 실통신 0건** — 백엔드가 병렬 구현 중이라 `POST /admin/password` 라운드트립을 못 돌렸다. `invalid-credentials`/`unauthorized`/`validation`/`rate-limited` 4분기, `sessionsRevoked` 0 vs n 문구, 배너 소멸은 통합 QA에서 실응답으로 확인 필요.
+- 브라우저 실조작: 포커스 이동(첫 오류 필드·성공/취소 후 헤더 버튼 복귀), 스크린리더의 `role="alert"` 발화, 비밀번호 관리자 자동완성(`current-password`/`new-password`) 동작.
+- 360px 실측: 배너 2줄 제목·`w-full` CTA, 헤더 3버튼 줄바꿈.

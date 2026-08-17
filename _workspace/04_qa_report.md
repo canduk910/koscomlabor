@@ -1,3 +1,161 @@
+# QA 리포트: 관리자 비밀번호 변경 (11회차)
+
+> **배치 위치 안내**: 리더 지시는 "말미에 이어서"였으나, 이 파일은 **최신 회차가 최상단**인 내림차순(10→1) 관례로 관리되고 있다. 말미에 넣으면 1회차 아래에 묻히므로 관례를 따라 최상단에 추가했다(기존 내용 삭제·수정 0건). 위치 이동이 필요하면 알려주면 옮긴다.
+
+- 작성: qa-tester | 작성일: 2026-08-17
+- 검증 기준: **`_workspace/00_input/contract-password-change.md`(확정 계약 + 개정 1) = 판정 기준**, 요구사항 문서, 02 스펙 §14.8(§14.8.5 개정 반영본), 06 §10.4/§12.1-a/§12.3/§12.4, 07 §9, 03 §17
+- 검증 대상(git 미커밋): 신규 4 (`server/migrations/1755300000003_create-admin-credentials.sql`, `server/src/repos/credentials.ts`, `server/scripts/set-password.mjs`, `src/components/admin/PasswordChangeForm.tsx`) + 수정 10
+- **환경 격리**: 전용 QA DB `guestbook_qa` 신규 생성 + 스크래치패드 전용 env(`DATABASE_URL`=guestbook_qa, `COOKIE_SECURE=false`, `CORS_ORIGINS`에 localhost:3000, `ADMIN_PASSWORD_HASH`=QA 전용 해시). **`server/.env` 무수정, 개발 DB `guestbook` 무접촉, 프로덕션(101.79.31.30) 접속 0건**
+- 검증 방법: ① 계약↔서버↔프론트 **필드 단위 3자 대조표** ② **curl 실왕복 45케이스**(계약 §2 표 순서대로) ③ **실브라우저 실조작 107 어서션**(headless Chrome + CDP 자체 드라이버 — `claude-in-chrome` MCP는 localhost 도달 불가로 대체, 아래 비고 1) ④ 대비 스크립트 재현 ⑤ 로그·스토리지 시크릿 grep ⑥ 빌드 6종
+- 정리: `guestbook_qa` drop, API·dev·Chrome 프로세스 3종 종료(잔여 0), `server/.env` md5 불변 확인, 개발 DB 행수 기준선과 동일
+
+## 11회차 요약: 통과 27 | 실패 0 | 권고 3 | 미검증 4
+
+**최우선 리스크(서버가 `UNAUTHORIZED`를 내면 관리자가 로그아웃됨)는 실응답·실브라우저 양쪽에서 해소 확인.** 백엔드·프론트가 서로의 응답을 처음 받아본 왕복에서 경계면 불일치 0건.
+
+### A. 경계면 3자 교차 대조 (계약 ↔ `routes/admin.ts` 실응답 ↔ `lib/api/admin.ts`)
+
+**`GET /admin/me`** — 4필드 전부 일치. `additionalProperties:false` 스키마가 필드를 떨어뜨리지 않음을 **실응답으로 확인**.
+
+| 필드 | 계약 §1 | 서버 (`admin.ts:31-41` 스키마 / `:254-284` 핸들러) | 프론트 (`admin.ts:768-781`) | 실응답 |
+|---|---|---|---|---|
+| `ok` | `true` | `boolean` required | 미검사(무해) | `true` |
+| `method` | `"session"\|"bearer"` | `string` required, 2분기 | `=== "bearer" ? "bearer" : "session"` | 세션 `"session"` / Bearer `"bearer"` 둘 다 실측 |
+| `expiresAt` | `string\|null` | `["string","null"]` required | 문자열 아니면 `null` | 세션 ISO / Bearer `null` |
+| `passwordIsInitial` | `boolean` (신규) | `boolean` required, `active.updatedAt === null` | `=== true` (하위호환 방어) | 시드 후 `true` → 변경 후 `false` |
+
+실응답 원문: `{"ok":true,"method":"session","expiresAt":"2026-08-17T12:42:10.094Z","passwordIsInitial":true}` / `{"ok":true,"method":"bearer","expiresAt":null,"passwordIsInitial":false}`
+
+**`POST /admin/password`** — 요청 필드명(`currentPassword`/`newPassword`) 서버·프론트 동일. 성공 3필드 일치(`sessionsRevoked` 스키마 `integer` ↔ 프론트 `Number.isInteger` 아니면 0). 실패 5분기 전부 계약과 **문자 단위 일치**(아래 B).
+
+**`http.ts` `CODE_TO_REASON`** — `INVALID_CREDENTIALS: "invalid-credentials"` 등록 확인(`src/lib/api/http.ts:82`). 미등록 시 `?? "network"`로 오분류되는 경로였으나 **정상 등록됨**. `ApiFailureReason`에도 추가(`:16`). 기존 reason 값·기존 엔드포인트 매핑 불변.
+
+**타입 우회**: 이번 변경분(`src/components/admin`, `src/lib/api`, `server/src`)에 `as any`/`@ts-ignore`/`@ts-expect-error` **0건**. 유일한 `as unknown`은 `admin.ts:112`(기존 `requestJson` 반환 widening — 안전한 확대).
+
+### B. API 실측 (curl) — 계약 §2 표 순서
+
+| # | 케이스 | 실응답 | 판정 |
+|---|---|---|---|
+| 0 | rate limit 초과 | `429` `{"error":{"code":"RATE_LIMITED","message":"요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요."}}` + `Retry-After: 6` | PASS |
+| 0-b | 429 상태에서 **정상 요청도 차단**(진입 시 `check`) | `429` 동일 | PASS |
+| 1a | `newPassword: ""` | `400 VALIDATION_ERROR` `currentPassword 와 newPassword 는 1자 이상 200자 이하의 문자열이어야 합니다.` | PASS |
+| 1b | `currentPassword: 123`(비문자열) | 동일 | PASS |
+| 1c | 필드 누락 `{}` | 동일 | PASS |
+| 1d | `newPassword` 201자 | 동일 | PASS |
+| 2 | `newPassword` 11자 | `400 VALIDATION_ERROR` `새 비밀번호는 12자 이상이어야 합니다.` | PASS |
+| 2-순서 | **틀린 current + 11자 new** | `400` 12자 메시지 (401 아님 — #2가 #4보다 먼저) | PASS |
+| 3 | `new === current` | `400 VALIDATION_ERROR` `새 비밀번호가 현재 비밀번호와 같습니다.` | PASS |
+| 3-순서 | **틀린 current이면서 new===current** | `400` 동일 메시지 (#3이 #4보다 먼저) | PASS |
+| 4 | 현재 비밀번호 불일치 | **`401` `{"error":{"code":"INVALID_CREDENTIALS","message":"현재 비밀번호가 일치하지 않습니다."}}`** | **PASS (최우선)** |
+| — | **인증 실패와의 구분**: 쿠키 없음 / 위조 쿠키 | 둘 다 `401 UNAUTHORIZED` `관리자 인증에 실패했습니다.` — `INVALID_CREDENTIALS` **아님** | **PASS (최우선)** |
+| 200 | 정상 변경 (세션 A로) | `{"ok":true,"changedAt":"2026-08-17T00:43:54.931Z","sessionsRevoked":2}` | PASS |
+
+4개 message 전부 계약 §2 표와 **파이썬 문자열 비교로 문자 단위 일치** 확인.
+
+| # | 부수 검증 | 실측 | 판정 |
+|---|---|---|---|
+| 5 | 변경 후 `GET /admin/me` | `passwordIsInitial:false` | PASS |
+| 6 | 구 비밀번호 로그인 / 신 비밀번호 로그인 | `401 UNAUTHORIZED` / `200` (**재기동 없이 즉시 반영**) | PASS |
+| 7 | **세션 무효화** A·B·C 중 A로 변경 | A `200` 유지, B·C `401`, `sessionsRevoked:2` 정확 | PASS |
+| 8 | **만료 세션 부풀림 방지** 변경 직전 만료행 2건 주입 | `sessionsRevoked:2`(살아있던 B·C만) — 만료 2건은 `pruneExpired`로 선정리, 변경 후 `total=1` | PASS (07 §9.3-4 정교화 실동작) |
+| 9 | **Bearer 경로** (살아있는 세션 2개) | `200 sessionsRevoked:2` → `admin_sessions` 0건, 두 쿠키 모두 `401` | PASS |
+| 10 | Bearer + 현재 비밀번호 불일치 | `401 INVALID_CREDENTIALS` | PASS |
+| 11 | `set-password.mjs` 복구 | `changedAt=… sessionsRevoked=1`, 전 세션 삭제, **재기동 없이** 새 비밀번호 로그인 `200`. 11자 입력 거부(exit 1). 평문·해시 미출력. **게시물·방명록 행수 불변** | PASS |
+| 12 | 마이그레이션 | `1755300000003` 적용 후 컬럼·`CHECK (id = 1)`·PK가 계약 §4와 동일 | PASS |
+| 13 | 부팅 시드 | 기동 시 `id=1`, `updated_at NULL` 1행 생성 | PASS |
+| 14 | CORS preflight `OPTIONS /admin/password` | 허용 Origin: `allow-origin: http://localhost:3000` + `allow-credentials: true` + `allow-headers: Content-Type, Accept`. 비허용 Origin(`https://evil.example`)은 ACAO 미반환 | PASS |
+| 15 | 비정상 본문 4종(빈 본문/text-plain/깨진 JSON/배열) | 전부 `400 VALIDATION_ERROR` — 500 누출 없음 | PASS |
+| 16 | **회귀** | 방명록 POST 201·GET 200 / 로그인 200 / admin 게시물 생성 201·목록 200·PATCH 200·DELETE 200 / 공개 `GET /posts?category=notice` 200 / 로그아웃 200 + 이후 `401` — 전부 이전과 동일 | PASS |
+
+### C. UI 실측 (실브라우저 조작 — headless Chrome + CDP, 107 어서션 전부 통과)
+
+| # | 항목 | 실측 결과 | 판정 |
+|---|---|---|---|
+| 17 | **경고 배너 노출→소멸** | `passwordIsInitial:true` 상태에서 ready 뷰 **첫 자식**으로 `<section aria-labelledby="initial-password-title">` 렌더, 변경 성공 **즉시** DOM에서 제거(`/admin/me` 재호출 없음) | PASS |
+| 18 | 배너 CTA / 헤더 버튼 동일 패널 | 둘 다 동일 패널 오픈, 열릴 때 `activeElement === #admin-current-password` | PASS |
+| 19 | **PostForm과 상호 배타** | 비번 패널 열림→`새 게시물` 클릭 시 비번 패널 닫힘 / 반대도 성립. **`<h3>` 항상 정확히 1개**(`["비밀번호 변경"]` ↔ `["새 게시물 등록"]`) | PASS |
+| 20 | **현재 비밀번호 오입력** (최대 리스크) | `stillOnAdminPanel:true, loginFormShown:false` — **로그아웃 안 됨**. 현재 비밀번호 필드 아래 `현재 비밀번호가 일치하지 않습니다.`(서버 message 그대로) + `aria-invalid="true"` + `activeElement`가 해당 필드로 이동 | **PASS (최우선)** |
+| 21 | 세션 만료(대조군) | 패널 열어둔 채 외부에서 세션 행 삭제 → 제출 → `UNAUTHORIZED` → **로그인 화면 전환** + 패널 닫힘(평문 폐기). 20번과 정반대로 정확히 분기 | **PASS (최우선)** |
+| 22 | 성공 문구 2갈래 | `sessionsRevoked=0`: `비밀번호를 변경했습니다. 이 브라우저의 로그인은 유지됩니다.` / `=2`: `비밀번호를 변경했습니다. 다른 기기의 로그인 2건이 해제되었습니다.` — 기존 상위 `<p role="status">` 슬롯 사용(토스트 신설 0) | PASS |
+| 23 | 취소·성공 후 포커스 복귀 | 둘 다 `document.activeElement === 헤더 "비밀번호 변경" 버튼`(배너 CTA 아님 — 객체 동일성으로 확인) | PASS |
+| 24 | 제출 버튼 비활성 조건 | 빈 폼에서 `disabled:false` — 눌러서 검증 → `현재 비밀번호를 입력해 주세요.` + 첫 오류 필드 포커스, 서버 요청 없음. busy일 때만 `disabled:true` + 라벨 `변경 중…` + `aria-busy="true"`, **`opacity:1` 유지**(대비 무손실), 입력 필드는 `disabled:false`(포커스 유실 방지), `cursor:not-allowed` | PASS |
+| 25 | 서버 에러 4분기 UI 매핑 | `validation`(201자 주입) → 폼 하단 `<p role="alert">`에 서버 message 그대로 / `rate-limited` → `시도 횟수를 초과했습니다. 잠시 후 다시 시도해 주세요.` / `network`(fetch 차단) → `서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.` / `invalid-credentials` → 필드 에러(#20). **네 경우 모두 로그인 화면으로 튕기지 않음** | PASS |
+| 26 | 하위호환 방어 | `/admin/me` 응답에서 `passwordIsInitial`를 가로채 제거(구버전 API 모사) → `invalidResponse`로 죽지 않고 ready 진입, **배너 미표시**(안전한 기본값), 헤더 진입점은 유지 | PASS |
+| 27 | PostForm 회귀 | `LABEL_CLASS` → `ADMIN_LABEL_CLASS` 교체 후 라벨 7개 전부 `#1a1a1a / 18px / 600 / block` — 시각 회귀 0 | PASS |
+
+### D. 접근성
+
+| 항목 | 실측 | 판정 |
+|---|---|---|
+| 헤딩 순서 | 배너 있음+패널 닫힘: `h1 관리자 → h2 주의 — 초기 비밀번호를 사용 중입니다 → h2 게시물 관리`. 패널 열림: 뒤에 `h3 비밀번호 변경`. 변경 후: `h1 → h2 게시물 관리`. **건너뜀·중복 0** | PASS |
+| 배너 라이브 리전 **미부착**(스펙상 의도) | `role=null, aria-live=null`, 하위 `[role=status\|alert\|aria-live]` **0개** | PASS |
+| 라벨·autoComplete·maxLength | 3필드 전부 `label[for]` 연결(`현재 비밀번호 (필수)`/`새 비밀번호 (필수)`/`새 비밀번호 확인 (필수)` — "(필수)" 텍스트 표기), `type=password`, `current-password`/`new-password`/`new-password`, `maxLength=200` | PASS |
+| `aria-invalid` / `aria-describedby` | 에러 없을 때 `aria-invalid` 미설정 → 에러 시 `"true"`. `aria-describedby`가 참조하는 **모든 id가 실제 DOM에 존재**(`getElementById` 전수 확인). 확인 필드는 힌트 없으므로 속성 자체 미출력(빈 문자열·유령 id 없음) | PASS |
+| `role="alert"` 배치 | 필드 에러 3개 각 필드 아래 조건부 렌더(나타날 때 발화), 폼 하단 에러는 form 직계 `<p role="alert">` | PASS |
+| 힌트 문구 | 스펙 §14.8.4와 문자 단위 일치(`본인 확인을 위해 현재 비밀번호를 다시 입력합니다.` / `12자 이상 200자 이하, 현재 비밀번호와 다르게 입력해 주세요.`) | PASS |
+| **색 대비 재현** (`check-contrast.mjs`) | **#27 신규 `#093389` on `#fdf0e7` = 10.18** ✅ / 15.58 / 7.84 / 8.77 / 11.37 / 17.40 / 7.56 / 8.46 / 4.83 / 11.37 — §14.8.7 표 10개 값 **전부 일치**. 금지 조합도 재현(`#4b5563` on tint 6.76 AAA미달, `#ec6d1e` on tint 2.78 UI불가) | PASS |
+| **구현 실측 색 ↔ 대비표** | 브라우저 `getComputedStyle` 실측: 배너 배경 `#fdf0e7`, 좌측바 `#7a3806` 4px, CTA `#093389`/`#ffffff`, 제목 `#7a3806` 18px/700, 본문 **`#1a1a1a`**(금지된 `text-ink-muted` 아님), 아이콘 `#7a3806` 24px `aria-hidden="true"`, 힌트 `#4b5563`, 에러 `#9c0d14`, 입력 보더 `#6b7280`/48px/radius 12px, 포커스 링 3px `#093389` — **스펙 값과 전부 일치, 임의 색 0건** | PASS |
+| 키보드 전용 전 플로우 | 실 `Tab`/`Enter` 키 이벤트: Tab만으로 헤더 버튼 도달 → **Enter로 패널 열림 + 첫 필드 자동 포커스** → Tab 3회로 3필드 → 제출 → 취소, Shift+Tab 역방향 정상, **Enter로 제출 성공** | PASS |
+| 포커스 링·터치 대상 | 헤더 버튼 `outline: 3px solid #093389`, `min-height:44px`(실측 44px). 입력 48px, CTA 44px, 제출·취소 44px | PASS |
+| **360px 뷰포트** | `scrollWidth 360 = clientWidth 360` — **가로 스크롤 0**. 헤더 3버튼 **2줄 wrap**(새 게시물+비밀번호 변경 / 로그아웃). 배너 328px, **CTA `w-full` 292px×44px 세로 스택**, 제목 2줄·말줄임 없음(`text-overflow:clip`), 폼 우측 327px < 360px | PASS |
+| ≥768px 배너 | `flex-direction:row` 단일 행, CTA 146px·1줄(라벨 줄바꿈 없음) | PASS |
+
+### E. 보안·개인정보
+
+| 항목 | 실측 | 판정 |
+|---|---|---|
+| 서버 로그 시크릿 | 전체 로그(144줄) grep: 평문 6종·`$argon2`/`argon2id`·`token_hash`/`admin_session=`·`currentPassword`/`newPassword` **전부 0건**. 기록된 라인은 `{"route":"admin-password-change","method":"session","sessionsRevoked":2}` / `{"result":"current-password-mismatch"}`뿐 | PASS |
+| 응답 본문 해시 누출 | `GET /admin/me`·`POST /admin/password` 성공/실패 전 응답에 해시 문자열 0건 (직렬화 스키마가 4/3필드로 고정) | PASS |
+| 프론트 평문 잔류 | 브라우저 실측: `localStorage` 0키, `sessionStorage` 0키, URL에 평문 없음, **직렬화 HTML(`outerHTML`)에도 평문 없음**(React 제어 input이 `value` 속성을 렌더하지 않음). 평문은 `PasswordChangeForm` 로컬 state에만 존재하고 언마운트로 폐기 | PASS |
+| WHERE 없는 DELETE 전수 | `server/` 전체 grep: 2곳뿐 — `repos/sessions.ts:64`(`destroyAll`), `scripts/set-password.mjs:55`. **둘 다 `admin_sessions` 한정**. 게시물·방명록 테이블 대상 0건. 나머지 DELETE 3개는 전부 WHERE 보유. `TRUNCATE` 0건, `DROP TABLE`은 마이그레이션 Down뿐 | PASS |
+| 현재 비밀번호 재확인 강제 | 세션만으로는 변경 불가 — #4 검증이 항상 수행됨(실측) | PASS |
+| rate limit 정책 | `check`만 진입 시 수행, `record`는 **#4 실패에서만**(성공 변경 5회 연속 실행해도 카운트 안 됨 — 실측) | PASS |
+
+### F. 빌드·정적 검사
+
+| 명령 | 결과 |
+|---|---|
+| `npx next typegen` | 통과 |
+| `npx tsc --noEmit` | 통과 (오류 0) |
+| `npm run lint` | 통과 (오류·경고 0) |
+| `npm run build` | 통과 (`/admin` ○ Static, 라우트 구성 변화 없음) |
+| `cd server && npm run typecheck` | 통과 (strict) |
+| `cd server && npm run build` | 통과 |
+
+### 회귀 (이전 회차 실패 항목)
+
+| 회차 | 항목 | 현재 상태 |
+|---|---|---|
+| 7회차 실패 #1 | `GmarketSans*.woff2`가 실제로는 OTF(`OTTO`) | **해소** — 두 파일 모두 시그니처 `774f4632`(`wOF2`) 확인 |
+| 10회차 | 실패 0 | 해당 없음 |
+
+### 권고 (실패 아님 — 리더 판단 사항)
+
+| # | 분류 | 위치 | 내용 | 제안 |
+|---|---|---|---|---|
+| R1 | 예외 경로 견고성 | `server/src/repos/credentials.ts:59-73` (`update`) ↔ `server/src/routes/admin.ts:127-134` (`resolveCredentials`) | **폴백이 절반만 구현됨.** `resolveCredentials`는 행 부재 시 env로 폴백해 검증을 통과시키지만, 이어지는 `update()`는 `UPDATE … WHERE id = 1`이라 0행 → throw → **`500 INTERNAL_ERROR`**. 실측: 행 삭제 후 `POST /admin/password` → `500`. 프론트는 `INTERNAL_ERROR`가 `CODE_TO_REASON` 미등록이라 `network`로 낙하 → **"서버에 연결하지 못했습니다."**(원인과 무관한 문구). 트리거는 07 §9.7이 안내하는 "최후의 수단: 행 DELETE" 직후 재기동 전 구간뿐이라 심각도 낮음 | `credentials.update`를 `set-password.mjs:44-49`와 동일한 UPSERT(`INSERT … ON CONFLICT (id) DO UPDATE SET password_hash=…, updated_at=now() RETURNING updated_at`)로 바꾸면 행 부재 경로가 자가 치유되고 폴백 설계가 일관해진다 (1개 쿼리 교체) |
+| R2 | 계약 문언 | `_workspace/00_input/contract-password-change.md:75-76` ↔ `server/src/routes/admin.ts:362-377` | 계약은 "Bearer 로 호출한 경우 모든 세션이 무효화"라고 쓰였으나, 구현 분기 기준은 "**유효한 세션 쿠키를 들고 왔는가**"다. 실측: Bearer + 유효 쿠키 동시 전송 시 `method:"session"`, `sessionsRevoked:1`로 그 쿠키 세션을 **유지**한다. 계약의 상위 원칙("현재 요청의 세션은 유지된다")에는 부합하며 브라우저·curl 실사용에서 겹칠 일이 없으므로 결함으로 보지 않음 | 계약 §2 문구를 "요청에 유효한 세션 쿠키가 없으면(=순수 Bearer 호출) 전 세션 무효화"로 정밀화하면 문언·구현이 완전 일치 |
+| R3 | 문서 정합 | `_workspace/03_developer_impl.md` §17 "스펙과의 차이 1건" | 개발자가 "스펙 §14.8.5 표가 개정 1 이전 상태라 수정 필요"로 기록했으나, **리더가 이미 §14.8.5를 개정 반영본으로 갱신**했다(현재 스펙에 `invalid-credentials`→필드 에러 / `unauthorized`→로그인 화면 표 + "✅ 경계면 해소" 문단 존재). 기록이 역으로 낡음 | 03 §17의 해당 절을 "해소됨"으로 갱신 (코드 영향 0) |
+| R4 | 운영 유의 (정보) | `server/src/app.ts:141`, `routes/admin.ts:299-302` | loginLimiter 공유는 계약 §2 규정대로지만, `/admin/login`은 **성공 로그인도 `consume`** 한다. 즉 "로그인 1회 + 현재 비밀번호 4회 오타"면 5회 소진으로 429. 또한 이 버킷은 **복구용 Bearer 경로도 함께 막는다**(실측: 로그인 4회 후 Bearer 변경 시도 → 429). 계약 준수이므로 실패 아님 | 운영 문서에 "잠금 시 최대 1시간 대기 또는 API 재기동(인메모리 리미터 초기화)" 한 줄 추가 권장 |
+
+### 미검증 항목
+
+| # | 항목 | 사유 |
+|---|---|---|
+| 1 | `claude-in-chrome` MCP(사용자 실제 Chrome)로의 조작 | **권한/도달 불가** — 확장이 `localhost:3000`·`127.0.0.1:3000`·LAN IP 모두 "error page"로 반려(외부 사이트 `example.com`은 정상 로드되어 확장 자체는 동작). dev 서버는 curl 200 응답 확인됨. 대체 수단으로 **격리 프로필의 headless Chrome을 CDP로 직접 구동**해 실조작 검증(위 C·D)을 수행했다. 실사용자 Chrome 프로필·확장 환경에서의 동작은 미검증 |
+| 2 | 스크린리더 실낭독 (`role="alert"` 발화 타이밍, 배너 랜드마크 안내, `aria-describedby` 낭독 순서) | 보조기기 실행 환경 없음. DOM 속성 정확성까지만 검증 |
+| 3 | 비밀번호 관리자(1Password·Chrome 저장) 자동완성·저장 프롬프트 실동작 | headless 환경에 비밀번호 관리자 부재. `autoComplete` 값 정확성까지만 검증 |
+| 4 | 프로덕션 배포 검증 (07 §9.5 절차, 마이그레이션→API 재기동 순서, 프로덕션 스모크) | 지시에 따라 프로덕션 접속 0건. 배포는 리더 수행 범위 |
+
+### 비고
+
+1. **브라우저 도구 대체 경위**: `claude-in-chrome` MCP는 외부 사이트는 열지만 로컬 개발 서버(localhost/127.0.0.1/LAN IP)에 대해 일관되게 "Frame with ID 0 is showing error page"를 반환했고, dev 서버 로그에도 해당 요청이 도달하지 않았다(확장 측 사이트 권한 문제로 추정). 추측으로 넘기지 않기 위해, 별도 `--user-data-dir`의 headless Chrome을 띄우고 Node 내장 WebSocket만으로 CDP 드라이버를 작성해 **실제 마우스·키보드 이벤트와 `getComputedStyle`·`document.activeElement` 실측**으로 검증했다. 설치한 패키지 0건, 사용자 Chrome 프로필 무접촉.
+2. **rate limit 리셋 방법**: 인메모리 리미터라 테스트 그룹 사이에 API 프로세스를 재기동해 초기화했다(DB 상태 유지). 리미터 자체의 동작은 재기동 전에 실측 완료(#0).
+3. `server/dist`·`.next`는 검증 과정에서 재빌드되었다(둘 다 gitignore 대상, 현재 소스와 일치). 추적 파일 변경 0건 — `git status`가 개발자 변경분 21건 그대로.
+4. 06 §18의 "429 + `Retry-After: 60`"은 예시값이며, 실측값은 슬라이딩 윈도 잔여시간에 따라 달라진다(이번 실측 6초). 불일치 아님.
+
+---
+
 # QA 리포트: 공지·소식 DB 전환 + admin 풀스택 (10회차)
 
 - 작성: qa-tester | 작성일: 2026-08-17

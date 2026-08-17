@@ -54,6 +54,26 @@ export interface AdminSession {
   expiresAt?: string;
 }
 
+/** GET /admin/me 응답 (비밀번호 변경 계약 §1·§3) */
+export interface AdminMe {
+  method: "session" | "bearer";
+  expiresAt: string | null;
+  /** admin_credentials.updated_at IS NULL — 배포 시드 비밀번호를 아직 한 번도 바꾸지 않음 */
+  passwordIsInitial: boolean;
+}
+
+/** POST /admin/password 성공 응답 (계약 §2·§3) */
+export interface PasswordChangeResult {
+  changedAt: string;
+  /** 이번 변경으로 무효화된 "다른" 세션 수 (0 이상) */
+  sessionsRevoked: number;
+}
+
+/** 새 비밀번호 하한 (계약 §2 검증 #2 — 서버와 동일 수치, 클라이언트 선검증용) */
+export const PASSWORD_MIN_LENGTH = 12;
+/** 비밀번호 상한 (계약 §2 검증 #1 — maxLength 로 사전 차단) */
+export const PASSWORD_MAX_LENGTH = 200;
+
 /** 백엔드 한도와 동일 수치 (06 명세 §13.3 — 클라이언트 선검증용) */
 export const ATTACHMENT_MAX_FILES = 5;
 export const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
@@ -121,11 +141,64 @@ export async function adminLogout(): Promise<ApiResult<null>> {
   return { ok: true, data: null };
 }
 
-/** 세션 유효성 확인 — admin UI 초기 로드용 (§12.1 GET /admin/me) */
-export async function adminMe(): Promise<ApiResult<null>> {
+/**
+ * 세션 유효성 + 초기 비밀번호 여부 (§12.1 GET /admin/me — 비밀번호 변경 계약 §1·§3).
+ * 하위 호환 방어: 구버전 API(필드 없음)와 신버전 프론트가 잠시 공존할 수 있으므로
+ * 필드 누락·타입 불일치를 invalidResponse 로 올리지 않고 안전한 기본값으로 낮춘다.
+ * - passwordIsInitial 비boolean → false (경고 배너 미표시가 안전한 기본값)
+ * - method 비"session"/"bearer" → "session", expiresAt 비문자열 → null
+ */
+export async function adminMe(): Promise<ApiResult<AdminMe>> {
   const result = await requestJson("/admin/me", { method: "GET" }, "세션을 확인하지 못했습니다.");
   if (!result.ok) return result;
-  return { ok: true, data: null };
+  const payload = isRecord(result.data) ? result.data : {};
+  return {
+    ok: true,
+    data: {
+      method: payload.method === "bearer" ? "bearer" : "session",
+      expiresAt: typeof payload.expiresAt === "string" ? payload.expiresAt : null,
+      passwordIsInitial: payload.passwordIsInitial === true,
+    },
+  };
+}
+
+/**
+ * 비밀번호 변경 (계약 §2 POST /admin/password).
+ * 인증(세션 쿠키)만으로는 부족하고 현재 비밀번호를 본문으로 재확인한다.
+ * 실패 reason 별 UI 대응은 계약 §3 표 — 호출부(PasswordChangeForm)가 담당한다.
+ */
+export async function adminChangePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<ApiResult<PasswordChangeResult>> {
+  const result = await requestJson(
+    "/admin/password",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    },
+    "비밀번호를 변경하지 못했습니다.",
+  );
+  if (!result.ok) return result;
+  if (!isRecord(result.data) || result.data.ok !== true) {
+    return invalidResponse("비밀번호 변경 응답 형식이 올바르지 않습니다.");
+  }
+  const { changedAt, sessionsRevoked } = result.data;
+  if (typeof changedAt !== "string") {
+    return invalidResponse("비밀번호 변경 응답 형식이 올바르지 않습니다.");
+  }
+  return {
+    ok: true,
+    data: {
+      changedAt,
+      // 정수가 아니면 0 — 성공 문구가 "다른 기기 n건 해제"를 잘못 말하지 않게 한다 (계약 §3)
+      sessionsRevoked:
+        typeof sessionsRevoked === "number" && Number.isInteger(sessionsRevoked)
+          ? sessionsRevoked
+          : 0,
+    },
+  };
 }
 
 /* ---------- 게시물 CRUD (§13.1) ---------- */

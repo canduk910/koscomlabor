@@ -181,13 +181,17 @@ NCP Object Storage 버킷 생성은 콘솔 작업 → 배포 단계에서 단계
 | code | HTTP | 발생 조건 |
 |---|---|---|
 | `VALIDATION_ERROR` | 400 | 필수 필드 누락, 길이 초과/미달, 형식 오류, 거부 조건(4.2절) 해당 |
-| `UNAUTHORIZED` | 401 | 관리자 토큰 누락/불일치 |
+| `UNAUTHORIZED` | 401 | **인증 수단 자체가 무효** — 관리자 토큰/세션 쿠키 누락·불일치·만료 (`requireAdmin`) |
+| `INVALID_CREDENTIALS` | 401 | **인증은 유효하나 본문으로 재확인한 자격 증명이 불일치.** `POST /admin/password` 의 `currentPassword` **전용** (§12.4) — 다른 엔드포인트는 이 code 를 내지 않는다 |
 | `NOT_FOUND` | 404 | 존재하지 않는 리소스/경로 |
 | `PAYLOAD_TOO_LARGE` | 413 | 요청 body 16KB 초과 |
 | `RATE_LIMITED` | 429 | 4.3절 한도 초과. `Retry-After` 헤더(초) 동봉 |
+| `LINK_FETCH_FAILED` | 422 | 링크 메타데이터 추출 실패·차단 (§13.2) |
 | `INTERNAL_ERROR` | 500 | 서버 내부 오류 (상세는 서버 로그에만 — 응답에 스택/내부정보 금지) |
 
 `message`는 한국어 사용자 안내 문구. `code`는 안정 계약 (변경 시 리더 승인 + web-developer 통보).
+
+**`UNAUTHORIZED` ↔ `INVALID_CREDENTIALS` 분리 근거 (2026-08-17, 계약 개정 1):** 둘 다 401 이지만 프론트의 올바른 대응이 다르다. `UNAUTHORIZED` 는 세션이 죽은 것이므로 **로그인 화면으로 전환**해야 하고, `INVALID_CREDENTIALS` 는 세션이 살아 있는데 입력값이 틀린 것이므로 **필드 인라인 에러**로 표시하고 화면을 유지해야 한다. 같은 code 면 구분이 불가능하다. 프론트는 `http.ts` 의 `CODE_TO_REASON` 에 `INVALID_CREDENTIALS: "invalid-credentials"` 를 등록해야 한다 — **미등록 code 는 `"network"` 로 잘못 분류된다.**
 
 **현재 프론트의 에러 처리 실태 (중요):** guestbook.ts는 `response.ok === false`이면 에러 body를 **읽지 않고** 일괄 `reason: "network"`로 처리한다 (L77–83, L129–135). 즉 위 code 목록은 현 시점 프론트가 분기하지 않으며, 분기하려면 프론트 계약 확장이 필요하다 → 3절 제안 C. 백엔드는 프론트 대응 여부와 무관하게 처음부터 이 형식으로 응답한다 (형식을 나중에 바꾸는 것이야말로 경계면 버그의 원인).
 
@@ -466,6 +470,24 @@ CREATE TABLE admin_sessions (
 );
 ```
 
+### 10.4 `admin_credentials` 테이블 (2026-08-17 추가 — 비밀번호 변경 기능)
+
+마이그레이션: `server/migrations/1755300000003_create-admin-credentials.sql`
+
+```sql
+CREATE TABLE admin_credentials (
+  id            smallint PRIMARY KEY DEFAULT 1 CHECK (id = 1),  -- 단일 행 강제
+  password_hash text NOT NULL,          -- argon2id
+  seeded_at     timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz            -- NULL = 초기(시드) 비밀번호 그대로
+);
+```
+
+- **단일 행 강제**: `CHECK (id = 1)` — 관리자 계정은 1개(비밀번호 단일)라는 현 운영 모델을 스키마로 고정
+- `updated_at IS NULL` → 초기 비밀번호 (`GET /admin/me` 의 `passwordIsInitial = true`)
+- 한 번이라도 변경하면 `updated_at` 이 채워지고 **영구히 false** (초기 비밀번호로 되돌려도 false — 실측 확인 §18)
+- 이 테이블이 **비밀번호 해시의 권위 저장소**다. `ADMIN_PASSWORD_HASH` 환경변수와의 관계는 §12.3
+
 ## 11. 공개 API (인증 없음)
 
 공통: camelCase, ISO 8601 UTC, 에러 형식 `{ error: { code, message } }` (§2.4 코드 체계 공유).
@@ -524,14 +546,86 @@ CREATE TABLE admin_sessions (
   - 만료: 발급 후 **12시간** + 사용 시 `last_used_at` 갱신, 만료분은 로그인 시 배치 삭제
   - 쿠키: `Set-Cookie: admin_session=<토큰>; HttpOnly; Secure; SameSite=Lax; Path=/admin; Max-Age=43200` — **host-only** (union-api 도메인, Domain 속성 미설정)
   - 응답 `200 { "ok": true, "expiresAt": "..." }` / 실패 `401 UNAUTHORIZED` (계정 존재 여부 힌트 없는 단일 메시지)
-- `POST /admin/logout` → 세션 삭제 + 쿠키 만료. `GET /admin/me` → 세션 유효성 확인 (admin UI 초기 로드용)
+- `POST /admin/logout` → 세션 삭제 + 쿠키 만료. `GET /admin/me` → 세션 유효성 확인 (admin UI 초기 로드용) — **응답 확장은 아래 §12.1-a**
 - **CORS 변경 필요**: admin UI는 www.koscomlabor.cloud(프론트)에서 union-api로 fetch — 같은 사이트(eTLD+1 동일)이므로 SameSite=Lax 쿠키가 전송되지만, **CORS에 `Access-Control-Allow-Credentials: true` 추가 필요** (허용 Origin은 기존 명시 목록 유지, `*` 불가 — 승인 항목 §15-2)
 - 로그인 rate limit: **IP당 1분 5회, 1시간 10회** (429). 실패도 카운트 (대입 방어)
 - 감사 로그: 로그인 성공/실패(IP 해시), 세션 발급·만료 — 비밀번호·토큰 원문 미로깅
 
+### 12.1-a `GET /admin/me` 응답 확장 (2026-08-17)
+
+인증: 기존과 동일 (`requireAdmin` — 세션 쿠키 또는 정적 Bearer).
+
+```jsonc
+{
+  "ok": true,
+  "method": "session" | "bearer",
+  "expiresAt": "2026-08-17T12:00:00.000Z" | null,
+  "passwordIsInitial": true | false   // ← 신규 필드
+}
+```
+
+- `passwordIsInitial`: `admin_credentials.updated_at IS NULL` 일 때 `true`. 즉 **배포 시 env 로 시드된 초기 비밀번호를 아직 한 번도 바꾸지 않은 상태**. admin UI 는 이 값이 true 면 경고 배너 + 변경 CTA 를 상시 표시한다 (강제 차단은 하지 않음 — 리더 확정)
+- 기존 필드(`ok`/`method`/`expiresAt`)의 의미·타입은 **변경 없음** (하위 호환). 응답 스키마 serializer 로 이 4개 필드만 직렬화된다
+- 프론트 하위 호환 방어: 구버전 API 와 신버전 프론트가 잠시 공존할 수 있으므로, `passwordIsInitial` 이 boolean 이 아니면 프론트는 `false` 로 간주한다 (`invalidResponse` 로 처리하지 않음)
+
 ### 12.2 기존 방명록 정적 토큰과의 관계 (판단)
 
 **병행 운영을 제안**한다: ① 기존 `Authorization: Bearer ADMIN_API_TOKEN` (curl 운영 경로 — 유지) ② 신규 세션 쿠키 (admin UI 경로). 방명록 `DELETE /admin/guestbook/:id` 및 신규 admin 엔드포인트 전부 **둘 중 하나면 인증 통과**. 사유: 장애 시 UI 없이도 curl 복구 경로 확보, 마이그레이션 리스크 0. UI 정착 후 정적 토큰 폐기는 별도 결정 (승인 항목 §15-4).
+
+### 12.3 비밀번호 저장 위치: env → DB 전환 (2026-08-17)
+
+**문제:** `ADMIN_PASSWORD_HASH` 는 `config.ts` 가 **기동 시 1회만** 읽어 `config.adminPasswordHash` 에 담아두는 값이었다. 런타임에 바꿀 방법이 없어, 비밀번호 변경이 곧 "SSH 접속 → 해시 생성 → .env 수정 → 컨테이너 재기동"이었다 (노조 담당자가 수행 불가).
+
+**전환:** 해시의 권위 저장소를 `admin_credentials`(§10.4) 로 옮긴다.
+
+| 항목 | 규칙 |
+|---|---|
+| 부팅 시드 | `INSERT INTO admin_credentials (id, password_hash) VALUES (1, $env) ON CONFLICT (id) DO NOTHING` — 앱 조립(`buildApp`) 중 1회 |
+| env 의 역할 | **최초 부팅 시드 전용.** 행이 이미 있으면 env 값은 무시된다. 즉 `.env` 의 해시를 바꿔도 가동 중인 서버의 비밀번호는 바뀌지 않는다 |
+| env 필수 여부 | **필수 유지** — 최초 배포 시드 + 설정 누락 조기 감지 (`config.ts` 검증 그대로) |
+| 인증 시 조회 | `POST /admin/login` 과 `POST /admin/password` 는 **매 요청 DB 에서 활성 해시를 읽는다** → 변경이 재기동 없이 즉시 반영 |
+| 행 부재 시 | 방어적으로 env 시드 해시로 폴백하고 경고 로그를 남긴다 (행이 없다는 이유로 관리자가 잠기지 않게) |
+| 시드 실패 시 | **기동 거부** — DB 연결 불가/테이블 부재를 조용히 넘기지 않는다 (`config.ts` 의 "런타임에 조용히 깨지는 것 금지" 원칙 계승). 배포 순서상 **마이그레이션이 API 재기동보다 먼저** 적용돼야 한다 |
+
+### 12.4 `POST /admin/password` — 비밀번호 변경 (신규, 2026-08-17)
+
+인증: `requireAdmin` (세션 쿠키 또는 정적 Bearer). **인증만으로는 부족하고 현재 비밀번호를 본문으로 재확인해야 한다** — 자리를 비운 브라우저·탈취된 세션으로 비밀번호가 바뀌는 것을 막는다.
+
+요청 본문: `{ "currentPassword": "…", "newPassword": "…" }`
+
+**검증 순서 (이 순서 그대로 구현·검증한다):**
+
+| # | 조건 | 상태 | code | message |
+|---|------|------|------|---------|
+| 0 | rate limit 초과 (loginLimiter) | 429 | `RATE_LIMITED` | 공통 문구 + `Retry-After` |
+| 1 | `currentPassword`/`newPassword` 가 문자열이 아니거나 빈 문자열이거나 200자 초과 | 400 | `VALIDATION_ERROR` | `currentPassword 와 newPassword 는 1자 이상 200자 이하의 문자열이어야 합니다.` |
+| 2 | `newPassword.length < 12` | 400 | `VALIDATION_ERROR` | `새 비밀번호는 12자 이상이어야 합니다.` |
+| 3 | `newPassword === currentPassword` | 400 | `VALIDATION_ERROR` | `새 비밀번호가 현재 비밀번호와 같습니다.` |
+| 4 | `argon2.verify(활성해시, currentPassword)` 실패 | 401 | `INVALID_CREDENTIALS` | `현재 비밀번호가 일치하지 않습니다.` |
+
+12자 하한은 `scripts/hash-password.mjs`·`scripts/set-password.mjs` 와 동일 기준이다.
+
+**200 성공 응답:**
+
+```jsonc
+{ "ok": true, "changedAt": "2026-08-17T12:00:00.000Z", "sessionsRevoked": 2 }
+```
+
+- `changedAt`: ISO 8601 UTC (`admin_credentials.updated_at`)
+- `sessionsRevoked`: 이번 변경으로 무효화된 **다른** 세션 수 (정수, 0 이상)
+
+**부수 효과:**
+
+1. `admin_credentials.password_hash` = argon2id(newPassword), `updated_at = now()` → 이후 `passwordIsInitial` 영구 false
+2. **세션 쿠키로 호출**: 현재 세션 토큰을 제외한 모든 `admin_sessions` 삭제 (현재 브라우저는 로그인 유지)
+   **Bearer 로 호출**: 유지할 현재 세션이 없으므로 전 세션 삭제
+   — 만료 세션을 먼저 정리(`pruneExpired`)한 뒤 삭제하므로 `sessionsRevoked` 는 "실제로 살아 있던 다른 세션 수"다
+3. 로그: `{ route: "admin-password-change", method, sessionsRevoked }` — **평문·해시 미로깅**
+4. 정적 Bearer 토큰(`ADMIN_API_TOKEN`)은 영향받지 않는다 (복구 수단 유지)
+
+**rate limit:** `loginLimiter`(분당 5회/시간당 10회) 버킷을 로그인과 **공유**한다. 진입 시 `check` 만 하고, **#4 실패 시에만 `record`** 한다 (성공한 변경은 카운트하지 않음). 공유 이유: 현재 비밀번호 오입력도 로그인 시도와 동일한 무차별 대입 표면이다.
+
+**복구 경로 (비밀번호 분실):** `server/scripts/set-password.mjs` — stdin 으로 새 비밀번호를 받아 argon2id 해시 후 `admin_credentials` UPSERT + `updated_at = now()` + 전 세션 삭제. `DATABASE_URL` 사용, **API 재기동 불필요**. 절차는 07 문서 §9.4.
 
 ## 13. Admin CRUD + 링크 메타데이터 + 파일 업로드 (전부 세션/토큰 인증 + `/admin/*` rate limit)
 
@@ -663,3 +757,19 @@ body `{ "url": "https://..." }` → 응답 `200 { "title": "...", "siteName": ".
 ### 17.6 구현 중 설계 정교화 (기록)
 
 - **/admin/* rate limit (분당 10회)는 "실패한 인증 시도"만 카운트**하도록 정교화. 사유: 전 요청 카운트 시 정상 관리 작업(글 1건 작성 + 첨부 5개 + 목록 조회 > 10 요청/분)이 즉시 잠김. 무차별 대입 방어 목적에는 실패 카운트로 충분. 로그인 한도(5/분·10/시간)는 성공·실패 전부 카운트 유지
+
+## 18. 비밀번호 변경 기능 로컬 실측 (2026-08-17) — 전 케이스 PASS
+
+`admin_credentials` 도입(§10.4)과 `POST /admin/password`(§12.4) 구현 후 로컬 실측. 프로덕션과 동일한 마이그레이션 상태(0000–0002)에서 시작해 1755300000003 을 적용하고 검증했다. **curl 요청/응답 원문 캡처는 07 문서 §9.4** (분량 관계로 그쪽에 병기). 요약:
+
+- **검증 순서** #1→#2→#3→#4 가 표 그대로 동작 (틀린 현재 비밀번호 + 11자 새 비밀번호 → `400` 12자 메시지, `401` 아님)
+- **세션 처리**: 세션 쿠키로 변경 시 현재 세션 유지 + 나머지 무효화(`sessionsRevoked:2`), Bearer 로 변경 시 전 세션 무효화
+- **즉시 반영**: 변경 후 재기동 없이 구 비밀번호 `401` / 신 비밀번호 `200`
+- **`passwordIsInitial`**: 시드 직후 `true` → 변경 후 `false`. **초기 비밀번호로 되돌려도 `false` 유지** (`updated_at` 비가역)
+- **계약 개정 1**: 인증 수단 무효 → `UNAUTHORIZED`, `currentPassword` 불일치 → `INVALID_CREDENTIALS` 로 실제 분리 확인. 로그인 오답은 `UNAUTHORIZED` 유지
+- **rate limit**: `/admin/password` 가 loginLimiter 버킷 공유 — 분 창 5회 초과 시 `429` + `Retry-After: 60`
+- **개인정보·시크릿**: 서버 로그 전체에 평문·argon2 해시 문자열 **없음**
+- **방어 경로**: 행 삭제 시 env 폴백으로 로그인 유지(경고 로그), 재기동 시 재시드. 마이그레이션 미적용 상태에서는 **기동 거부**(exit 1 + 조치 안내)
+- **마이그레이션 up → down → up 왕복** 정상 (롤백 근거)
+- **회귀**: 방명록·게시물·admin CRUD·health 전부 이전과 동일 shape
+- `tsc --noEmit` strict 통과, 빌드 통과

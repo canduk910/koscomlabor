@@ -12,6 +12,8 @@ export type ApiFailureReason =
   | "rate-limited"
   | "validation"
   | "unauthorized"
+  /** 인증 수단은 유효하나 본문의 currentPassword 불일치 (계약 개정 1 — INVALID_CREDENTIALS) */
+  | "invalid-credentials"
   | "not-found"
   | "link-fetch-failed"
   | "payload-too-large";
@@ -75,6 +77,9 @@ const CODE_TO_REASON: Record<string, ApiFailureReason> = {
   RATE_LIMITED: "rate-limited",
   VALIDATION_ERROR: "validation",
   UNAUTHORIZED: "unauthorized",
+  // 계약 개정 1: 세션 만료(UNAUTHORIZED)와 현재 비밀번호 불일치를 프론트에서 구분해야 한다.
+  // 미등록 code 는 아래 `?? "network"` 로 잘못 분류되므로 등록 필수.
+  INVALID_CREDENTIALS: "invalid-credentials",
   NOT_FOUND: "not-found",
   LINK_FETCH_FAILED: "link-fetch-failed",
   PAYLOAD_TOO_LARGE: "payload-too-large",

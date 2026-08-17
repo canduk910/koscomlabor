@@ -3,6 +3,15 @@
  * admin은 기능 화면: 히어로·그림자·Gmarket 미사용, 전부 Pretendard (§14 설계 원칙).
  */
 
+/** 폼 라벨 (§14.4·§14.8.4 공용) — 흰 배경 위 #1a1a1a 17.40:1 (#1) */
+export const ADMIN_LABEL_CLASS = "mb-2 block text-body font-semibold text-ink";
+
+/** 필드 힌트 caption (§14.8.4) — 흰 배경 위 #4b5563 7.56:1 (#6) */
+export const ADMIN_HINT_CLASS = "mt-1 text-caption text-ink-muted";
+
+/** 필드 인라인 에러 (§14.8.5) — 흰 배경 위 #9c0d14 8.46:1 (#12). role="alert"와 함께 사용 */
+export const ADMIN_FIELD_ERROR_CLASS = "mt-1 text-caption text-urgent-strong";
+
 /** 입력 필드 (§7.2 스타일 계승 — v2 radius 12px) */
 export const ADMIN_FIELD_CLASS =
   "rounded-badge w-full border border-border-strong bg-bg text-body text-ink focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2";

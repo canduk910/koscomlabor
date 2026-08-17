@@ -20,6 +20,7 @@ import { hashIp } from "./lib/ipHash.js";
 import { SlidingWindowLimiter } from "./lib/rateLimit.js";
 import { validateGuestbookInput } from "./lib/validate.js";
 import { AttachmentsRepository } from "./repos/attachments.js";
+import { AdminCredentialsRepository } from "./repos/credentials.js";
 import { PostsRepository } from "./repos/posts.js";
 import { SessionsRepository } from "./repos/sessions.js";
 import { registerAdminRoutes } from "./routes/admin.js";
@@ -117,6 +118,21 @@ export async function buildApp({ config }: AppDeps): Promise<FastifyInstance> {
   const posts = new PostsRepository(pool);
   const attachments = new AttachmentsRepository(pool);
   const sessions = new SessionsRepository(pool);
+  const credentials = new AdminCredentialsRepository(pool);
+
+  // 관리자 비밀번호 해시 부팅 시드 (§12.3). env 값은 admin_credentials 행이 없을 때만 쓰이고,
+  // 이후에는 DB 가 권위 값이다. **실패하면 기동을 거부한다** — 자격 증명 저장소를 읽지 못하는
+  // 상태로 뜨면 로그인이 런타임에 조용히 깨지므로 (config.ts 와 동일 원칙).
+  // 주의: 마이그레이션(1755300000003)이 API 재기동보다 먼저 적용돼야 한다.
+  try {
+    await credentials.ensureSeeded(config.adminPasswordHash);
+  } catch (error) {
+    await pool.end().catch(() => undefined);
+    const cause = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `admin_credentials 시드에 실패했습니다. 마이그레이션 1755300000003_create-admin-credentials 적용 여부와 DB 연결을 확인하세요. 원인: ${cause}`,
+    );
+  }
 
   const postLimiter = new SlidingWindowLimiter(POST_RULES);
   const getLimiter = new SlidingWindowLimiter(GET_RULES);
@@ -309,6 +325,7 @@ export async function buildApp({ config }: AppDeps): Promise<FastifyInstance> {
     posts,
     attachments,
     sessions,
+    credentials,
     adminLimiter,
     loginLimiter,
     errorSchema,

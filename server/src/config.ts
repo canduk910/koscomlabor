@@ -7,6 +7,13 @@ export interface AppConfig {
   port: number;
   databaseUrl: string;
   adminApiToken: string;
+  /**
+   * **최초 부팅 시드 전용** — admin_credentials(id=1) 행이 없을 때 1회 INSERT 되고,
+   * 그 이후에는 무시된다 (DB 행이 권위 값 — 명세 06 §12.3).
+   * 즉 이 값을 바꿔도 이미 시드된 서버의 비밀번호는 바뀌지 않는다.
+   * 운영 중 변경은 `POST /admin/password` 또는 `scripts/set-password.mjs` 를 쓴다.
+   * 필수 환경변수로 유지하는 이유: 최초 배포 시드 + 설정 누락 조기 감지.
+   */
   adminPasswordHash: string;
   ipHashSecret: string;
   corsOrigins: string[];

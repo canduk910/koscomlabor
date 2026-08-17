@@ -309,3 +309,207 @@ QA 10회차 통과 후 리더 승인으로 API 배포 완료. 구현·로컬 실
 - Caddy: `union-api` 블록에만 `request_body { max_size 12MB }` 추가 (업로드용). 기존 블록 무변경, validate → reload
 - 크론 추가: **03:05 KST uploads 볼륨 tar 백업**(`/root/koscomlabor-api/backup-uploads.sh`, 14일 롤링, 1회 실행 검증 완료). 전체 크론: 00:10 웹 재빌드 → 00:30 onnuri → 03:00 DB 백업 → 03:05 uploads 백업 → 03:30 ip_hash 정리
 - admin 초기 비밀번호: `/root/koscomlabor-api/ADMIN_PASSWORD.initial` (600, 안내문 포함). **확인 후 삭제 필요**
+
+## 9. 관리자 비밀번호 변경 기능 (2026-08-17) — 구현 완료, **프로덕션 미적용**
+
+계약: `_workspace/00_input/contract-password-change.md` (+ 개정 1). 명세: 06 §10.4 / §12.1-a / §12.3 / §12.4.
+
+### 9.1 문제와 해결
+
+`ADMIN_PASSWORD_HASH` 는 `config.ts` 가 **기동 시 1회만** 읽던 값이라 런타임 변경이 불가능했다. 비밀번호를 바꾸려면 SSH → 해시 생성 → `.env` 수정 → 컨테이너 재기동이 필요했고, 이는 노조 담당자가 수행할 수 있는 절차가 아니다.
+
+해시의 권위 저장소를 **`admin_credentials` 단일 행 테이블**로 옮기고, env 는 **최초 부팅 시드 전용**으로 격하했다. 인증 시 매 요청 DB 를 읽으므로 변경이 **재기동 없이 즉시 반영**된다.
+
+### 9.2 변경 파일
+
+| 파일 | 내용 |
+|---|---|
+| `server/migrations/1755300000003_create-admin-credentials.sql` | 신규. 단일 행 테이블 (`CHECK (id = 1)`), `updated_at NULL` = 초기 비밀번호 |
+| `server/src/repos/credentials.ts` | 신규. `ensureSeeded` / `getActive` / `update` — snake_case ↔ camelCase 변환 경계 |
+| `server/src/repos/sessions.ts` | `destroyOthers(token)` / `destroyAll()` 추가 |
+| `server/src/routes/admin.ts` | 로그인 검증을 DB 활성 해시로 전환, `GET /admin/me` 에 `passwordIsInitial` 추가, `POST /admin/password` 신규, `resolveCredentials` 폴백 헬퍼 |
+| `server/src/app.ts` | `AdminCredentialsRepository` 주입 + 부팅 시드 (실패 시 기동 거부) |
+| `server/src/lib/errors.ts` | `INVALID_CREDENTIALS` code 추가 (계약 개정 1) |
+| `server/src/config.ts` | `adminPasswordHash` 가 "시드 전용"임을 주석 명시 |
+| `server/.env.example` | 동일 취지 주석 + 변경·복구 경로 안내 |
+| `server/scripts/set-password.mjs` | 신규. 분실 복구용 강제 재설정 (stdin, 평문 미출력) |
+
+### 9.3 설계 판단 기록 (리더 확인 요망 항목 포함)
+
+1. **시드 실패 시 기동을 거부한다** (권장안 채택). `buildApp` 에서 `ensureSeeded` 가 던지면 풀을 닫고 재던져 `index.ts` 가 exit 1 한다. 근거: `config.ts` 가 이미 "필수 값 없으면 기동 거부 — 런타임에 조용히 깨지는 것 금지" 원칙을 세웠고, 자격 증명 저장소를 읽지 못하는 채로 뜨면 (a) 폴백 경로로만 동작해 비밀번호 변경이 무음 실패하거나 (b) 관리자가 이유 없이 잠긴다. 대신 **에러 메시지에 원인과 조치를 명시**해 크래시 루프가 자가 설명되게 했다.
+   - 실측: `서버 기동 실패: admin_credentials 시드에 실패했습니다. 마이그레이션 1755300000003_create-admin-credentials 적용 여부와 DB 연결을 확인하세요. 원인: relation "admin_credentials" does not exist` (exit 1)
+   - **운영 함의: 마이그레이션이 API 재기동보다 반드시 먼저 적용돼야 한다** (9.5 절차의 순서가 이 때문에 고정이다). 순서를 어기면 API 가 크래시 루프에 빠지지만, 마이그레이션을 적용하면 `restart: unless-stopped` 로 자동 복구된다 (데이터 손실 없음).
+2. **행 부재 시 env 해시 폴백** (기동 후 런타임 경로). 기동은 거부하되, 이미 떠 있는 서버가 어떤 이유로 행을 잃은 경우에는 `resolveCredentials` 가 env 시드 해시로 폴백하고 `row-missing-fallback-to-env` 경고를 남긴다. 기동 시점의 엄격함과 런타임의 가용성을 분리한 것이다.
+3. **WHERE 절 없는 DELETE 의 명시적 예외 2곳** — `sessions.destroyAll()` 과 `scripts/set-password.mjs` 의 `DELETE FROM admin_sessions`. 스킬 §3 의 대상 특정 규칙에 대한 의도적 예외이며 근거는 코드 주석에도 남겼다: (a) 대상이 조합 콘텐츠가 아니라 재발급 가능한 휘발성 인증 상태이고, (b) "비밀번호를 바꿨으니 전 기기 로그아웃"이라는 요구가 곧 전체 삭제이며, (c) 호출부가 비밀번호 변경 경로로 한정된다. 세션을 남겨야 하는 경로는 전부 `destroyOthers(token)`(WHERE 있음)를 쓴다. **게시물·방명록 테이블에는 이 예외를 적용하지 않는다.**
+4. **`sessionsRevoked` 산출 전 `pruneExpired()` 선행** (계약에 없는 정교화). 만료된 세션 행이 남아 있으면 "무효화된 다른 세션 수"가 실제보다 부풀려져 관리자에게 거짓 정보를 준다. 만료분을 먼저 정리해 살아 있던 세션만 센다.
+5. **rate limit 버킷을 로그인과 공유**하되 `check` 만 하고 **#4 실패 시에만 `record`** 한다. 성공한 변경을 카운트하면 정상 작업이 자기 자신을 잠근다.
+6. **초기 비밀번호로 되돌려도 `passwordIsInitial` 은 false 로 유지**된다 (`updated_at` 이 한 번 채워지면 되돌아가지 않음). 배너의 의미가 "이 값을 아는 사람이 배포자 말고 또 있다"가 아니라 "담당자가 한 번도 관리하지 않았다"이므로 이 동작이 맞다고 판단했다. 실측 확인(§9.4 #18).
+
+### 9.4 로컬 실측 (2026-08-17, macOS + PostgreSQL 16 + Node 26) — 전 케이스 PASS
+
+로컬 DB 는 프로덕션과 동일한 마이그레이션 상태(0000–0002)에서 시작했다. 로컬 `.env` 의 `ADMIN_PASSWORD_HASH` 는 **검증용으로 변경**했다(평문 미기록).
+
+**마이그레이션 up → down → up 왕복 확인** (프로덕션 롤백 절차의 근거):
+
+```
+$ npm run migrate       → Migrations complete!  (pgmigrations 4건)
+  admin_credentials 컬럼: id smallint NOT NULL DEFAULT 1 / password_hash text NOT NULL
+                          / seeded_at timestamptz NOT NULL DEFAULT now() / updated_at timestamptz NULL
+  제약: admin_credentials_pkey PRIMARY KEY (id), admin_credentials_id_check CHECK ((id = 1))
+$ npm run migrate:down  → DROP TABLE admin_credentials;  (to_regclass → null)
+$ npm run migrate       → 재적용 정상 (4건)
+```
+
+**시나리오 실측 (curl 요청/응답 원문):**
+
+| # | 케이스 | 실응답 | 판정 |
+|---|---|---|---|
+| 1 | `POST /admin/login` (초기 비번) | `200` `{"ok":true,"expiresAt":"2026-08-17T12:22:04.577Z"}` + `Set-Cookie: admin_session=…; Max-Age=43199; Path=/admin; HttpOnly; SameSite=Lax` | PASS |
+| 2 | `GET /admin/me` (세션) | `200` `{"ok":true,"method":"session","expiresAt":"2026-08-17T12:22:04.577Z","passwordIsInitial":true}` | PASS |
+| 2-b | `GET /admin/me` (Bearer) | `200` `{"ok":true,"method":"bearer","expiresAt":null,"passwordIsInitial":true}` | PASS |
+| 4 | `POST /admin/password` 무인증 | `401` `{"error":{"code":"UNAUTHORIZED","message":"관리자 인증에 실패했습니다."}}` | PASS |
+| 5 | #1 `newPassword` 누락 | `400` `{"error":{"code":"VALIDATION_ERROR","message":"currentPassword 와 newPassword 는 1자 이상 200자 이하의 문자열이어야 합니다."}}` | PASS |
+| 5-b | #1 201자 `newPassword` | `400` 동일 메시지 | PASS |
+| 6 | #2 11자 `newPassword` | `400` `{"error":{"code":"VALIDATION_ERROR","message":"새 비밀번호는 12자 이상이어야 합니다."}}` | PASS |
+| 7 | #3 새 비번 = 현재 비번 | `400` `{"error":{"code":"VALIDATION_ERROR","message":"새 비밀번호가 현재 비밀번호와 같습니다."}}` | PASS |
+| 8 | #4 현재 비번 불일치 | `401` `{"error":{"code":"INVALID_CREDENTIALS","message":"현재 비밀번호가 일치하지 않습니다."}}` | PASS |
+| 9 | **검증 순서**: 틀린 현재 비번 + 11자 새 비번 | `400` 12자 메시지 (401 아님 — #2 가 #4 보다 먼저) | PASS |
+| 10 | 정상 변경 (세션 A, 세션 B·C 존재) | `200` `{"ok":true,"changedAt":"2026-08-17T00:22:05.714Z","sessionsRevoked":2}` | PASS |
+| 11 | 변경 후 `GET /admin/me` (세션 A **유지**) | `200` `{"ok":true,"method":"session","expiresAt":"…","passwordIsInitial":false}` | PASS |
+| 12 | 세션 B / C | 각 `401` (타 기기 로그아웃) | PASS |
+| 13 | 구 비밀번호 로그인 | `401` `{"error":{"code":"UNAUTHORIZED","message":"인증에 실패했습니다."}}` | PASS |
+| 14 | 신 비밀번호 로그인 (**재기동 없이**) | `200` `{"ok":true,"expiresAt":"2026-08-17T12:24:07.119Z"}` | PASS |
+| 16 | Bearer 경로 변경 (세션 2개 생존) | `200` `{"ok":true,"changedAt":"2026-08-17T00:24:07.414Z","sessionsRevoked":2}` → `admin_sessions` 0건 | PASS |
+| 18 | 초기 비번으로 되돌린 뒤 `GET /admin/me` | `passwordIsInitial:false` (영구 false — 9.3-6) | PASS |
+| 19 | **로그 유출 검사** | 서버 로그 전체에 평문·`$argon2` 문자열 **없음**. 기록된 라인: `{"route":"admin-password-change","method":"session","sessionsRevoked":2,"msg":"admin password changed"}` | PASS |
+
+**계약 개정 1 (401 code 분리) 실측:**
+
+| 케이스 | 실응답 | 판정 |
+|---|---|---|
+| 인증 수단 무효 (쿠키 없음) | `401` `{"error":{"code":"UNAUTHORIZED","message":"관리자 인증에 실패했습니다."}}` | PASS |
+| 인증 유효 + `currentPassword` 불일치 | `401` `{"error":{"code":"INVALID_CREDENTIALS","message":"현재 비밀번호가 일치하지 않습니다."}}` | PASS |
+| 로그인 오답 (다른 엔드포인트) | `401` `UNAUTHORIZED` 유지 — `INVALID_CREDENTIALS` 는 `/admin/password` 전용 | PASS |
+
+**방어 경로·부수 기능 실측:**
+
+| 케이스 | 실응답 | 판정 |
+|---|---|---|
+| #0 rate limit (loginLimiter 공유) | 분 창 5회 초과 시 `429` + `retry-after: 60` + `{"error":{"code":"RATE_LIMITED",…}}` | PASS |
+| `admin_credentials` 행 삭제 후 `GET /admin/me` | `200 passwordIsInitial:true` + 경고 로그 `{"route":"admin-credentials","result":"row-missing-fallback-to-env"}` — **로그인 안 깨짐** | PASS |
+| 행 부재 상태로 재기동 | `ensureSeeded` 가 재시드 (`updated_at` NULL) | PASS |
+| `scripts/set-password.mjs` | `관리자 비밀번호를 재설정했습니다. changedAt=2026-08-17T00:27:27.496Z sessionsRevoked=2` → 기존 세션 `401`, 새 비번 로그인 `200` (**재기동 없이**) | PASS |
+| `set-password.mjs` 11자 입력 | `비밀번호는 12자 이상이어야 합니다.` (exit 1) | PASS |
+| 마이그레이션 미적용 상태 기동 | exit 1 + 조치 안내 메시지 (9.3-1) | PASS |
+
+**기존 엔드포인트 회귀 (하위 호환):** `GET /guestbook` 200 / `GET /posts?category=notice` 200 + `X-Total-Count` / `GET /posts` (category 누락) 400 / `GET /admin/posts` Bearer 200·무인증 401 / `POST /admin/logout` 200 / `GET /health` 200 — 전부 이전과 동일.
+
+**품질:** `npm run typecheck` (strict, `noUncheckedIndexedAccess`·`exactOptionalPropertyTypes` 포함) 통과, `npm run build` 통과.
+
+### 9.5 프로덕션 배포 절차
+
+전제 (리더 실측, 2026-08-17): 컨테이너 `koscomlabor-api`/`koscomlabor-db`/`koscomlabor-web` 가동 중, 프로덕션 DB 는 마이그레이션 0000–0002 까지만 적용, `admin_credentials` 없음. 배치 경로 `/root/koscomlabor-api/` (compose + `app/` + `.env`).
+
+> **순서 고정 — 마이그레이션이 API 재기동보다 먼저.** 반대로 하면 API 가 시드 실패로 기동을 거부한다 (9.3-1). 아래 순서를 지키면 무중단에 가깝다 (api 재생성 몇 초).
+
+```bash
+# ① 로컬에서 소스 동기화
+rsync -az --delete --exclude node_modules --exclude dist --exclude .env \
+  server/ root@101.79.31.30:/root/koscomlabor-api/app/
+
+# ② 서버에서 — 백업 먼저 (롤백 대비)
+ssh root@101.79.31.30
+cd /root/koscomlabor-api
+docker exec koscomlabor-db pg_dump -Fc -U guestbook_app guestbook > /root/backups/pre_pwchange_$(date +%Y%m%d_%H%M).dump
+
+# ③ 마이그레이션 이미지 재빌드 후 적용 (profile 서비스는 일반 build 대상이 아님 — §7.3-2)
+docker compose --profile tools build migrate
+docker compose --profile tools run --rm migrate      # 1755300000003 적용
+
+# ④ 적용 확인
+docker exec koscomlabor-db psql -U guestbook_app -d guestbook -c '\d admin_credentials'
+
+# ⑤ API 이미지 재빌드 + 재기동 (이때 .env 의 ADMIN_PASSWORD_HASH 로 1회 시드된다)
+docker compose build api
+docker compose up -d api
+
+# ⑥ 기동·시드 확인
+docker logs --tail 30 koscomlabor-api                # "Server listening" — 시드 실패 메시지 없어야 함
+docker exec koscomlabor-db psql -U guestbook_app -d guestbook \
+  -c 'SELECT id, seeded_at, updated_at FROM admin_credentials;'   # updated_at 은 NULL 이 정상
+docker exec onnuri-caddy wget -qO- http://koscomlabor-api:3001/health
+```
+
+**⑦ 스모크 (프로덕션):** `POST /admin/login` → `GET /admin/me` 에 `passwordIsInitial:true` 확인 → 잘못된 `currentPassword` 로 `401 INVALID_CREDENTIALS` 확인. **프로덕션에서 실제 비밀번호 변경까지 수행할지는 리더 판단** (수행하면 그 시점부터 `.env` 의 해시는 무의미해지고 배너가 사라진다).
+
+**주의:**
+- `.env` 의 `ADMIN_PASSWORD_HASH` 는 **지우지 말 것**. 필수 환경변수로 남아 있고(설정 누락 조기 감지), 행 부재 시 폴백에도 쓰인다. 다만 시드 이후에는 이 값을 바꿔도 실제 비밀번호는 바뀌지 않는다
+- 프론트(web) 배포는 별도. `passwordIsInitial` 을 소비하는 UI 와 `INVALID_CREDENTIALS` → `invalid-credentials` reason 등록이 web-developer 작업이며, **API 를 먼저 배포해도 구버전 프론트는 정상 동작**한다 (필드 추가일 뿐이고 기존 필드 불변)
+
+### 9.6 롤백
+
+| 상황 | 조치 |
+|---|---|
+| 코드만 되돌림 (테이블 유지) | 이전 이미지로 `docker compose up -d api`. `admin_credentials` 가 남아 있어도 구버전 코드는 이 테이블을 읽지 않고 `.env` 해시로 인증하므로 **동작한다**. 단 그 사이 비밀번호를 바꿨다면 `.env` 의 구 비밀번호로 되돌아간다 |
+| 스키마까지 되돌림 | `docker compose --profile tools run --rm migrate npx node-pg-migrate down -m migrations --migration-file-language sql` → `DROP TABLE admin_credentials` (로컬 왕복 검증 완료). **변경된 비밀번호는 소멸**하고 `.env` 해시가 다시 유일한 진실이 된다 |
+| DB 손상 | ②에서 뜬 `pre_pwchange_*.dump` 로 `pg_restore --clean --if-exists` (2.5절 복구 절차) |
+
+`admin_credentials` 는 신규 테이블이므로 기존 데이터(방명록·게시물·첨부)에는 어떤 영향도 없다.
+
+### 9.7 비밀번호 분실 복구 절차 (운영 매뉴얼)
+
+관리자가 비밀번호를 잊었을 때. **API 컨테이너 재기동 불필요, 서비스 중단 없음.**
+
+```bash
+ssh root@101.79.31.30
+cd /root/koscomlabor-api
+
+# 평문이 셸 히스토리에 남지 않도록 stdin 으로만 전달한다
+umask 077
+read -rs NEWPW              # 화면에 표시되지 않음 (12자 이상)
+printf '%s' "$NEWPW" | docker compose --profile tools run --rm -T migrate \
+  node scripts/set-password.mjs
+unset NEWPW
+```
+
+출력 예: `관리자 비밀번호를 재설정했습니다. changedAt=… sessionsRevoked=N`
+
+- `migrate` 서비스(build 스테이지)를 재사용하는 이유: 전체 의존성(`pg`, `argon2`)과 `scripts/`, `DATABASE_URL` 이 이미 갖춰져 있다. `-T` 는 stdin 파이프용(TTY 할당 끄기)
+- **부수 효과: 모든 기기의 세션이 무효화**된다 (재로그인 필요). 정적 `ADMIN_API_TOKEN` 은 영향 없음
+- 실행 후 `passwordIsInitial` 은 false 가 된다 (경고 배너 사라짐)
+- 최후의 수단(스크립트도 못 쓸 때): `DELETE FROM admin_credentials WHERE id = 1;` 후 API 재기동 → `.env` 의 해시로 재시드된다. **`WHERE id = 1` 을 반드시 붙일 것**
+
+### 9.8 미결 사항
+
+- 프로덕션 적용은 리더가 수행 (이 작업 범위는 코드·마이그레이션·문서까지)
+- 프론트 대응(`passwordIsInitial` 배너 + 변경 폼 + `http.ts` 의 `invalid-credentials` reason 등록)은 web-developer 영역. **`CODE_TO_REASON` 미등록 시 `INVALID_CREDENTIALS` 가 `network` 로 오분류되어 잘못된 문구가 뜬다** — 배포 전 확인 필요
+  - **해소 (QA 11회차 실측):** `src/lib/api/http.ts:82` 에 등록 확인됨. 오분류 경로 없음.
+
+### 9.9 리더 후속 조치 (2026-08-17, QA 11회차 권고 반영)
+
+QA 판정은 **통과(실패 0)** 였고, 권고 4건에 대한 리더 처리는 다음과 같다.
+
+| 권고 | 처리 | 내용 |
+|------|------|------|
+| R1 폴백 절반 구현 | **코드 수정** | `repos/credentials.ts` 의 `update()` 를 순수 `UPDATE` → **UPSERT** 로 교체 |
+| R2 계약 문언 부정확 | **문서 수정** | 계약 문서에 "개정 2" 추가 — 판정 기준은 인증 헤더가 아니라 유효 세션 쿠키 유무 |
+| R3 03 문서 기록 낡음 | **문서 수정** | `03_developer_impl.md` §17 에 종결 후속 기록 추가 |
+| R4 rate limit 잠김 | **운영 안내 추가** | 아래 참조 |
+
+**R1 상세.** `getActive()` 는 행 부재 시 env 해시로 폴백하지만 `update()` 는 `WHERE id = 1` 이라
+같은 상황에서 0행 → 500 이 되어 **폴백이 절반만 동작**했다. `set-password.mjs` 와 동일한
+UPSERT 문장으로 교체해 자가 치유시켰다. 대상은 여전히 단일 행(id = 1)이므로 "대상 특정 필수"
+규칙에 부합한다. 이에 따라 §9.7 의 최후 수단도 정정한다 — `DELETE FROM admin_credentials
+WHERE id = 1` 후에는 **재기동 없이도** env 해시로 로그인되고(폴백), 그 상태에서 비밀번호를
+변경하면 행이 UPSERT 로 다시 생성된다. 재기동은 선택 사항이다.
+
+**R4 운영 안내 — 로그인 잠김 시 대처.**
+`loginLimiter` 는 `POST /admin/login` 의 **성공·실패 전 시도**와 `POST /admin/password` 의
+**현재 비밀번호 오입력**을 같은 IP 버킷(분당 5회 / 시간당 10회)에 누적한다. 따라서
+"로그인 1회 + 비밀번호 오타 4회" 만으로 429 가 되고, 이때 **복구용 Bearer 경로도 함께 막힌다**
+(`/admin/*` 은 별도로 `adminLimiter` 분당 10회도 적용).
+
+- 정상 대처: `Retry-After` 헤더의 초만큼 대기한다 (최대 1시간 버킷까지 고려)
+- 급할 때: rate limit 은 **프로세스 메모리**에만 있으므로 `docker compose restart api` 로 즉시 초기화된다
+  (DB·세션·비밀번호에는 영향 없음. 단 진행 중 요청이 끊기므로 관리자 작업이 없을 때 수행)
+- 이 동작은 무차별 대입 방어의 의도된 결과이며 계약 준수 사항이다 (완화하려면 계약 변경 필요)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type ApiAdminPost,
   adminDeletePost,
@@ -12,13 +12,15 @@ import {
 import { getApiConnection } from "@/lib/api/http";
 import { formatEntryDate } from "@/lib/date";
 import { UrgentBadge } from "@/components/ui/UrgentBadge";
-import { DocumentIcon, ConstructionIcon } from "@/components/ui/icons";
+import { DocumentIcon, ConstructionIcon, WarningIcon } from "@/components/ui/icons";
 import { EmptyState } from "@/components/board/EmptyState";
 import { PostForm } from "@/components/admin/PostForm";
+import { PasswordChangeForm } from "@/components/admin/PasswordChangeForm";
 import { DeleteDialog } from "@/components/admin/DeleteDialog";
 import {
   ADMIN_DANGER_BUTTON_CLASS,
   ADMIN_FIELD_CLASS,
+  ADMIN_LABEL_CLASS,
   ADMIN_PRIMARY_BUTTON_CLASS,
   ADMIN_SECONDARY_BUTTON_CLASS,
 } from "@/components/admin/styles";
@@ -57,7 +59,7 @@ function LoginForm({ onLoggedIn }: { onLoggedIn: () => void }) {
   return (
     <div className="rounded-badge mx-auto mt-8 w-full max-w-96 border border-border-strong px-6 py-8">
       <form onSubmit={handleSubmit} noValidate>
-        <label htmlFor="admin-password" className="mb-2 block text-body font-semibold text-ink">
+        <label htmlFor="admin-password" className={ADMIN_LABEL_CLASS}>
           관리자 비밀번호
         </label>
         <input
@@ -95,19 +97,30 @@ export function AdminApp() {
   const [deleting, setDeleting] = useState<ApiAdminPost | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [passwordPanelOpen, setPasswordPanelOpen] = useState(false);
+  /** GET /admin/me 의 passwordIsInitial (계약 §1) — 초기 비밀번호 경고 배너 노출 조건 */
+  const [passwordIsInitial, setPasswordIsInitial] = useState(false);
+  const [meToken, setMeToken] = useState(0);
+  const passwordButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  // 세션 확인 (비동기 콜백 setState)
+  // 세션 확인 + 초기 비밀번호 여부 조회 (비동기 콜백 setState).
+  // 로그인 직후에도 meToken 을 올려 재조회한다 — 최초 진입에서 세션이 없으면
+  // 이 효과의 결과가 "login"이라 passwordIsInitial 을 아직 알 수 없기 때문.
   useEffect(() => {
     if (!configured) return;
     let cancelled = false;
     void adminMe().then((result) => {
       if (cancelled) return;
-      setPhase(result.ok ? "ready" : "login");
+      if (result.ok) setPasswordIsInitial(result.data.passwordIsInitial);
+      // phase 는 최초 진입에서만 이 조회가 결정한다. 로그인 직후 재조회(meToken > 0)에서
+      // 일시적 통신 실패를 이유로 로그인 화면으로 되돌리지 않는다 —
+      // 세션이 실제로 무효라면 이어지는 목록 조회가 로그인 화면으로 전환한다.
+      if (meToken === 0) setPhase(result.ok ? "ready" : "login");
     });
     return () => {
       cancelled = true;
     };
-  }, [configured]);
+  }, [configured, meToken]);
 
   // 목록 로드 (ready 상태에서)
   useEffect(() => {
@@ -154,11 +167,55 @@ export function AdminApp() {
   }
 
   if (phase === "login") {
-    return <LoginForm onLoggedIn={() => setPhase("ready")} />;
+    return (
+      <LoginForm
+        onLoggedIn={() => {
+          setPhase("ready");
+          setMeToken((token) => token + 1); // passwordIsInitial 재조회 (배너 판정)
+        }}
+      />
+    );
   }
 
   async function handleLogout() {
     await adminLogout();
+    setPasswordPanelOpen(false);
+    setPhase("login");
+  }
+
+  /** 비밀번호 패널과 PostForm 은 같은 슬롯을 공유하므로 동시에 열지 않는다 (§14.8.3) */
+  function openPasswordPanel() {
+    setEditing(null);
+    setPasswordPanelOpen(true);
+  }
+
+  function openPostForm(target: ApiAdminPost | "new") {
+    setPasswordPanelOpen(false);
+    setEditing(target);
+  }
+
+  /** 취소·성공 모두 포커스 복귀 대상은 헤더 버튼으로 고정 (배너 CTA는 성공 후 사라짐 — §14.8.6) */
+  function closePasswordPanel() {
+    setPasswordPanelOpen(false);
+    passwordButtonRef.current?.focus();
+  }
+
+  function handlePasswordChanged(sessionsRevoked: number) {
+    setPasswordPanelOpen(false);
+    // 계약 §2: 한 번 변경하면 passwordIsInitial 은 영구 false —
+    // /admin/me 재호출 없이 로컬 갱신으로 배너를 즉시 제거한다 (§14.8.2)
+    setPasswordIsInitial(false);
+    setNotice(
+      sessionsRevoked > 0
+        ? `비밀번호를 변경했습니다. 다른 기기의 로그인 ${sessionsRevoked}건이 해제되었습니다.`
+        : "비밀번호를 변경했습니다. 이 브라우저의 로그인은 유지됩니다.",
+    );
+    passwordButtonRef.current?.focus();
+  }
+
+  /** reason "unauthorized" = 인증 수단 자체가 무효 → 세션 만료 처리 (계약 §3) */
+  function handlePasswordSessionExpired() {
+    setPasswordPanelOpen(false);
     setPhase("login");
   }
 
@@ -178,15 +235,59 @@ export function AdminApp() {
 
   return (
     <div className="mt-6">
+      {/*
+        초기 비밀번호 경고 배너 (§14.8.2) — ready 뷰 최상단 첫 자식, 닫기 버튼 없음.
+        라이브 리전(role="status"/"alert")을 붙이지 않는다: 최초 렌더에 포함되어 나타나므로
+        중복·과잉 안내가 된다. <section aria-labelledby> 랜드마크로 건너뛰기·되찾기를 지원.
+        색은 urgent(적색)가 아니라 accent(오렌지) — 오류가 아닌 상시 주의 환기 (§14.8.1).
+      */}
+      {passwordIsInitial ? (
+        <section
+          aria-labelledby="initial-password-title"
+          className="rounded-badge mb-4 border-l-4 border-accent-strong bg-accent-tint p-4 md:px-5"
+        >
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
+            <div className="flex flex-1 items-start gap-3">
+              <WarningIcon className="mt-1 size-6 shrink-0 text-accent-strong" />
+              <div className="min-w-0">
+                <h2 id="initial-password-title" className="text-body font-bold text-accent-strong">
+                  주의 — 초기 비밀번호를 사용 중입니다
+                </h2>
+                <p className="mt-1 text-caption text-ink">
+                  배포할 때 발급된 초기 비밀번호를 아직 한 번도 바꾸지 않았습니다. 지금 변경해
+                  주세요.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={openPasswordPanel}
+              className={`${ADMIN_PRIMARY_BUTTON_CLASS} w-full md:w-auto md:shrink-0`}
+            >
+              비밀번호 변경
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-h2 text-ink">게시물 관리</h2>
-        <div className="flex gap-2">
+        {/* flex-wrap: 360px 에서 3버튼 합(≈330px)이 콘텐츠 폭(328px)을 넘는다 (§14.8.7) */}
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => setEditing("new")}
+            onClick={() => openPostForm("new")}
             className={ADMIN_PRIMARY_BUTTON_CLASS}
           >
             새 게시물
+          </button>
+          <button
+            type="button"
+            ref={passwordButtonRef}
+            onClick={openPasswordPanel}
+            className={ADMIN_SECONDARY_BUTTON_CLASS}
+          >
+            비밀번호 변경
           </button>
           <button type="button" onClick={handleLogout} className={ADMIN_SECONDARY_BUTTON_CLASS}>
             로그아웃
@@ -197,6 +298,17 @@ export function AdminApp() {
       <p role="status" className="mt-2 text-caption text-ink">
         {notice ?? ""}
       </p>
+
+      {passwordPanelOpen ? (
+        <div className="rounded-badge mt-4 border border-border-soft p-4">
+          <h3 className="text-body font-bold text-ink">비밀번호 변경</h3>
+          <PasswordChangeForm
+            onChanged={handlePasswordChanged}
+            onCancel={closePasswordPanel}
+            onSessionExpired={handlePasswordSessionExpired}
+          />
+        </div>
+      ) : null}
 
       {editing !== null ? (
         <div className="rounded-badge mt-4 border border-border-soft p-4">
@@ -262,7 +374,7 @@ export function AdminApp() {
                     <span className="flex shrink-0 gap-2">
                       <button
                         type="button"
-                        onClick={() => setEditing(post)}
+                        onClick={() => openPostForm(post)}
                         className={ADMIN_SECONDARY_BUTTON_CLASS}
                       >
                         수정

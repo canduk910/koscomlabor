@@ -20,6 +20,7 @@ import { DocumentIcon } from "@/components/ui/icons";
 import {
   ADMIN_DANGER_BUTTON_CLASS,
   ADMIN_FIELD_CLASS,
+  ADMIN_LABEL_CLASS,
   ADMIN_PRIMARY_BUTTON_CLASS,
   ADMIN_SECONDARY_BUTTON_CLASS,
 } from "@/components/admin/styles";
@@ -38,8 +39,6 @@ interface PostFormProps {
   onSaved: () => void;
   onCancel: () => void;
 }
-
-const LABEL_CLASS = "mb-2 block text-body font-semibold text-ink";
 
 /** 유형/카테고리 라디오 — §4.2 탭 시각 스타일 (시맨틱은 radio, ARIA tabs 아님 — §14.4) */
 function RadioPill({
@@ -226,7 +225,7 @@ export function PostForm({ initial, onSaved, onCancel }: PostFormProps) {
   return (
     <form onSubmit={handleSubmit} noValidate className="mt-4">
       <fieldset>
-        <legend className={LABEL_CLASS}>글 유형</legend>
+        <legend className={ADMIN_LABEL_CLASS}>글 유형</legend>
         <div className="inline-flex gap-1 rounded-full bg-surface p-1">
           <RadioPill
             name="post-type"
@@ -246,7 +245,7 @@ export function PostForm({ initial, onSaved, onCancel }: PostFormProps) {
       </fieldset>
 
       <fieldset className="mt-4">
-        <legend className={LABEL_CLASS}>카테고리</legend>
+        <legend className={ADMIN_LABEL_CLASS}>카테고리</legend>
         <div className="inline-flex gap-1 rounded-full bg-surface p-1">
           <RadioPill
             name="post-category"
@@ -267,7 +266,7 @@ export function PostForm({ initial, onSaved, onCancel }: PostFormProps) {
 
       {type === "link" ? (
         <div className="mt-4">
-          <label htmlFor="post-url" className={LABEL_CLASS}>
+          <label htmlFor="post-url" className={ADMIN_LABEL_CLASS}>
             URL (필수)
           </label>
           <div className="flex flex-wrap gap-2">
@@ -292,7 +291,7 @@ export function PostForm({ initial, onSaved, onCancel }: PostFormProps) {
       ) : null}
 
       <div className="mt-4">
-        <label htmlFor="post-title" className={LABEL_CLASS}>
+        <label htmlFor="post-title" className={ADMIN_LABEL_CLASS}>
           제목 (필수)
         </label>
         <input
@@ -319,7 +318,7 @@ export function PostForm({ initial, onSaved, onCancel }: PostFormProps) {
       {type === "article" ? (
         <>
           <div className="mt-4">
-            <label htmlFor="post-body" className={LABEL_CLASS}>
+            <label htmlFor="post-body" className={ADMIN_LABEL_CLASS}>
               본문 (필수)
             </label>
             <textarea
@@ -333,7 +332,7 @@ export function PostForm({ initial, onSaved, onCancel }: PostFormProps) {
             </p>
           </div>
           <div className="mt-4">
-            <label htmlFor="post-source" className={LABEL_CLASS}>
+            <label htmlFor="post-source" className={ADMIN_LABEL_CLASS}>
               출처{sourceRequired ? " (필수)" : ""}
             </label>
             <input
@@ -361,7 +360,7 @@ export function PostForm({ initial, onSaved, onCancel }: PostFormProps) {
       </div>
 
       <div className="mt-4">
-        <label htmlFor="post-deadline" className={LABEL_CLASS}>
+        <label htmlFor="post-deadline" className={ADMIN_LABEL_CLASS}>
           마감일
         </label>
         <input
@@ -374,7 +373,7 @@ export function PostForm({ initial, onSaved, onCancel }: PostFormProps) {
       </div>
 
       <div className="mt-4">
-        <span className={LABEL_CLASS}>파일 첨부</span>
+        <span className={ADMIN_LABEL_CLASS}>파일 첨부</span>
         <input
           ref={fileInputRef}
           type="file"
