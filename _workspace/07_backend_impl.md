@@ -310,7 +310,7 @@ QA 10회차 통과 후 리더 승인으로 API 배포 완료. 구현·로컬 실
 - 크론 추가: **03:05 KST uploads 볼륨 tar 백업**(`/root/koscomlabor-api/backup-uploads.sh`, 14일 롤링, 1회 실행 검증 완료). 전체 크론: 00:10 웹 재빌드 → 00:30 onnuri → 03:00 DB 백업 → 03:05 uploads 백업 → 03:30 ip_hash 정리
 - admin 초기 비밀번호: `/root/koscomlabor-api/ADMIN_PASSWORD.initial` (600, 안내문 포함). **확인 후 삭제 필요**
 
-## 9. 관리자 비밀번호 변경 기능 (2026-08-17) — 구현 완료, **프로덕션 미적용**
+## 9. 관리자 비밀번호 변경 기능 (2026-08-17) — 구현 완료, **프로덕션 적용 완료** (§9.10)
 
 계약: `_workspace/00_input/contract-password-change.md` (+ 개정 1). 명세: 06 §10.4 / §12.1-a / §12.3 / §12.4.
 
@@ -513,3 +513,40 @@ WHERE id = 1` 후에는 **재기동 없이도** env 해시로 로그인되고(�
 - 급할 때: rate limit 은 **프로세스 메모리**에만 있으므로 `docker compose restart api` 로 즉시 초기화된다
   (DB·세션·비밀번호에는 영향 없음. 단 진행 중 요청이 끊기므로 관리자 작업이 없을 때 수행)
 - 이 동작은 무차별 대입 방어의 의도된 결과이며 계약 준수 사항이다 (완화하려면 계약 변경 필요)
+
+### 9.10 프로덕션 적용 기록 (2026-08-17, 리더 수행)
+
+커밋 `28bbfb5`. §9.5 절차를 그대로 따랐고 편차 없음.
+
+| 단계 | 결과 |
+|------|------|
+| ① rsync `server/` → `/root/koscomlabor-api/app/` | 완료 (`--exclude node_modules,dist,.env,uploads`) |
+| ② DB 백업 | `/root/backups/pre_pwchange_20260817_1011.dump` (10,592 bytes) |
+| ③ `--profile tools build migrate` → `run --rm migrate` | `1755300000003_create-admin-credentials` 적용 |
+| ④ 스키마 확인 | `CHECK (id = 1)` 제약 포함 생성 확인 |
+| ⑤ `build api` → `up -d api` | Recreated → Started (db healthy 대기 후) |
+| ⑥ 기동·시드 확인 | 시드 실패 메시지 없음. `admin_credentials` 1행, `seeded_at=2026-08-17 01:12:16+00`, `updated_at=NULL` |
+| ⑦ 스모크 (`https://union-api.koscomlabor.cloud`) | 아래 |
+| ⑧ 웹 배포 | `git push origin main` → CI 성공 → Deploy Web run `31984390279` 성공 |
+
+**⑦ 스모크 실측 (프로덕션):**
+
+```
+POST /admin/login  (초기 비밀번호)  → 200 {"ok":true,"expiresAt":"2026-08-17T13:13:17.688Z"}
+GET  /admin/me                      → 200 {"ok":true,"method":"session",...,"passwordIsInitial":true}
+POST /admin/password (틀린 current) → 401 {"error":{"code":"INVALID_CREDENTIALS",
+                                              "message":"현재 비밀번호가 일치하지 않습니다."}}
+POST /admin/logout                  → 200
+```
+
+**시드 무결성 확인이 이번 배포의 핵심 관문이었다** — env→DB 전환 후에도 기존 초기 비밀번호로
+로그인이 되는가. 200 으로 확인됐다(관리자 잠김 없음). 스모크용 세션은 로그아웃으로 정리했고,
+남은 세션 3건은 배포 이전부터 존재하던 것으로 이번 작업과 무관하다.
+
+**웹 번들 검증:** `https://koscomlabor.cloud/admin` 200, 참조 청크 9개를 내려받아 신규 문자열
+전수 확인 — `초기 비밀번호를 사용 중입니다`, `다른 기기의 로그인 ${n}건이 해제되었습니다`,
+`admin/password`, `invalid-credentials`, `INVALID_CREDENTIALS`, `passwordIsInitial` 모두 존재.
+
+**프로덕션에서 비밀번호 변경은 수행하지 않았다** — 새 비밀번호는 사용자가 정할 값이다.
+`passwordIsInitial` 이 `true` 이므로 관리 화면에 경고 배너가 떠 있다. 사용자가 UI 에서 변경한
+뒤 `/root/koscomlabor-api/ADMIN_PASSWORD.initial` 을 삭제하면 된다.

@@ -13,3 +13,4 @@
 | 2026-08-16 | backend-developer 에이전트 + union-backend-dev 스킬 추가, 오케스트레이터에 백엔드 경로 반영 | agents/backend-developer.md, skills/union-backend-dev, skills/union-page-orchestrator | NCP 백엔드(방명록 서버) 로드맵 확정, 프론트와 전문성 축 분리 |
 | 2026-08-16 | 모던 스타일 기준(§0) 추가 — Pretendard 필수, 라운드·히어로 패널 언어 | skills/union-design-system | 사용자 피드백: "디자인 구식, 폰트 촌스러움" |
 | 2026-08-17 | 프로덕션 데이터 변경 시 WHERE 절 필수 규칙 추가 | skills/union-backend-dev | 배포 중 스모크 정리에 조건 없는 DELETE 사용 발생(실손실 0, 재발 방지) |
+| 2026-08-17 | 위 WHERE 절 규칙에 "휘발성 인증 상태 테이블" 승인된 예외 명문화 | skills/union-backend-dev §3 | 비밀번호 변경 시 전 기기 로그아웃은 전체 삭제가 곧 요구사항이라 규칙과 충돌. 개발·QA 양쪽이 판정을 요청해 예외 조건(전용 함수·근거 주석·호출처 1곳·콘텐츠 테이블 제외)을 규칙에 흡수 |
