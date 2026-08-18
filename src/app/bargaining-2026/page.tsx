@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { DateBadge } from "@/components/home/DateBadge";
+import { StruggleCalendar } from "@/components/bargaining/StruggleCalendar";
 import { DocumentIcon } from "@/components/ui/icons";
 import { daysUntilKst, formatMonthDaySlash } from "@/lib/date";
 
@@ -37,19 +38,28 @@ export const metadata: Metadata = {
     "금융노조 산별중앙교섭이 결렬되어 9월 4일 총파업에 들어갑니다. 남은 일정과 교섭 경과를 안내합니다.",
 };
 
-/** 남은 일정 — 날짜는 ISO(날짜 전용). D-n 은 렌더 시점에 계산한다(하드코딩 금지, §17.3) */
+/**
+ * 남은 일정 — 날짜는 ISO(날짜 전용). D-n 은 렌더 시점에 계산한다(하드코딩 금지, §17.3).
+ *
+ * **일정의 단일 출처다.** 달력(StruggleCalendar)과 상세 카드가 이 배열 하나를 읽는다 —
+ * 달력용 날짜를 따로 적어 두 벌이 되면 한쪽만 고쳐졌을 때 조합원에게 서로 다른 날짜가 보인다.
+ *
+ * `level` 은 **중대도**이며 임박도가 아니다(§18.3.2). 달력 셀 색과 카드 배지 색을 함께 정한다.
+ */
 const SCHEDULE = [
   {
     date: "2026-08-28",
     title: "총력투쟁 결의대회",
     meta: "서울 여의도 · 저녁",
     detail: "총파업 D-7 집회입니다.",
+    level: "major",
   },
   {
     date: "2026-09-04",
     title: "총파업",
     meta: "종일",
     detail: "집결 장소와 시간은 지부 공지로 별도 안내합니다.",
+    level: "peak",
   },
 ] as const;
 
@@ -108,12 +118,17 @@ export default function BargainingPage() {
             <div id="schedule-heading">
               <SectionHeading>남은 일정</SectionHeading>
             </div>
+            {/*
+              달력은 카드를 대체하지 않는 **추가 레이어**다(§18.0 #4). 카드가 장소·시간·상세
+              안내의 정본이며, 일정이 전부 지나면 달력만 사라지고 카드는 그대로 남는다.
+              now 를 넘기지 않는다 — 프로덕션은 렌더 시점(revalidate 60초)으로 계산한다.
+            */}
+            <StruggleCalendar events={SCHEDULE} className="mt-6" />
             <ul className="mt-6 grid gap-4 md:grid-cols-2">
               {SCHEDULE.map((item) => {
                 // 요청 시점 계산 — 8/28 이 지나면 이 카드가 스스로 "완료"로 전환된다
                 const days = daysUntilKst(item.date);
                 const past = days !== null && days < 0;
-                const imminent = days !== null && days >= 0 && days <= 7;
                 return (
                   <li
                     key={item.date}
@@ -122,7 +137,14 @@ export default function BargainingPage() {
                     <DateBadge
                       monthDay={formatMonthDaySlash(item.date)}
                       subLabel={days === null || past ? "종료" : days === 0 ? "오늘" : `D-${days}`}
-                      variant={past ? "default" : imminent ? "imminent" : "emphasis"}
+                      /*
+                        색은 중대도(level)가 정한다 — D-7 이내 판정으로 색을 고르면 8/28·9/4 가
+                        둘 다 emphasis 가 되어 총파업의 중대성이 화면에서 사라진다(§18.5).
+                        이 페이지는 variant `imminent` 를 **최상위 중대도**의 시각 표현으로
+                        사용한다. 이름을 바꾸면 PostList 의 마감 임박 표시까지 흔들리므로
+                        DateBadge 는 손대지 않는다.
+                      */
+                      variant={past ? "default" : item.level === "peak" ? "imminent" : "emphasis"}
                     />
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-center gap-2">

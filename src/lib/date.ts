@@ -100,3 +100,62 @@ export function daysUntilKst(isoDate: string, now: Date = new Date()): number | 
   const todayUtc = Date.UTC(Number(np.year), Number(np.month) - 1, Number(np.day));
   return Math.round((targetUtc - todayUtc) / 86_400_000);
 }
+
+/* ---- v3 (§18.10): 카운트다운 달력용. 기존 함수는 수정하지 않는다 ---- */
+
+/**
+ * KST 달력 기준 오늘의 날짜 전용 ISO (YYYY-MM-DD).
+ * daysUntilKst 와 **같은 포매터**를 쓴다 — 두 함수가 다른 기준을 쓰면
+ * "오늘"의 판정과 D-n 이 자정 전후로 어긋난다.
+ */
+export function todayIsoKst(now: Date = new Date()): string {
+  if (Number.isNaN(now.getTime())) return "";
+  const p = partsOf(KST_ISO_FORMATTER, now);
+  if (!p) return "";
+  return `${p.year}-${p.month}-${p.day}`;
+}
+
+/**
+ * 날짜 전용 ISO 에 n일 가감한 ISO. UTC 자정끼리의 산술이라 DST·타임존 오차 0.
+ * 월·연 경계는 Date.UTC 의 자동 정규화에 맡긴다(수동 계산 금지).
+ * 유효하지 않은 입력은 빈 문자열 반환.
+ */
+export function addDaysIso(isoDate: string, days: number): string {
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime()) || !Number.isFinite(days)) return "";
+  const p = partsOf(ISO_FORMATTER, date);
+  if (!p) return "";
+  const shifted = new Date(Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day) + days));
+  return toIsoDateString(shifted);
+}
+
+/**
+ * 날짜 전용 ISO 의 요일 인덱스 (0=일 … 6=토).
+ * 날짜 전용 ISO 는 UTC 자정으로 파싱되므로 getUTCDay() 로 오차 없이 얻는다.
+ * (요일 **표기**는 반드시 Intl.DateTimeFormat 의 weekday 옵션으로 만들 것 — §18.10)
+ * 유효하지 않은 입력은 NaN (Date API 의 동작 그대로).
+ */
+export function weekdayIndexIso(isoDate: string): number {
+  return new Date(isoDate).getUTCDay();
+}
+
+/** 스크린리더 낭독·헤드라인용 한국어 날짜 표기 */
+const KOREAN_MONTH_DAY_FORMATTER = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "UTC",
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+});
+
+/**
+ * 한국어 날짜: `8월 28일`.
+ * ko-KR 의 기본 출력은 `8. 28.` 이라 그대로 쓸 수 없다 — formatToParts 로 조립한다.
+ * 유효하지 않은 입력은 빈 문자열 반환.
+ */
+export function formatKoreanMonthDay(isoDate: string): string {
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) return "";
+  const p = partsOf(KOREAN_MONTH_DAY_FORMATTER, date);
+  if (!p) return "";
+  return `${Number(p.month)}월 ${Number(p.day)}일`;
+}
