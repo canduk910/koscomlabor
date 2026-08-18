@@ -4,6 +4,11 @@
 # NEXT_PUBLIC_* 은 빌드타임에 번들에 임베드되므로 build ARG 로 주입한다:
 #   docker build --build-arg NEXT_PUBLIC_API_BASE_URL=https://union-api.koscomlabor.cloud .
 # (compose: deploy/web/docker-compose.yml 의 build.args 에서 주입)
+#
+# NEXT_PUBLIC_NAVER_MAP_CLIENT_ID: 네이버 지도(Web Dynamic Map) Client ID.
+#   미주입이면 참석 안내 페이지(/rally-2026-08-28)의 **지도 블록이 통째로 렌더되지 않는다** —
+#   오류 문구도 뜨지 않는다(위치 정보는 같은 페이지 텍스트 블록에 온전히 있다).
+#   NCP 콘솔의 서비스 URL 등록과 값이 맞아야 한다(불일치 시 인증 실패 → 대체면).
 
 FROM node:22-alpine AS deps
 WORKDIR /app
@@ -15,6 +20,8 @@ RUN npm ci
 FROM deps AS build
 ARG NEXT_PUBLIC_API_BASE_URL
 ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
+ARG NEXT_PUBLIC_NAVER_MAP_CLIENT_ID
+ENV NEXT_PUBLIC_NAVER_MAP_CLIENT_ID=$NEXT_PUBLIC_NAVER_MAP_CLIENT_ID
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY . .
 # 일일 재빌드 캐시 버스트: 마감 스트립 D-n 이 빌드 시점 고정이므로

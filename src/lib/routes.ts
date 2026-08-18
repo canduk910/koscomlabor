@@ -19,6 +19,17 @@ export const EXTERNAL_LINKS = {
   onnuriGuide: "https://onnuri.koscomlabor.cloud/",
 } as const;
 
+/**
+ * 온누리 카드에 **표시**하는 도메인 (스펙 §20.12.6).
+ *
+ * `href` 와 화면 문자열이 갈리면 "클릭 전에 목적지를 알려준다"는 목적을 정면으로 배신하므로
+ * 리터럴을 따로 적지 않고 `EXTERNAL_LINKS.onnuriGuide` 에서 파생한다.
+ * `host` 는 서브도메인 포함·프로토콜 제외·끝 슬래시 제외 — 채택 표기와 정확히 일치한다.
+ * 전체 URL 은 360px 카드 안에서 28px 넘친다(§20.12.1 실측) — 도메인만 쓰는 이유다.
+ * 호스트가 더 긴 도메인으로 바뀌면 §20.12.1 의 197px 예산을 **다시 실측**해야 한다.
+ */
+export const ONNURI_GUIDE_DISPLAY_HOST = new URL(EXTERNAL_LINKS.onnuriGuide).host;
+
 /* 상세 경로 빌더 — 개별 상수(ROUTES.notice 등)와 분류 매핑(ROUTES.post)이 같은 함수를 공유한다 */
 function noticePath(id: string): string {
   return `/notices/${encodeURIComponent(id)}`;
@@ -50,6 +61,12 @@ export const ROUTES = {
    * 8페이지 구조 문서이고 투쟁 종료 후 폐기·보존 판단이 별도로 필요해 코드로 관리한다.
    */
   bargaining: "/bargaining-2026",
+  /**
+   * 8/28 결의대회 참석 안내 (§20.1).
+   * `/bargaining-2026` 의 하위 경로로 두지 않는 이유는 상위 페이지가 폐기돼도
+   * 공유된 링크가 살아 있어야 하기 때문이다(§20.0-4).
+   */
+  rally0828: "/rally-2026-08-28",
   /** 메인페이지의 특정 섹션 앵커 (§15.9.2 — 상세 페이지 "목록으로 돌아가기" 복귀 지점) */
   homeSection: (id: HomeSectionId): string => `/#${id}`,
   /** 공지사항 상세 (DB 전환 — id는 uuid, §15-7) */

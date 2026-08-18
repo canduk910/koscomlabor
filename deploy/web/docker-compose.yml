@@ -3,7 +3,7 @@
 # 서버 배치: 이 파일은 /root/koscomlabor-web/docker-compose.yml 로 복사되고,
 # 저장소는 /root/koscomlabor-web/src/ 로 rsync 된다 (node_modules·.next·.git·_workspace·server 제외).
 #
-# NEXT_PUBLIC_API_BASE_URL 은 빌드타임 임베드 — 값 변경 시 재빌드 필요.
+# NEXT_PUBLIC_API_BASE_URL·NEXT_PUBLIC_NAVER_MAP_CLIENT_ID 은 빌드타임 임베드 — 값 변경 시 재빌드 필요.
 # 외부 노출은 onnuri-caddy(443) 경유만 (호스트 포트 미개방, deploy_web 네트워크 공유).
 
 name: koscomlabor-web
@@ -14,6 +14,9 @@ services:
       context: ./src
       args:
         NEXT_PUBLIC_API_BASE_URL: https://union-api.koscomlabor.cloud
+        # 네이버 지도 Client ID (NCP → Maps → Application). 서비스 URL 로 koscomlabor.cloud 와
+        # localhost 가 등록돼 있다. 값이 비면 /rally-2026-08-28 의 지도 블록이 렌더되지 않는다.
+        NEXT_PUBLIC_NAVER_MAP_CLIENT_ID: x79smqla3u
         BUILD_DATE: dev   # deploy.sh 가 --build-arg BUILD_DATE=$(date +%F) 로 덮어씀 (일일 재빌드 캐시 버스트)
     image: koscomlabor-web:latest
     container_name: koscomlabor-web

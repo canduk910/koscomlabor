@@ -14,10 +14,12 @@ import { SiteFooter } from "@/components/layout/SiteFooter";
 import { HeroPanel } from "@/components/home/HeroPanel";
 import { DeadlineStrip } from "@/components/home/DeadlineStrip";
 import { OnnuriGuideCard } from "@/components/home/OnnuriGuideCard";
+import { RallyEntryCard } from "@/components/home/RallyEntryCard";
 import { SectionNav } from "@/components/home/SectionNav";
 import { HomeSection } from "@/components/home/HomeSection";
 import { StruggleCalendar } from "@/components/bargaining/StruggleCalendar";
 import { STRUGGLE_SCHEDULE, nextStruggleEvent } from "@/lib/struggleSchedule";
+import { rallyPhase } from "@/lib/rally";
 
 /**
  * 메인페이지 (스펙 §15 — 탭 → 섹션 나열 전환판. §3 구조도·§4 탭 스펙은 폐기).
@@ -117,6 +119,18 @@ export default async function Home() {
               <StruggleCalendar events={STRUGGLE_SCHEDULE} size="mini" />
             </div>
           ) : null}
+          {/*
+            결의대회 참석 안내 진입 블록 (§20.2.1) — 미니달력 **바로 아래**, 온누리 카드 위.
+            8/28 을 말하는 블록이 둘이면 떨어뜨릴수록 별개 사건으로 오독된다. 인접시키면
+            "개요(달력) → 그날의 상세(참석 안내)" 계열로 읽힌다.
+            **조건부 렌더가 아니다** — 8/28 이 지나도 렌더하고 상태만 바뀐다(리더 결정 2).
+            미니달력이 사라진 상태(§18.7 상태 E)에서는 스트립/히어로 바로 아래로 자연히 올라온다.
+            감싸는 div 가 항상 1개라 여백이 겹치지 않는다.
+            상태 계산은 여기서 한다 — 컴포넌트는 시간을 모른다(§18.7 패턴).
+          */}
+          <div className="mt-8 md:mt-10">
+            <RallyEntryCard phase={rallyPhase()} />
+          </div>
           <div className="mt-8 md:mt-10">
             <OnnuriGuideCard />
           </div>

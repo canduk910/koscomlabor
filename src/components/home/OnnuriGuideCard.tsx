@@ -1,4 +1,4 @@
-import { EXTERNAL_LINKS } from "@/lib/routes";
+import { EXTERNAL_LINKS, ONNURI_GUIDE_DISPLAY_HOST } from "@/lib/routes";
 import { BookIcon, ExternalLinkIcon } from "@/components/ui/icons";
 
 /**
@@ -33,6 +33,27 @@ export function OnnuriGuideCard() {
         </span>
         <span className="mt-1 block text-caption font-normal text-ink">
           코스콤 조합원 대상 안내 · 외부 페이지가 새 창에서 열립니다
+        </span>
+        {/*
+          목적지 주소 (§20.12) — **추가만 했다. 위 2줄은 문구·클래스 그대로다.**
+          도메인만 쓰는 이유: 전체 URL 은 360px 카드 안(197px)에서 28px 넘치고, URL 은 공백이
+          없어 어절 줄바꿈이 안 되므로 카드 밖으로 삐져나간다(§20.12.1 실측).
+          `https://` 는 이 사이트 모든 외부 링크에 공통이라 변별 정보가 0이다.
+          문자열은 `href` 에서 파생한다 — 링크가 바뀌었는데 화면에 옛 주소가 남으면
+          "클릭 전에 목적지를 알려준다"는 목적을 정면으로 배신한다(§20.12.6).
+          색은 카드의 링크 색과 같은 accent-strong(#7a3806 on #fdf0e7 = 7.84 AAA) —
+          tint 면 위 ink-muted 는 §16.9.7 이 금지한 조합이다.
+          `break-all` 은 텍스트 확대 200%(15px→30px) 에서 카드 밖으로 나가지 않게 하는 보험이다.
+          **`truncate`·말줄임 금지** — 주소가 잘리면 표시하는 의미가 사라진다.
+          `aria-hidden`: 카드 전체가 단일 <a> 라 내부 텍스트가 전부 접근성 이름에 들어간다.
+          도메인이 섞이면 스크린리더가 문자 단위로 끊어 읽어 낭독이 장황해진다 —
+          숨긴 것은 콘텐츠가 아니라 `href` 의 시각적 사본이므로 §0.4 은폐와 무관하다.
+        */}
+        <span
+          aria-hidden="true"
+          className="mt-1 block break-all text-caption text-accent-strong"
+        >
+          {ONNURI_GUIDE_DISPLAY_HOST}
         </span>
       </span>
       <ExternalLinkIcon className="size-5 shrink-0 text-accent-strong" />

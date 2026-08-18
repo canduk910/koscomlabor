@@ -166,3 +166,26 @@ export function ConstructionIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+/**
+ * 좌향 화살표 아이콘 (§20.3.7 — 참석 안내 페이지 "돌아가기" 링크 20px).
+ * ArrowRightIcon 과 동일 규격(viewBox·stroke·cap/join·aria-hidden)이며 path 만 반전이다.
+ * **ArrowRightIcon 재사용 금지** — 방향이 반대인 아이콘은 "앞으로 간다"는 오독을 만든다.
+ */
+export function ArrowLeftIcon({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M19 12H5" />
+      <path d="m12 19-7-7 7-7" />
+    </svg>
+  );
+}

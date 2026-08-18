@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { DateBadge } from "@/components/home/DateBadge";
 import { StruggleCalendar } from "@/components/bargaining/StruggleCalendar";
-import { DocumentIcon } from "@/components/ui/icons";
+import { ArrowRightIcon, DocumentIcon } from "@/components/ui/icons";
 import { daysUntilKst, formatMonthDaySlash } from "@/lib/date";
 import { STRUGGLE_SCHEDULE } from "@/lib/struggleSchedule";
+import { RALLY_DATE } from "@/lib/rally";
+import { ROUTES } from "@/lib/routes";
 
 /**
  * 26년 임단협 투쟁 안내 (디자인 스펙 §17).
@@ -135,6 +138,23 @@ export default function BargainingPage() {
                       </span>
                       <span className="mt-1 block text-caption text-ink-muted">{item.meta}</span>
                       <span className="mt-2 block text-body text-ink">{item.detail}</span>
+                      {/*
+                        8/28 카드에만 참석 안내로 나가는 링크 1개를 붙인다(§20.2.5).
+                        이것이 없으면 이 카드가 막다른 길이 되고, 이 페이지만 본 조합원은
+                        집결 시각·위치를 영영 못 본다.
+                        라벨은 목적지와 1:1 이다 — `참석 안내 보기` 는 항상 `/rally-2026-08-28`,
+                        `자세히 보기` 는 항상 `/bargaining-2026`. 같은 문자열이 다른 곳으로 가면
+                        그 자체가 QA 실패다(§20.0-3).
+                      */}
+                      {item.date === RALLY_DATE ? (
+                        <Link
+                          href={ROUTES.rally0828}
+                          className="ease-out-soft mt-3 inline-flex min-h-touch items-center gap-1 text-body font-semibold text-primary transition-colors duration-150 hover:underline focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
+                        >
+                          참석 안내 보기
+                          <ArrowRightIcon className="size-5" />
+                        </Link>
+                      ) : null}
                     </span>
                   </li>
                 );
