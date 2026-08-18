@@ -1071,3 +1071,76 @@ npm run build     → ✓ Compiled successfully / 7 페이지 생성
 - `daysUntilKst` 경계 동작(D-0 `오늘`, 음수 `종료`+완료 배지)은 코드 경로만 확인.
   **날짜를 넘겨 실측하지 못했다**
 - 대비: §16.18 검증 조합만 썼으나 **신규 조합 여부를 스크립트로 재확인하지 않았다**
+
+---
+
+## §18. 푸터 관리자페이지 진입 링크 (2026-08-18)
+
+### 변경 파일
+
+| 파일 | 변경 |
+|------|------|
+| `src/components/layout/SiteFooter.tsx` | 저작권 줄에 `관리자` 링크 추가 (+ `Link`·`ROUTES` import, 주석) |
+
+신규 파일 없음. 토큰 추가 0건 — 기존 색 토큰만 사용했다.
+
+### 마크업 구조
+
+저작권 `<p>` 를 `flex flex-wrap items-center justify-between gap-x-6` 래퍼로 감쌌다
+(기존 `mt-5` 는 래퍼로 이동, 저작권 문구·색·크기 변경 0). 좌: 저작권, 우: 관리자 링크.
+`flex-wrap` 이므로 360px 처럼 한 줄에 안 들어가면 링크가 아랫줄로 내려간다 — 잘리거나
+겹치지 않는다.
+
+경로는 하드코딩하지 않고 `ROUTES.admin` 을 참조한다(union-webapp-dev §4).
+`next/link` 사용 — 푸터의 첫 내부 링크이지만 헤더·히어로의 내부 이동 관례와 동일하다.
+
+### 선택한 색 토큰과 대비 (footer 배경 --color-primary #093389 기준)
+
+| 상태 | 토큰 | 값 | 대비 | 판정 |
+|------|------|-----|------|------|
+| 기본 | `text-primary-soft` | `#d9e9ff` | **9.23:1** | AAA(본문) 통과 |
+| hover | `text-white` | `#ffffff` | **11.37:1** | AAA(본문) 통과 |
+
+`.claude/skills/union-design-system/scripts/check-contrast.mjs "#d9e9ff" "#093389"` 실측:
+`ratio 9.23 → AAA(본문) 통과`. 요구선(AA 4.5:1)을 2배 이상 상회한다.
+
+**"관리자 링크는 눈에 덜 띄어야 한다"를 대비 낮추기로 구현하지 않았다** — §0.4 저대비 금지
+규칙 정면 위반이다. 시각적 절제는 ① 크기(`text-caption` 15px, 본문 하한) ② 배치(푸터 최하단
+우측) ③ 굵기 미부여로만 얻었고, 색은 바로 옆 저작권 문단과 **동일한 토큰**이다. 즉 이 링크는
+푸터에서 가장 흐린 요소가 아니라, 가장 흐린 요소와 같은 수준이다.
+
+`underline underline-offset-4` 를 준 이유: 저작권 문단과 색이 같으므로 **색이 아닌 형태로**
+링크임을 알린다. 색 단독 구분(WCAG 1.4.1 위반)을 피하는 목적도 겸한다.
+
+### 포커스·터치
+
+- `focus-visible:outline-3 focus-visible:outline-white focus-visible:outline-offset-2`
+  — 딥블루 면 위의 관례(`HeroPanel.tsx:48`)와 동일. 헤더의 `outline-primary` 를 그대로
+  가져오면 #093389 링이 #093389 배경에 묻혀 **포커스가 보이지 않는다.**
+- `inline-flex min-h-touch items-center` — 44px 터치 대상(`--spacing-touch`) 확보.
+- `ease-out-soft transition-colors duration-150` — 호버 색 전환, 기존 관례와 동일.
+
+### 콘텐츠 은폐 금지 준수
+
+`hidden`·`display:none`·조건부 렌더 없음. 서버 컴포넌트에서 **항상 렌더되는 일반 `<a>`**
+로 출력된다. 로그인 여부에 따라 숨기지 않았다 — `/admin` 자체의 인증은 해당 라우트 책임이고,
+링크를 숨기는 것은 보안이 아니라 은폐다.
+
+### 검증 결과
+
+| 명령 | 결과 |
+|------|------|
+| `npm run lint` | 통과 (경고 0) |
+| `npx tsc --noEmit` | 통과 (exit 0) |
+| `npm run build` | 통과 — `/admin` 포함 8 페이지 생성, TypeScript 체크 통과 |
+
+**유의:** 타입 생성 전 `tsc --noEmit` 은 `src/app/layout.tsx(10,50) TS2304: Cannot find name
+'LayoutProps'` 를 낸다. 이번 변경과 무관하며 `.next/types` 미생성 상태의 산물이다 —
+`npm run build` 후 재실행하면 exit 0. QA 가 clean 클론에서 검증할 때 `tsc` 를 build 보다
+먼저 돌리면 이 에러를 만나므로, **build → tsc 순서**로 확인할 것.
+
+### QA 인계 (미검증)
+
+- **브라우저 실측 미수행** — 360px/768px/1280px 실화면, 저작권 문구와의 줄바꿈 거동
+- 키보드 Tab 이동 시 흰 포커스 링의 실제 가시성(스크립트 대비값이 아닌 육안)
+- `/admin` 도착 후 동작(인증 화면 등)은 이번 범위 밖
