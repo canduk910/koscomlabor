@@ -16,6 +16,8 @@ import { DeadlineStrip } from "@/components/home/DeadlineStrip";
 import { OnnuriGuideCard } from "@/components/home/OnnuriGuideCard";
 import { SectionNav } from "@/components/home/SectionNav";
 import { HomeSection } from "@/components/home/HomeSection";
+import { StruggleCalendar } from "@/components/bargaining/StruggleCalendar";
+import { STRUGGLE_SCHEDULE, nextStruggleEvent } from "@/lib/struggleSchedule";
 
 /**
  * 메인페이지 (스펙 §15 — 탭 → 섹션 나열 전환판. §3 구조도·§4 탭 스펙은 폐기).
@@ -101,6 +103,18 @@ export default async function Home() {
           {deadlinePosts.length > 0 ? (
             <div className="mt-3 md:mt-4">
               <DeadlineStrip posts={deadlinePosts} />
+            </div>
+          ) : null}
+          {/*
+            미니달력 (§19.2.1) — 투쟁 일정은 온누리 가이드보다 상위 정보라 그 위에 온다.
+            마감 스트립(게시물 마감)과는 담는 정보·표면·형태·시맨틱이 전부 다르다(§19.2.3).
+            일정이 전부 지나면 감싸는 여백까지 통째로 사라진다 — 빈 32px 이 남으면 안 되므로
+            컴포넌트의 null 반환에 맡기지 않고 여기서 렌더 여부를 판정한다.
+            달력에는 전 일정을 넘긴다(격자는 지난 일정도 빈 칸으로 자리를 지킨다).
+          */}
+          {nextStruggleEvent() !== null ? (
+            <div className="mt-8 md:mt-10">
+              <StruggleCalendar events={STRUGGLE_SCHEDULE} size="mini" />
             </div>
           ) : null}
           <div className="mt-8 md:mt-10">

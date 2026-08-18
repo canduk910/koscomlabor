@@ -5,6 +5,7 @@ import { DateBadge } from "@/components/home/DateBadge";
 import { StruggleCalendar } from "@/components/bargaining/StruggleCalendar";
 import { DocumentIcon } from "@/components/ui/icons";
 import { daysUntilKst, formatMonthDaySlash } from "@/lib/date";
+import { STRUGGLE_SCHEDULE } from "@/lib/struggleSchedule";
 
 /**
  * 26년 임단협 투쟁 안내 (디자인 스펙 §17).
@@ -38,30 +39,11 @@ export const metadata: Metadata = {
     "금융노조 산별중앙교섭이 결렬되어 9월 4일 총파업에 들어갑니다. 남은 일정과 교섭 경과를 안내합니다.",
 };
 
-/**
- * 남은 일정 — 날짜는 ISO(날짜 전용). D-n 은 렌더 시점에 계산한다(하드코딩 금지, §17.3).
- *
- * **일정의 단일 출처다.** 달력(StruggleCalendar)과 상세 카드가 이 배열 하나를 읽는다 —
- * 달력용 날짜를 따로 적어 두 벌이 되면 한쪽만 고쳐졌을 때 조합원에게 서로 다른 날짜가 보인다.
- *
- * `level` 은 **중대도**이며 임박도가 아니다(§18.3.2). 달력 셀 색과 카드 배지 색을 함께 정한다.
+/*
+ * 남은 일정은 `src/lib/struggleSchedule.ts` 가 **단일 출처**다(§19.3.3).
+ * 메인페이지 미니달력도 같은 배열을 읽는다 — 여기에 다시 적으면 두 벌이 되고,
+ * 한쪽만 고쳐졌을 때 조합원에게 서로 다른 날짜가 나간다.
  */
-const SCHEDULE = [
-  {
-    date: "2026-08-28",
-    title: "총력투쟁 결의대회",
-    meta: "서울 여의도 · 저녁",
-    detail: "총파업 D-7 집회입니다.",
-    level: "major",
-  },
-  {
-    date: "2026-09-04",
-    title: "총파업",
-    meta: "종일",
-    detail: "집결 장소와 시간은 지부 공지로 별도 안내합니다.",
-    level: "peak",
-  },
-] as const;
 
 /** 요구안 — 임금은 대비가 핵심이라 전폭 카드로 분리하고, 나머지는 항목 수에 무관한 그리드 */
 const DEMANDS = [
@@ -123,9 +105,9 @@ export default function BargainingPage() {
               안내의 정본이며, 일정이 전부 지나면 달력만 사라지고 카드는 그대로 남는다.
               now 를 넘기지 않는다 — 프로덕션은 렌더 시점(revalidate 60초)으로 계산한다.
             */}
-            <StruggleCalendar events={SCHEDULE} className="mt-6" />
+            <StruggleCalendar events={STRUGGLE_SCHEDULE} className="mt-6" />
             <ul className="mt-6 grid gap-4 md:grid-cols-2">
-              {SCHEDULE.map((item) => {
+              {STRUGGLE_SCHEDULE.map((item) => {
                 // 요청 시점 계산 — 8/28 이 지나면 이 카드가 스스로 "완료"로 전환된다
                 const days = daysUntilKst(item.date);
                 const past = days !== null && days < 0;
