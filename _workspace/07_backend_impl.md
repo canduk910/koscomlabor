@@ -1562,3 +1562,95 @@ curl -s -o /dev/null -w '%{http_code}\n' https://koscomlabor.cloud/             
 - `/rally-2026-08-28` 에서 `ncpKeyId` 가 사라짐
 - `rebuild.log` 에 `[compose] 검증 실패` 출력
 
+### 12.7 저장소 ↔ 서버 diff 확인 결과 (적용 전)
+
+리더가 손으로 맞춰 놓은 상태라 저장소가 서버를 덮어쓸 때 무엇이 바뀌는지 먼저 확인했다.
+
+**`deploy.sh`** — 서버본과 저장소본이 **완전히 동일**했다(diff 0). 이번 변경 전 기준.
+
+**`docker-compose.yml`** — 차이는 **주석 3곳뿐**이고, **실효 설정(비주석 라인)의 차이는 0** 이었다.
+
+```
+-# NEXT_PUBLIC_API_BASE_URL 은 빌드타임 임베드 …
++# NEXT_PUBLIC_API_BASE_URL·NEXT_PUBLIC_NAVER_MAP_CLIENT_ID 은 빌드타임 임베드 …
++        # 네이버 지도 Client ID (NCP → Maps → Application) … (설명 주석 2줄)
+```
+
+`services`·`image`·`container_name`·`networks`·`build.args` 전부 동일 —
+`NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_NAVER_MAP_CLIENT_ID: x79smqla3u`, `BUILD_DATE: dev`.
+**즉 저장소가 서버를 덮어써도 동작이 달라지는 값은 없다.** 이 확인 후에 적용했다.
+
+(적용 시점에 compose 주석을 한 번 더 손봤다 — "이 파일이 단일 출처이며 서버 파일을 손으로
+고치지 말 것"을 파일 자체에 남기기 위해서다. 이 역시 주석이며 실효 설정은 그대로다.)
+
+### 12.8 검증 실행 결과
+
+서버 측 4개 경로를 모두 실제 프로덕션에서 실행해 확인했다.
+
+| # | 경로 | 조건 | 결과 |
+|---|------|------|------|
+| ① | **크론 경로** (rsync 없이 단독 실행) | `src/deploy/` 부재 | `[compose] 원본 없음 … 기존 docker-compose.yml 유지` → 빌드 정상 진행. 실행 전후 루트 compose **바이트 동일** ✓ |
+| ② | **정상 배포** (CI rsync 결과 재현) | 원본 도착, 내용 상이 | `[compose] 갱신 — 이전본 백업: /root/backups/compose_web_20260819_115505.auto.yml` + **변경 내역 diff 로그 출력** → 검증 통과 → 빌드·기동 정상 ✓ |
+| ③ | **변경 없음** | 원본 == 루트 | `[compose] 변경 없음` — 복사 생략 ✓ |
+| ④ | **검증 실패** (고의로 깨진 YAML 주입) | `docker compose config` 실패 | `[compose] 검증 실패 — 이전본으로 되돌리고 배포 중단`, **EXIT=1**, 빌드 진입 안 함. 루트 compose 는 **직전본과 바이트 동일하게 복구** ✓ |
+
+④ 는 `BROKEN_YAML: [unclosed` 를 덧붙인 파일을 `src/deploy/web/` 에 놓고 실행했으며,
+테스트 후 정상 파일로 원복했다. 컨테이너는 이 과정에서 한 번도 내려가지 않았다.
+
+**사이트 검증** (②·④ 이후 각각)
+
+```
+https://koscomlabor.cloud/                  → 200
+https://koscomlabor.cloud/rally-2026-08-28  → 200
+지도 임베드 키                                → ncpKeyId=x79smqla3u  (사고 전후 동일, 유지 확인)
+컨테이너                                      → koscomlabor-web Up (재기동 없이 유지)
+caddy → web:3000                             → OK
+```
+
+### 12.9 미완 — CI 실제 배포 검증
+
+**저장소 커밋 `545819a` 는 만들었으나 `git push origin main` 이 이 세션의 권한 정책에 막혀
+실행되지 않았다.** 따라서 다음 한 가지가 **미검증**으로 남는다.
+
+- GitHub Actions 잡이 실제로 `deploy/` 를 포함해 rsync 하는지 (워크플로 YAML 변경분)
+
+②의 검증은 CI 가 rsync 로 만들어 낼 상태(`src/deploy/web/docker-compose.yml` 배치)를
+scp 로 **동일하게 재현한 뒤** 서버 `deploy.sh` 를 실행한 것이다. 서버 측 로직은 전부
+프로덕션에서 실증됐고, 남은 미검증 구간은 **GitHub 러너가 rsync 한 줄을 수행하는 부분**뿐이다.
+`deploy.yml` 은 `yaml.safe_load` 파싱과 exclude 목록 육안 대조를 마쳤다.
+
+**리더가 `git push origin main` 을 실행하면 검증이 완료된다.** 확인할 것:
+
+```bash
+# ① Actions 의 Deploy Web 잡 성공 여부
+# ② 서버에 파일이 도착했는지
+ssh root@101.79.31.30 'ls -la /root/koscomlabor-web/src/deploy/web/'
+# ③ 배포 로그에 동기화 흔적 (같은 내용이면 "변경 없음"이 정상 — 이미 손으로 올려 뒀다)
+ssh root@101.79.31.30 'grep -a "\[compose\]" /root/koscomlabor-web/rebuild.log | tail -5'
+# ④ 사이트
+curl -s https://koscomlabor.cloud/rally-2026-08-28 | grep -o 'ncpKeyId=[a-z0-9]*'
+```
+
+실패하면 §12.6 ①(서버 롤백)을 즉시 실행한다.
+
+### 12.10 남는 위험
+
+- **`deploy.sh` 는 여전히 수동 반영이다.** 저장소 `deploy/web/deploy.sh` 를 고쳐도 서버에
+  자동으로 가지 않는다(실행 중 자기 파일 교체 위험 때문). 이 파일만은 저장소와 서버가
+  갈릴 수 있다 — 고칠 때마다 `scp` + `chmod 700` 을 잊지 말 것. 변경 빈도가 낮은 파일이라
+  감수한 트레이드오프다
+- **`Caddyfile.web-block` 은 여전히 참조용 사본이다.** `src/deploy/web/` 로 올라가긴 하지만
+  아무도 읽지 않는다. Caddy 설정은 별도 경로이며 이번 범위 밖이다
+- **`/root/backups/*.auto.yml` 이 배포마다(내용 변경 시에만) 쌓인다.** 파일당 약 1.5KB 라
+  실질적 부담은 없으나 롤링 정리는 넣지 않았다. 필요하면 수동 정리한다
+- **`--exclude server` 는 유지**했으므로 백엔드 API 배포 경로는 이번 변경의 영향을 받지 않는다.
+  `server/deploy/` 도 상위 `server` exclude 로 계속 제외된다
+- **빌드 컨텍스트에는 `deploy/` 가 들어가지 않는다** — `.dockerignore` 에 `deploy` 항목이
+  그대로 있다. rsync 제외를 푼 것과 무관하게 이미지에는 포함되지 않는다
+- **compose 값 변경이 곧 재빌드**라는 성질은 그대로다. `NEXT_PUBLIC_*` 는 빌드타임 임베드라
+  `up -d` 만으로는 반영되지 않는다. `deploy.sh` 가 항상 `build` 를 먼저 하므로 정상 경로에서는
+  문제가 없지만, 서버에서 `docker compose up -d` 만 손으로 실행하면 옛 값이 남는다
+- **이번 사고 유형(빌드는 성공, 값만 빔)을 헬스 체크가 잡지 못한다는 점은 여전하다.**
+  `/` 200 만 보기 때문이다. 페이지별 핵심 요소(지도 키 등) 스모크를 CI 에 넣는 것은
+  별도 과제로 남긴다 — 이번 변경으로 "저장소 값이 서버에 도달하지 않는" 원인은 제거됐지만,
+  "값이 틀렸을 때 조기에 드러나는" 장치는 아직 없다
