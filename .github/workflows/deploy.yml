@@ -5,6 +5,9 @@
 #
 # SSH 키는 command 제한 배포 전용 키 (rsync → /root/koscomlabor-web/src/ 와
 # deploy.sh 실행만 허용 — 서버의 deploy-key-wrapper.sh).
+#
+# 배포 설정(deploy/web/docker-compose.yml)도 이 rsync 로 함께 올라가며, 서버 deploy.sh 가
+# 빌드 직전 루트로 복사한다. deploy.sh 자체는 자동 동기화 대상이 아니다 (07 문서 §12).
 name: Deploy Web
 
 on:
@@ -42,11 +45,15 @@ jobs:
             StrictHostKeyChecking yes
           EOF
 
-      - name: rsync 소스 동기화
+      # deploy/ 는 제외하지 않는다 — 배포 설정(deploy/web/docker-compose.yml)이 서버로 가는
+      # 유일한 경로다. 배포 키가 src/ 하위에만 쓸 수 있어(command 제한) 루트에 직접 못 올린다.
+      # 도착한 src/deploy/web/docker-compose.yml 은 서버 deploy.sh 가 루트로 복사한다 (07 §12).
+      # 컨테이너 빌드 컨텍스트에는 .dockerignore 의 deploy 항목이 그대로 막아 준다.
+      - name: rsync 소스 동기화 (배포 설정 deploy/ 포함)
         run: |
           rsync -az --delete \
             --exclude node_modules --exclude .next --exclude .git --exclude .idea --exclude .claude \
-            --exclude _workspace --exclude server --exclude deploy --exclude "*.pem" --exclude ".env*" \
+            --exclude _workspace --exclude server --exclude "*.pem" --exclude ".env*" \
             --exclude tsconfig.tsbuildinfo --exclude design --exclude .github \
             ./ ncp:/root/koscomlabor-web/src/
 

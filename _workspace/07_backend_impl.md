@@ -1421,3 +1421,144 @@ docker compose --profile tools run --rm migrate \
 - **`uploads` 볼륨 백업은 여전히 DB 만 대상**이다 (`deploy/backup.sh` 는 pg_dump 만). 썸네일은 `backfill` 로 언제든 재생성되는 파생 캐시라 백업이 불필요하지만, **첨부 파일은 여전히 백업 대상이 아니다** — 06 §13.3 이 예정했던 uploads tar 백업이 미구현 상태다. 이번 작업 범위 밖이며 별도 과제로 남긴다
 - **`Vj3lQ7Y71PU`(오바마 영상)는 원출처 미표기 재업로드로 예고 없이 삭제될 수 있다** (§10.9 후속 점검 항목). 영상이 삭제되면 이미 캐싱한 썸네일은 **계속 표시된다** — 링크는 죽었는데 썸네일은 살아 있는 상태가 되므로, 링크 정기 점검 시 함께 확인할 것
 - 디자이너 재판정 대기: 썸네일 카드 프레임 일관성(요구사항 문서의 쟁점 ③). 백엔드는 16:9 이미지만 제공하며 표시 규격은 디자이너·web-developer 영역
+
+---
+
+## 12. 배포 설정(compose)을 CI/CD 대상에 편입 (2026-08-19)
+
+### 12.1 배경 — 실제 사고
+
+`/rally-2026-08-28` 배포 시 네이버 지도 키(`NEXT_PUBLIC_NAVER_MAP_CLIENT_ID`)를 저장소
+`deploy/web/docker-compose.yml` 에 추가했으나 **배포는 성공했는데 지도가 렌더되지 않았다.**
+
+원인은 파이프라인 구조였다. `.github/workflows/deploy.yml` 의 rsync 는
+
+- 대상이 서버의 **`/root/koscomlabor-web/src/`** (루트가 아니다)
+- 제외 목록에 **`--exclude deploy`**
+
+즉 **저장소의 배포 설정이 서버로 전달되는 경로가 처음부터 없었다.** compose 는 최초 1회
+수동 배치된 사본이었고, 그 뒤 저장소 쪽 수정은 서버에 반영된 적이 없다. 빌드타임 임베드
+값이라 키가 없으면 지도 블록이 통째로 비는데, 헬스 체크(`/` 200)는 통과하므로 CI 는 성공으로
+보고했다. 리더가 서버 파일을 직접 고쳐 복구했다(백업 `/root/backups/compose_web_20260819_1100.yml`).
+
+**손으로 맞춰 놓은 상태는 해결이 아니다.** 같은 사고가 다음 compose 변경에서 반복된다.
+
+### 12.2 제약 — 배포 키가 command 제한이다
+
+배포 전용 SSH 키는 서버 `deploy-key-wrapper.sh` 로 **두 가지만** 허용한다(§8.2).
+
+1. `/root/koscomlabor-web/src/` 를 대상으로 하는 rsync
+2. `/root/koscomlabor-web/deploy.sh` 실행
+
+compose 가 있어야 할 위치인 **`/root/koscomlabor-web/` 루트에는 CI 가 직접 쓸 수 없다.**
+이는 키가 유출돼도 임의 root 쓰기가 불가능하도록 한 의도적 설계이며, **이 작업에서 wrapper 를
+느슨하게 바꾸지 않는다.**
+
+### 12.3 채택안과 대안 검토
+
+**채택: rsync 로 `src/deploy/` 를 실어 나르고, `deploy.sh` 가 빌드 직전 루트로 복사한다.**
+
+1. `deploy.yml` rsync 제외 목록에서 `deploy` 제거 → `src/deploy/web/docker-compose.yml` 도착
+2. 서버 `deploy.sh` 가 `docker compose build` 직전 그 파일을 루트 `docker-compose.yml` 로 복사
+
+검토했으나 채택하지 않은 대안:
+
+| 대안 | 기각 사유 |
+|------|----------|
+| `deploy.sh` 가 복사 없이 `docker compose -f src/deploy/web/docker-compose.yml` 을 직접 사용 | compose 의 `context: ./src` 는 파일 위치 기준 상대경로다. 위치가 바뀌면 `src/deploy/web/src` 를 찾아 깨진다. `--project-directory` 로 우회할 수 있으나 상대경로 해석이 compose 버전에 따라 미묘하다. 또한 루트에 남은 옛 compose 를 수동 조작자가 쓰게 되어 **진실이 둘**이 된다 |
+| compose 를 저장소 루트로 옮긴다 | 서버에서는 어차피 `src/` 하위에 도착하므로 루트 복사가 여전히 필요하다. 이득 없이 저장소만 어지럽다 |
+| wrapper 에 루트 쓰기 rsync 를 허용 | 배포 키의 보안 전제를 무너뜨린다. 범위 밖 |
+
+**`deploy.sh` 자신은 자동 동기화하지 않는다.** 실행 중인 스크립트 파일을 덮어쓰면 bash 가
+파일 오프셋 기준으로 나머지를 읽어 오동작할 수 있다. `deploy.sh` 변경은 저장소
+`deploy/web/deploy.sh` 를 고친 뒤 **수동으로 서버에 반영**한다(빈도가 낮은 파일이다).
+
+### 12.4 변경 전후 파이프라인
+
+**변경 전**
+
+```
+저장소 push → CI → deploy.yml
+  ├─ rsync (--exclude deploy) ──→ 서버 /root/koscomlabor-web/src/
+  └─ ssh deploy.sh              ──→ docker compose build (루트 compose 사용)
+                                      ↑ 이 파일은 저장소와 연결이 끊겨 있다 ✗
+```
+
+**변경 후**
+
+```
+저장소 push → CI → deploy.yml
+  ├─ rsync (deploy 포함) ───────→ 서버 /root/koscomlabor-web/src/
+  │                                 └─ src/deploy/web/docker-compose.yml
+  └─ ssh deploy.sh              ──→ ① sync_compose: src/deploy/web/docker-compose.yml
+                                      → 루트 docker-compose.yml 복사 (+백업·검증)
+                                    ② docker compose build / up -d
+```
+
+### 12.5 안전 설계 — `sync_compose`
+
+크론(00:10 KST 일일 재빌드)은 **rsync 없이** `deploy.sh` 를 단독 실행한다. 복사 로직은 그
+경로에서도 안전해야 한다.
+
+| 상황 | 동작 |
+|------|------|
+| 원본(`src/deploy/web/docker-compose.yml`) 없음 | **기존 루트 파일 유지**하고 그대로 빌드 진행 (크론·첫 배포 경로) |
+| 원본과 루트가 동일 | 복사 생략 (로그 노이즈·불필요한 mtime 변경 방지) |
+| 원본과 루트가 다름 | 루트 파일을 `/root/backups/compose_web_<TS>.auto.yml` 로 백업 → 복사 → **변경 내역을 로그에 diff 출력** |
+| 복사 후 `docker compose config -q` 실패 | **백업본으로 되돌리고 스크립트 중단(exit≠0)** |
+
+검증 실패 시 옛 설정으로 조용히 계속 진행하지 **않는다.** 그것이 바로 이번 사고의 유형
+("배포는 성공, 반영은 안 됨")이다. 실패는 CI 를 붉게 만들어 드러내야 한다. 이때도 이미 떠
+있는 컨테이너는 그대로이므로 **서비스 중단은 없다.**
+
+### 12.6 롤백 절차
+
+파이프라인이 깨지면 어떤 배포도 불가능하므로 되돌리는 방법을 먼저 적어 둔다.
+**서버 롤백만으로 즉시 원상복구된다** (저장소 변경은 서버 `deploy.sh` 가 옛 버전이면 무해하다
+— `src/deploy/` 가 올라와도 아무도 읽지 않는다).
+
+**백업 파일**
+
+| 파일 | 백업 경로 |
+|------|----------|
+| 서버 `deploy.sh` (변경 전) | `/root/backups/deploy_sh_20260819_1146.sh` |
+| 서버 `docker-compose.yml` (변경 전) | `/root/backups/compose_web_20260819_1146.yml` |
+| 〃 (리더 수동 복구 시점) | `/root/backups/compose_web_20260819_1100.yml` |
+
+**① 서버 롤백 — 이것만으로 파이프라인이 변경 전으로 돌아간다**
+
+```bash
+ssh root@101.79.31.30
+cp -p /root/backups/deploy_sh_20260819_1146.sh      /root/koscomlabor-web/deploy.sh
+chmod 700 /root/koscomlabor-web/deploy.sh
+cp -p /root/backups/compose_web_20260819_1146.yml   /root/koscomlabor-web/docker-compose.yml
+
+# 확인 — sync_compose 가 사라지고 compose 에 지도 키가 있어야 한다
+grep -c sync_compose /root/koscomlabor-web/deploy.sh          # 기대: 0
+grep NEXT_PUBLIC_NAVER_MAP_CLIENT_ID /root/koscomlabor-web/docker-compose.yml  # 기대: x79smqla3u
+
+/root/koscomlabor-web/deploy.sh                                # 재배포로 확정
+```
+
+**② 저장소 롤백 (선택 — ①만으로도 안전하다)**
+
+```bash
+cd /Users/koscom/IdeaProjects/koscomlabor
+git revert --no-edit <이 작업 커밋 해시>
+git push origin main
+```
+
+**③ 복구 확인**
+
+```bash
+curl -s https://koscomlabor.cloud/rally-2026-08-28 | grep -o 'ncpKeyId=[a-z0-9]*'   # 기대: ncpKeyId=x79smqla3u
+curl -s -o /dev/null -w '%{http_code}\n' https://koscomlabor.cloud/                 # 기대: 200
+```
+
+**④ 롤백 판단 기준** — 다음 중 하나면 즉시 ① 실행
+
+- CI 배포 잡 실패
+- 배포 후 `https://koscomlabor.cloud/` 가 200 이 아님
+- `/rally-2026-08-28` 에서 `ncpKeyId` 가 사라짐
+- `rebuild.log` 에 `[compose] 검증 실패` 출력
+

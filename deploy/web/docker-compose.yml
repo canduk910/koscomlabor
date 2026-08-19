@@ -1,7 +1,10 @@
 # 프론트(Next.js) 프로덕션 배포 구성 (NCP VM, Docker 기반).
 #
-# 서버 배치: 이 파일은 /root/koscomlabor-web/docker-compose.yml 로 복사되고,
-# 저장소는 /root/koscomlabor-web/src/ 로 rsync 된다 (node_modules·.next·.git·_workspace·server 제외).
+# 이 파일이 프론트 배포 설정의 단일 출처다 (07 문서 §12).
+# 저장소는 /root/koscomlabor-web/src/ 로 rsync 되고(node_modules·.next·.git·_workspace·server 제외),
+# 이 파일도 src/deploy/web/ 로 함께 올라간 뒤 서버 deploy.sh 가 빌드 직전
+# /root/koscomlabor-web/docker-compose.yml 로 복사한다. 서버 파일을 손으로 고치지 말 것 —
+# 다음 배포 때 이 파일 내용으로 덮어써진다.
 #
 # NEXT_PUBLIC_API_BASE_URL·NEXT_PUBLIC_NAVER_MAP_CLIENT_ID 은 빌드타임 임베드 — 값 변경 시 재빌드 필요.
 # 외부 노출은 onnuri-caddy(443) 경유만 (호스트 포트 미개방, deploy_web 네트워크 공유).
