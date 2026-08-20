@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
-import { ArrowLeftIcon } from "@/components/ui/icons";
+import { ArrowLeftIcon, ExternalLinkIcon } from "@/components/ui/icons";
 import { RallyMap } from "@/components/rally/RallyMap";
 import { QrAttendanceCard } from "@/components/rally/QrAttendanceCard";
 import { RallySchedule } from "@/components/rally/RallySchedule";
 import { RALLY_PAST_NOTE, RallyStatusBadge } from "@/components/rally/RallyStatus";
 import { rallyPhase } from "@/lib/rally";
 import { DISTANCE_TEXT_LONG } from "@/lib/rallyMap";
-import { ROUTES } from "@/lib/routes";
+import { EXTERNAL_LINKS, NAVER_DIRECTIONS_DISPLAY_HOST, ROUTES } from "@/lib/routes";
 
 /**
  * 8/28 총력투쟁 결의대회 참석 안내 (디자인 스펙 §20.3).
@@ -171,6 +171,45 @@ export default function RallyPage() {
                 <dt className="text-caption font-semibold text-ink-muted">장소</dt>
                 <dd className="break-keep text-body text-ink">국회의사당역 5번 출구 메인무대 앞</dd>
               </dl>
+
+              {/*
+                네이버 길찾기 링크(§24.4·§24.5 · 검증 10회차 요구 71~77).
+
+                **자리가 근거다**: 링크의 도착지가 곧 위 `장소` 행의 내용이라 그 바로 아래가
+                인접성이 성립하는 유일한 자리이고, "여기 어떻게 가지?"는 페이지를 열자마자 드는
+                생각인데 블록 1 은 지도보다 위에 있다. **지도 컨트롤 행에 6번째 버튼으로 붙이지 마라** —
+                우리 지도 조작과 외부 이동이 한 줄에 섞이고 §21.1.3 폭 검산(2행)이 3행으로 깨진다.
+                `※` 2행보다 **위**인 이유: 링크는 `장소` 에 묶이고 `※` 는 시각에 묶이며,
+                마지막 자리는 **당일 해야 하는 행동**(2차 출석)이 갖는 것이 맞다.
+
+                **아웃라인 필 버튼(§20.14.3) 모양을 쓰지 마라** — 그것은 우리 페이지 안에서 일어나는
+                조작의 형태다. 외부 이동은 다르게 생겨야 한다. **오렌지(accent)도 쓰지 마라**(온누리·CI 전용).
+
+                외부 이동 **3중 병행**(§14.1): ↗ 아이콘 + 메타 문구 + 접근성 이름(카드 전체가 단일 `<a>` 라
+                내부 텍스트가 접근성 이름에 자동 포함된다 — 별도 `sr-only` 불필요).
+                **↗ 를 텍스트 문자로 쓰지 마라**(서체마다 위치·크기가 튄다). SVG 컴포넌트를 재사용한다.
+                보조 문구를 **`ink-muted` 로 흐리지 마라** — "빈 화면이 떴다"를 막는 문장이라 읽어야 한다.
+                **이 링크는 내장 지도·텍스트 안내를 대체하지 않는다**(요구 77 · §0.4). 지도를 지우지 마라.
+              */}
+              <a
+                href={EXTERNAL_LINKS.naverDirections}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-card ease-out-soft group mt-6 block border-2 border-border-strong bg-bg p-4 transition-colors duration-150 hover:outline-2 hover:outline-primary focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
+              >
+                {/* 카드 어디에 hover 해도 제목에 밑줄이 뜬다 — 온누리 카드와 같은 규칙(§16.9.7) */}
+                <span className="block break-keep text-body font-bold text-primary group-hover:underline">
+                  네이버 지도로 길찾기
+                  <ExternalLinkIcon className="ml-1 inline size-4 align-[-2px]" />
+                </span>
+                <span className="mt-1 block break-keep text-caption text-ink">
+                  도착지는 국회의사당역 5번 출구입니다. 출발지를 입력하면 경로가 나옵니다.
+                </span>
+                {/* URL 전체를 노출하지 않는다 — 네이버 내부 인코딩이라 판독 가치가 0이다(§24.6) */}
+                <span className="mt-1.5 block text-caption text-ink-muted">
+                  외부 링크(새 창) · {NAVER_DIRECTIONS_DISPLAY_HOST}
+                </span>
+              </a>
 
               {/*
                 각주 2줄(검증 요구 59·60). **`ink-muted` 로 흐리지 마라 — 읽어야 하는 문장이다.**

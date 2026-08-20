@@ -17,6 +17,23 @@ import type { HomeSectionId } from "@/lib/homeSections";
 export const EXTERNAL_LINKS = {
   /** 디지털온누리 사용 가이드 (리더 유효성 확인 완료 2026-08-16) */
   onnuriGuide: "https://onnuri.koscomlabor.cloud/",
+  /**
+   * 네이버 길찾기 — **도착지 = 국회의사당역 5번 출구**(§24.6 · 검증 10회차 요구 74·75·78).
+   *
+   * ⚠ **좌표부 `3zf71R,2AKrxU` 는 네이버 내부 인코딩이다.** 사람이 읽을 수 없고,
+   * 형식이 바뀌면 **에러 없이 엉뚱한 지도가 뜬다** — 조용히 깨지는 값이라 아래를 반드시 지켜라.
+   *
+   * - **직접 만들지 마라.** 네이버가 생성해 준 값이고 검증 10회차가 **실호출로 2회 재현**했다.
+   * - **소수 좌표 형식으로 바꾸지 마라.** `/p/directions/-/126.9172199,37.5282738,…` 는
+   *   **HTTP 200 을 주면서 마포구 성산동을 보여준다**(실측). 가장 위험한 오답이다.
+   * - **`index.nhn`·`route.nhn` 레거시 형식과 `nmap://` 앱 스킴 금지** — 앱 미설치 조합원에게 죽은 링크가 된다.
+   * - **HTTP 200 을 동작 근거로 삼지 마라.** `map.naver.com` 은 SPA 라 없는 경로에도 200 을 준다.
+   *   이 값을 손대는 사람은 **렌더 결과를 눈으로 확인**해야 한다(도착 핀이 5번 출구에 꽂히는지).
+   * - **정기 점검**: 게시 후 **8/28 전 1회 재확인**(요구 78). 모바일 UA 로 호출해
+   *   `appLink.naver?elng=126.9172199&elat=37.5282738` 로 좌표가 복원되는지 본다.
+   */
+  naverDirections:
+    "https://map.naver.com/p/directions/-/3zf71R,2AKrxU,%EA%B5%AD%ED%9A%8C%EC%9D%98%EC%82%AC%EB%8B%B9%EC%97%AD%205%EB%B2%88%20%EC%B6%9C%EA%B5%AC,,/-/transit?c=3zf71R,2AKrxU,17,0,0,0,dh",
 } as const;
 
 /**
@@ -29,6 +46,13 @@ export const EXTERNAL_LINKS = {
  * 호스트가 더 긴 도메인으로 바뀌면 §20.12.1 의 197px 예산을 **다시 실측**해야 한다.
  */
 export const ONNURI_GUIDE_DISPLAY_HOST = new URL(EXTERNAL_LINKS.onnuriGuide).host;
+
+/**
+ * 길찾기 링크에 **표시**하는 도메인(§24.5.4 · §14.1).
+ * **URL 전체를 화면에 노출하지 마라** — 네이버 내부 인코딩 문자열이라 소음이고 판독 가치가 0이다.
+ * `href` 에서 파생해 링크와 표시가 갈리지 않게 한다(온누리 카드와 같은 규칙).
+ */
+export const NAVER_DIRECTIONS_DISPLAY_HOST = new URL(EXTERNAL_LINKS.naverDirections).host;
 
 /* 상세 경로 빌더 — 개별 상수(ROUTES.notice 등)와 분류 매핑(ROUTES.post)이 같은 함수를 공유한다 */
 function noticePath(id: string): string {
