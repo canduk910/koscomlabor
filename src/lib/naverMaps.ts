@@ -46,19 +46,58 @@ export interface NaverMapOptions {
   scaleControl: boolean;
   center: NaverLatLng;
   zoom: number;
+  /** 과축소 하한 — 라벨 겹침 문제의 상한을 정하는 수단이다(§21.2.1) */
+  minZoom: number;
+  maxZoom: number;
 }
 
 export interface NaverMap {
   fitBounds(bounds: NaverLatLngBounds, margin?: NaverBoundsPadding): void;
   getBounds(): NaverLatLngBounds;
   getZoom(): number;
+  /** `useEffect: false` 로 애니메이션을 끈다 — `prefers-reduced-motion` 대응(§21.1.4) */
   setZoom(zoom: number, useEffect?: boolean): void;
+  /*
+   * 화면 픽셀 단위 이동. **현재 호출부가 없다** — 두 손가락 팬은 핀치와 제스처가 분리되지 않아
+   * 제거됐다(`RallyMap.tsx` 의 조작 계약 주석 참조). 선언만 남겨 두는 이유는 팬을 재검토할 때
+   * 타입부터 다시 만들지 않게 하기 위해서다. **쓰기 전에 실기기 실측이 선행돼야 한다.**
+   */
+  panBy(x: number, y: number): void;
+  addListener(eventName: string, listener: (payload?: unknown) => void): NaverMapEventListener;
   destroy(): void;
 }
 
-/** 마커·사각형·원의 공통 부분 — 이 프로젝트는 생성 후 제거만 한다 */
+/** `naver.maps.Event.removeListener()` 에 넘기는 핸들. 내부 구조는 쓰지 않는다 */
+export type NaverMapEventListener = object;
+
+/** 로드뷰 파노라마 — 별도 API 다(§21.3) */
+export interface NaverPanoramaOptions {
+  position: NaverLatLng;
+  pov: { pan: number; tilt: number; fov: number };
+  /** 지도와 같은 조작 규칙: 컨트롤 0, 한 손가락은 페이지 스크롤 */
+  logoControl: boolean;
+  zoomControl: boolean;
+  aroundControl: boolean;
+  minScale: number;
+  maxScale: number;
+}
+
+export interface NaverPanorama {
+  addListener(eventName: string, listener: (payload?: unknown) => void): NaverMapEventListener;
+  getPanoId(): string | null;
+  destroy(): void;
+}
+
+/** 사각형·원·폴리곤의 공통 부분 — 생성 후 제거만 한다 */
 export interface NaverOverlay {
   setMap(map: NaverMap | null): void;
+}
+
+/** 마커는 줌에 따라 아이콘(라벨)을 갈아끼운다(§21.2) */
+export interface NaverMarker extends NaverOverlay {
+  setIcon(icon: NaverMarkerIcon): void;
+  /** `minZoomOverride` 로 라벨 방향이 바뀌면 앵커 좌표도 함께 옮긴다(§23.2.3) */
+  setPosition(position: NaverLatLng): void;
 }
 
 export interface NaverMarkerIcon {
@@ -109,10 +148,18 @@ export interface NaverMapsNamespace {
   LatLng: new (lat: number, lng: number) => NaverLatLng;
   LatLngBounds: new (sw: NaverLatLng, ne: NaverLatLng) => NaverLatLngBounds;
   Map: new (element: HTMLElement, options: NaverMapOptions) => NaverMap;
-  Marker: new (options: NaverMarkerOptions) => NaverOverlay;
+  Marker: new (options: NaverMarkerOptions) => NaverMarker;
   Rectangle: new (options: NaverRectangleOptions) => NaverOverlay;
   Circle: new (options: NaverCircleOptions) => NaverOverlay;
   Polygon: new (options: NaverPolygonOptions) => NaverOverlay;
+  /**
+   * 로드뷰(§21.3). **선택 필드다** — 스크립트 버전·서브모듈 구성에 따라 없을 수 있고,
+   * 없을 때 `로드뷰 보기` 버튼을 아예 렌더하지 않으려면(죽은 버튼 금지) 타입이 그 사실을 말해야 한다.
+   */
+  Panorama?: new (element: HTMLElement, options: NaverPanoramaOptions) => NaverPanorama;
+  Event: { removeListener(listener: NaverMapEventListener): void };
+  /** `PanoramaStatus.OK` 비교용 — 로드뷰 로드 성공 판정(§21.3.2) */
+  PanoramaStatus?: { readonly OK: string };
   MapTypeId: { readonly NORMAL: string };
 }
 

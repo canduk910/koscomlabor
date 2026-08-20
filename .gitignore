@@ -42,3 +42,6 @@ next-env.d.ts
 
 # generated font assets (scripts/sync-pretendard.mjs — postinstall)
 /public/fonts/pretendard/
+
+# 브라우저 검증 도구 산출물 (QA·검증 세션이 생성)
+.playwright-mcp/
