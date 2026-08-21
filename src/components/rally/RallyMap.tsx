@@ -94,28 +94,50 @@ const GEO_OPTIONS: PositionOptions = {
 const FIT_PADDING = { top: 48, right: 24, bottom: 48, left: 56 } as const;
 
 /**
- * **초기 화면(`fitBounds`)의 줌 상한**(QA 23회차 실패 1건 · 2026-08-21).
+ * **초기 화면(`fitBounds`)의 줌 상한**(QA 23회차 실패 1건 · 2026-08-21 배포분).
  *
  * ⑤ 더샵 부지를 제거하면서 `fitBounds` 범위의 **남쪽 앵커가 사라져 범위가 좁아졌다.**
  * 그 결과 **1280px(896×504)에서 z17(50m)이 걸리고**, ② pill 이 원 위쪽에 붙는데
  * **원이 올라가 박스를 24px 벗어난다**(실측: ② 좌표 y **−24**).
  *
- * ⚠ **이 결함은 1280px 에서만 발현한다** — 360·768 은 100m 로 정상이다.
- * 박스가 가장 커서 같은 범위에 더 큰 확대가 걸리기 때문이다.
+ * ⚠ **이 결함은 큰 박스에서만 발현한다** — 360·768 은 100m 로 정상이다.
  * **360px 실측만으로는 잡히지 않는다.** 프로덕션에서도 창 폭 400px 대에서
  * `축척 50m · ② pill 미노출`로 관측됐다.
+ * **전체 화면 모달은 박스가 더 크므로 같은 상한을 반드시 함께 적용한다.**
  *
  * ⚠ **사용자 조작 상한(`MAP_MAX_ZOOM` = 19)과 다른 값이다. 합치지 마라** —
  * 이것은 *처음 보여 주는 화면*의 상한이고, 그것은 *확대 버튼으로 갈 수 있는 끝*이다.
  * 합치면 조합원이 지도를 확대할 수 없게 되고 §21.1.1 의 `minZoom 15 / maxZoom 19` 계약이 깨진다.
- * (실측 확인: 이 상한을 16으로 둬도 지도 밖 `확대` 는 100→50→30→**20m(z19)** 까지,
- *  `축소` 는 **300m(z15)** 까지 그대로 동작한다.)
+ * (실측: 이 상한을 16으로 둬도 `확대` 는 100→50→30→**20m(z19)**, `축소` 는 **300m(z15)** 까지 그대로다.)
  *
  * 대안(`FIT_PADDING.top` 증가 · ② `labelGap` 축소)을 쓰지 않은 이유는
- * **라벨 배치를 다시 흔들지 않기 위해서다**(§22·§23 에서 반복한 실측 지옥).
- * **지점이 늘거나 범위가 넓어지면 이 상한을 재검토하라.**
+ * **라벨 배치를 다시 흔들지 않기 위해서다**. **지점이 늘거나 범위가 넓어지면 재검토하라.**
  */
 const FIT_MAX_ZOOM = 16;
+
+/**
+ * **3단계-B 렌더 스위치**(§27.18 — 디자이너 분할 판정 2026-08-21).
+ *
+ * 3단계는 **A(즉시 배포) / B(대기)** 로 쪼개졌다.
+ * - **A**: 한 손가락 드래그 · 지도 안 `+`/`−` · 키보드 roving group · 팝업 접근성 · 완화 문구
+ * - **B**: **전체 화면 지도**(`지도 크게 보기` 버튼 + 전용 `<dialog>`) — **QA-260 검증 판정 대기**
+ *
+ * **QA-260 은 "전체 화면 모달 안에 범례가 없다" 이므로, 모달을 렌더하지 않으면 문제 자체가 없다.**
+ * 모달은 **별도 지도 인스턴스**(§27.6)라 A 의 기능과 의존이 없다 — 렌더만 끄면 분리가 끝난다.
+ *
+ * ⚠ **코드를 지우지 마라. 판정이 오면 이 값을 `true` 로 되돌리는 것이 곧 복구다.**
+ * 그때 함께 되살릴 것:
+ * 1. 컨트롤 행이 3개 → **4개**가 된다. §27.4.3 의 2행 폭 검산(1행 280.0 / 2행 264.4)이 **다시** 기준이 된다
+ *    (지금 유효한 것은 3개 기준 실측이다 — §27.18.3).
+ * 2. 판정이 **"범례 필수"** 면 §27.15.4 **안 B**(지도 500px + 범례 200px 내부 스크롤)를 함께 구현한다.
+ *    **`더 보기` 접기를 쓰지 마라**(§0.4 패턴표).
+ * 3. §27.16.3 (B) 완화 목록의 *"페이지 안에서 조작 공간이 좁다 → `지도 크게 보기`"* 항목이 되살아난다.
+ *    **(A) 목록은 영향을 받지 않는다** — "페이지를 못 내린다"의 유일한 완화는 여전히 **안내 문구 1건**이다.
+ *
+ * 타입을 `boolean` 으로 명시한 이유: 리터럴 `false` 로 좁혀지면 되살릴 코드가
+ * "도달 불가"로 취급돼 **다음 사람이 죽은 코드로 오해하고 지운다.**
+ */
+const STAGE3B_FULLSCREEN_MAP: boolean = false;
 
 /** 라벨 마커의 zIndex 시작값 — 도형보다 항상 위에 오도록 넉넉히 띄운다 */
 const LABEL_Z_BASE = 1_000;
@@ -239,6 +261,11 @@ function labelHtml(options: {
    * 상태에 쓰면 회색 참고 지물이 순간 "갈 곳"으로 읽힌다. `ink` 는 의미를 지지 않는 중립색이다.
    */
   selected: boolean;
+  /**
+   * 키보드 그룹의 **현재 항목**인가(§27.8.1 roving tabindex).
+   * 그룹 안에서 `tabindex="0"` 은 **하나뿐**이어야 페이지 탭 정지점이 1개로 유지된다.
+   */
+  focused: boolean;
 }): string {
   /*
    * 앵커에서 라벨까지의 간격. 좌우 28px 은 실측으로 정해진 값이다 — 16px 이면 360px 에서
@@ -255,7 +282,19 @@ function labelHtml(options: {
     textVisible,
     id,
     selected,
+    focused,
   } = options;
+  /*
+   * 마커는 이제 **포커스 가능한 버튼**이다(§27.8.2). 2단계의 `aria-hidden` 은 **해제됐다** —
+   * `aria-hidden` 을 유지한 채 포커스만 열면 **WCAG 2.4.3·4.1.2 반려선을 즉시 위반**한다.
+   * **둘은 반드시 한 쌍으로 간다.**
+   * `aria-label` 은 **`{번호} {이름}`** 으로 짧게 — 설명은 팝업이 진다. 길게 쓰면 그룹을 순회할 때
+   * **범례 전문이 6번 반복**된다(§27.8.3).
+   */
+  const a11y =
+    `id="rally-marker-${id}" role="button" tabindex="${focused ? 0 : -1}"` +
+    ` aria-label="${badge === null ? text : `${badge} ${text}`}"` +
+    ` aria-pressed="${selected ? "true" : "false"}"`;
   /* 선택 링은 흰 테두리 **바깥**에 얹는다 — 배지·pill 모두 같은 방식(§25.6.2) */
   const ring = selected ? `box-shadow:0 0 0 3px ${INK};` : "";
   // 배지만 남길 때는 pill 을 그리지 않는다 — 흰 면이 남으면 접은 의미가 없다
@@ -291,8 +330,8 @@ function labelHtml(options: {
      * `data-rally-badge` 는 **보이는 28px 원**에 붙는다(측정 기준이 시각 크기여야 한다).
      */
     return [
-      `<div aria-hidden="true" data-rally-label="${id}" data-rally-folded="1" style="position:relative;width:0;height:0;">`,
-      `<span data-rally-hit="${id}" style="position:absolute;${place}width:28px;height:28px;cursor:pointer;">`,
+      `<div data-rally-label="${id}" data-rally-folded="1" style="position:relative;width:0;height:0;">`,
+      `<span data-rally-hit="${id}" ${a11y} style="position:absolute;${place}width:28px;height:28px;cursor:pointer;">`,
       `<span style="position:absolute;left:-8px;top:-8px;width:44px;height:44px;"></span>`,
       `<span data-rally-badge="${id}" data-rally-number="${id}" style="position:absolute;inset:0;box-sizing:border-box;`,
       `border-radius:9999px;background:${badgeColor};border:2px solid #ffffff;color:#ffffff;`,
@@ -302,11 +341,11 @@ function labelHtml(options: {
     ].join("");
   }
   return [
-    `<div aria-hidden="true" data-rally-label="${id}" style="position:relative;width:0;height:0;">`,
+    `<div data-rally-label="${id}" style="position:relative;width:0;height:0;">`,
     /* pill 도 눌리면 팝업이 열린다(§25.2 겹2 · §25.3.1). 조합원이 가장 먼저 보는 것이 pill 이고,
        눌러 본 경험이 ①③⑤⑥ 배지로 **전이**된다. ②④ 만 안 눌리면 마커가 두 종류로 갈린다.
        **pill 히트는 실제 크기 그대로다** — 44px 로 늘리면 ⑤ 배지 히트와 5px 겹친다(§25.8.1). */
-    `<div data-rally-pill="${id}" data-rally-hit="${id}" style="position:absolute;${place}box-sizing:border-box;display:flex;align-items:center;gap:6px;cursor:pointer;`,
+    `<div data-rally-pill="${id}" data-rally-hit="${id}" ${a11y} style="position:absolute;${place}box-sizing:border-box;display:flex;align-items:center;gap:6px;cursor:pointer;`,
     `background:#ffffff;${pillBorder}border-radius:9999px;padding:${pad};`,
     `box-shadow:0 1px 4px rgb(0 0 0 / .30)${selected ? `,0 0 0 3px ${INK}` : ""};font-size:15px;font-weight:600;color:${INK};`,
     /* width:max-content 가 없으면 안 된다 — 앵커가 0폭 컨테이닝 블록이라 절대배치 요소의
@@ -318,7 +357,8 @@ function labelHtml(options: {
       : /* `data-rally-number` 는 **번호가 화면에 있는 것 전부**를 세는 표식이다(요구 86 검사용).
            `data-rally-badge` 는 **접힌 배지 전용**으로 남긴다 — §22·§23 실측 기준값이 그 셀렉터에 묶여 있다 */
         `<span data-rally-number="${id}" style="flex:0 0 24px;width:24px;height:24px;border-radius:9999px;background:${badgeColor};color:#ffffff;font-size:15px;font-weight:700;line-height:24px;text-align:center;">${badge}</span>`,
-    "<span>",
+    /* pill 안 글자는 `aria-label` 과 같은 내용이라 숨긴다 — 안 숨기면 두 번 읽힌다 */
+    '<span aria-hidden="true">',
     text,
     "</span></div></div>",
   ].join("");
@@ -493,6 +533,7 @@ function labelIconContent(
   textVisible: boolean,
   zoom?: number,
   selected = false,
+  focused = false,
 ): string {
   const color = toneColor(feature.tone);
   const suffix = feature.kind === "band" ? BAND_STYLE[feature.confidence].labelSuffix : "";
@@ -513,6 +554,7 @@ function labelIconContent(
       textVisible,
       id: feature.id,
       selected,
+      focused,
     })
   );
 }
@@ -549,6 +591,308 @@ function createLabelMarker(
     clickable: true,
     zIndex: LABEL_Z_BASE + index,
   });
+}
+
+/**
+ * 키보드 그룹의 **진입 첫 지점**(§27.8.1).
+ *
+ * 종전에는 ④ 코스콤지부(대오 2)였다. **그 지점이 제거되면서**(검증 12회차 — 구역 근거 무효)
+ * **① 국회의사당역 5번 출구**로 옮겼다. 구역이 확인되지 않은 지금 조합원이 **확실히 가야 하는 곳**은
+ * 내리는 역이고, 그것이 남은 지점 중 유일한 "행동의 시작점"이다.
+ * 구역 좌표가 확정돼 지점이 돌아오면 **진입 지점도 그쪽으로 되돌리는 것을 검토하라.**
+ */
+const KEYBOARD_ENTRY_ID = "exit5";
+
+/** 그룹 안 순회 순서 — 지도 안 `+`·`−` 다음에 지도 지점 6개(배열 순서 = 번호 순서) */
+function keyboardOrder(): string[] {
+  return ["rally-zoom-in", "rally-zoom-out", ...MAP_FEATURES.map((f) => f.id)];
+}
+
+/** 라벨을 다시 그리는 데 필요한 것 전부 — **페이지 지도와 전체 화면 지도가 이 함수 하나를 공유한다** */
+interface LabelPaintContext {
+  labels: LabelEntry[];
+  /** 겹침 때문에 접힌 항목(히스테리시스 상태) — 함수가 갱신한다 */
+  folded: Set<string>;
+  selectedId: string | null;
+  /** 키보드 그룹의 현재 항목 — roving tabindex 를 아이콘에 반영한다(§27.8.1) */
+  focusedId: string | null;
+  node: HTMLElement | null;
+}
+
+/**
+ * 줌·선택·포커스 상태를 라벨 아이콘에 반영한다(§21.2 · §25.2 · §27.8).
+ *
+ * **모듈 함수인 이유**: 전체 화면 지도가 같은 규칙을 써야 하는데 **두 벌이면 한쪽만 고쳐진다**
+ * (§27.14.4-3 이 키보드에 대해 못박은 것과 같은 위험). 상태는 인자로 받는다.
+ */
+function paintLabels(ctx: LabelPaintContext, currentZoom: number): void {
+  const { labels: entries, folded, selectedId, focusedId, node } = ctx;
+  if (entries.length === 0) return;
+
+  /*
+   * 텍스트 pill 노출 = **`textMode === "always"` 인 항목만**(§25.1).
+   * `popup` 항목은 **줌이 올라가도 텍스트를 띄우지 않는다** — 이름은 클릭 팝업이 진다.
+   * `always` 항목 안에서는 종전 등급 임계가 그대로 적용된다(② 는 z15 에서 배지가 된다).
+   */
+  const visible = new Map<string, boolean>();
+  for (const e of entries) {
+    visible.set(
+      e.feature.id,
+      e.feature.textMode === "always" &&
+        currentZoom >= LABEL_PRIORITY_MIN_ZOOM[e.feature.labelPriority],
+    );
+  }
+  const maps = window.naver?.maps;
+  const paint = () => {
+    for (const e of entries) {
+      const icon: NaverMarkerIcon = {
+        content: labelIconContent(
+          e.feature,
+          e.index,
+          visible.get(e.feature.id) === true,
+          currentZoom,
+          selectedId === e.feature.id,
+          focusedId === e.feature.id,
+        ),
+        anchor: { x: 0, y: 0 },
+      };
+      e.marker.setIcon(icon);
+      /*
+       * `minZoomOverride` 는 방향을 바꾸므로 **앵커 좌표도 함께 바뀐다**(§23.2.3).
+       * 아이콘만 갈아끼우면 라벨이 옛 앵커에 붙은 채 방향만 뒤집혀 **엉뚱한 곳을 가리킨다.**
+       */
+      if (maps !== undefined && e.feature.minZoomOverride !== undefined) {
+        const at = featureLabelAnchor(e.feature, currentZoom);
+        e.marker.setPosition(new maps.LatLng(at.lat, at.lng));
+      }
+    }
+    /*
+     * 아이콘 교체는 DOM 을 갈아치우므로 **포커스가 날아간다** — 키보드 사용자가 그 순간 길을 잃는다.
+     * 그려진 직후 현재 항목에 포커스를 되돌린다(§27.8.1 roving tabindex 유지).
+     *
+     * ⚠ **이미 그룹 안에 포커스가 있을 때만** 되돌린다. 조건 없이 부르면 모달이 열릴 때
+     * `닫기` 로 보내 둔 초기 포커스를 지도가 **빼앗는다**(실측으로 잡았다).
+     */
+    if (focusedId !== null && node !== null) {
+      const active = document.activeElement;
+      const inGroup =
+        active instanceof HTMLElement &&
+        (active.closest("[data-rally-hit]") !== null || active.id.startsWith("rally-zoom"));
+      if (inGroup) {
+        const el = node.querySelector<HTMLElement>(`[data-rally-hit="${focusedId}"]`);
+        if (el !== null && document.activeElement !== el) el.focus({ preventScroll: true });
+      }
+    }
+  };
+  paint();
+
+  // 그린 뒤 실제 사각형으로 겹침을 판정하고, 낮은 등급을 접는다
+  if (node === null) return;
+  requestAnimationFrame(() => {
+    const rects: { id: string; rank: number; r: DOMRect }[] = [];
+    for (const e of entries) {
+      if (visible.get(e.feature.id) !== true) continue;
+      const el = node.querySelector(`[data-rally-pill="${e.feature.id}"]`);
+      if (el === null) continue;
+      rects.push({
+        id: e.feature.id,
+        rank: PRIORITY_RANK[e.feature.labelPriority],
+        r: el.getBoundingClientRect(),
+      });
+    }
+    rects.sort((a, b) => a.rank - b.rank);
+    const kept: typeof rects = [];
+    const foldedNow = new Set<string>();
+    let changed = false;
+    for (const cand of rects) {
+      /*
+       * **히스테리시스**(§21.9.3): 접는 기준과 펴는 기준이 다르다.
+       * 지금 펼쳐진 라벨은 **실제로 교차할 때만** 접고(여백 0), 이미 접힌 라벨은 **8px 이상**
+       * 떨어져야 다시 편다. 한 값으로 양방향을 판정하면 경계에서 **라벨이 깜빡인다.**
+       */
+      const margin = folded.has(cand.id) ? LABEL_REVEAL_GAP : LABEL_MIN_GAP;
+      const hit = kept.some(
+        (k) =>
+          Math.min(k.r.right, cand.r.right) - Math.max(k.r.left, cand.r.left) > -margin &&
+          Math.min(k.r.bottom, cand.r.bottom) - Math.max(k.r.top, cand.r.top) > -margin,
+      );
+      // `primary` 는 겹쳐도 접지 않는다 — 접으면 지도가 핵심 정보를 잃는다
+      if (hit && cand.rank > 0) {
+        visible.set(cand.id, false);
+        foldedNow.add(cand.id);
+        changed = true;
+      } else {
+        kept.push(cand);
+      }
+    }
+    folded.clear();
+    for (const id of foldedNow) folded.add(id);
+    if (changed) paint();
+  });
+}
+
+/**
+ * 모달 배경 스크롤 잠금(§23.1.5). `showModal()` 과 **별도로** 잠근다 — 브라우저마다 처리가 달라
+ * 가정할 수 없다. 잠글 때의 `scrollY` 를 돌려주고, 푸는 쪽이 그 값을 그대로 복원한다.
+ */
+function lockBodyScroll(): number {
+  const y = window.scrollY;
+  const body = document.body;
+  body.style.position = "fixed";
+  body.style.top = `-${y}px`;
+  body.style.left = "0";
+  body.style.right = "0";
+  body.style.overflow = "hidden";
+  return y;
+}
+
+/**
+ * 잠금 해제 + 위치 복원. **세 가지가 모두 필요하다 — 하나만 빠져도 어긋난다(실측):**
+ * ① **레이아웃 강제 반영** — `position:fixed` 를 막 푼 시점에는 문서 높이가 뷰포트 높이라
+ *    `scrollTo` 가 **0 으로 잘린다** ② **`behavior:"instant"`** — 이 사이트는
+ *    `html { scroll-behavior: smooth }` 라 기본값이면 브라우저 자체 복원과 경합해 어긋난다(3355 → 3247)
+ * ③ 호출부의 **`focus({ preventScroll: true })`** — 기본 `focus()` 는 대상을 보이려고 스크롤을 옮긴다(818px 이탈).
+ */
+function unlockBodyScroll(y: number): void {
+  const body = document.body;
+  body.style.position = "";
+  body.style.top = "";
+  body.style.left = "";
+  body.style.right = "";
+  body.style.overflow = "";
+  void body.offsetHeight;
+  window.scrollTo({ top: y, left: 0, behavior: "instant" });
+}
+
+/**
+ * 지점 팝업 — **박스 안 고정 패널**(§25.4~§25.6). 페이지 지도와 전체 화면 지도가 **이 한 벌을 공유한다.**
+ *
+ * 가로는 박스에 고정(좌우 16px · `max-width:480px`)이고 세로만 마커 반대편에 붙는다 —
+ * **좌우 잘림이 계산이 아니라 구조로 0**이고, 드래그로 지도가 아무리 움직여도 팝업은 흔들리지 않는다.
+ *
+ * 3단계에서 `aria-hidden` 을 **해제**했다(§27.8.2): 팝업은 **열렸을 때만 렌더**되므로 낭독되는 것은
+ * **사용자가 연 것에 대한 응답**이지 중복이 아니다. `닫기` 의 `tabIndex={-1}` 도 함께 제거했다 —
+ * **둘 중 하나만 바꾸면 `aria-hidden` 안에 포커스 가능 요소가 생겨 즉시 반려선 위반**이 된다.
+ */
+function MapPopupPanel({
+  feature,
+  index,
+  side,
+  onClose,
+}: {
+  feature: MapFeature;
+  index: number;
+  side: "top" | "bottom";
+  onClose: () => void;
+}) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  /*
+   * 열리면 **팝업으로 포커스를 옮긴다**(§27.8.2). 닫을 때 마커로 되돌리는 것은 호출부가 한다.
+   *
+   * 이유: 팝업은 **사용자가 연 것에 대한 응답**이라 스크린리더가 그 자리에서 읽어야 하고,
+   * 옮기지 않으면 포커스가 `body` 로 떨어져 **Tab 이 페이지 처음부터 순회**한다
+   * (마커 아이콘이 다시 그려지며 방금 포커스한 노드가 사라지기 때문이다).
+   * `tabIndex={-1}` 은 **프로그램 포커스만** 허용한다 — 탭 정지점은 늘지 않는다.
+   * 의존성이 `feature.id` 인 이유: 다른 지점으로 **교체**될 때도 새 내용으로 다시 읽혀야 한다.
+   */
+  useEffect(() => {
+    panelRef.current?.focus({ preventScroll: true });
+  }, [feature.id]);
+
+  return (
+    <div
+      ref={panelRef}
+      tabIndex={-1}
+      className={`rounded-card shadow-card absolute inset-x-4 z-20 mx-auto max-w-[480px] border-2 border-border-strong bg-bg p-3.5 focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2 ${
+        side === "top" ? "top-4" : "bottom-4"
+      }`}
+    >
+      <p className="flex items-start gap-2 text-[17px] font-bold text-ink">
+        {/* 팝업↔지도 대응의 절반을 이 배지가 진다 — 빼지 마라(§25.6.2) */}
+        <span
+          className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full text-[15px] font-bold text-bg"
+          style={{ background: toneColor(feature.tone) }}
+        >
+          {circledNumber(index)}
+        </span>
+        <span className="break-keep break-words">{feature.label}</span>
+      </p>
+      {/* 본문은 **범례에서 파생**한다. 별도 문자열 상수를 만들지 마라 —
+          따로 두면 언젠가 한쪽만 고쳐진다(요구 88) */}
+      <p className="mt-2 break-keep break-words text-caption leading-[1.6] text-ink">
+        {feature.legend}
+      </p>
+      <div className="mt-3 flex justify-end">
+        <button type="button" onClick={onClose} className={CONTROL_CLASS}>
+          닫기
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** 지도 안 컨트롤 공통 — **반투명 금지**(지도 배경이 매 프레임 바뀌어 대비를 보장할 수 없다, §27.4.2) */
+const MAP_BUTTON_CLASS =
+  "flex size-11 items-center justify-center border-2 border-border-strong bg-bg text-primary disabled:text-ink-muted";
+
+/**
+ * 지도 안 확대·축소(§27.4).
+ *
+ * §21.1.3 은 *"컨트롤은 전부 지도 밖"* 이었고 그 유일한 근거는 **"지도 안 포커스 정지점이 생긴다"** 였다.
+ * §26.3.1 이 §20.9 를 개정해 **정지점을 개수가 아니라 구조로** 규율하면서 그 근거가 사라졌다 —
+ * `+/−` 는 마커와 함께 **`role="group"` 하나 뒤**에 들어가므로 정지점이 늘지 않는다(§27.8).
+ *
+ * **`+`·`−` 를 텍스트 문자로 쓰지 마라**(§16.12.3 선례) — 서체마다 위치·크기가 튄다. SVG 다.
+ * 자리는 **우측 상단**이다: 우측 하단은 축척 바·네이버 로고·⑥ 배지가 이미 쓰고 있어
+ * §22.10 **2-B(지도 크롬 가림 0%)** 가 즉시 깨진다.
+ */
+function MapZoomButtons({
+  zoom,
+  onZoom,
+  itemProps,
+  topOffset = "top-3",
+}: {
+  zoom: number | null;
+  onZoom: (delta: number) => void;
+  itemProps?: (id: string) => { id: string; tabIndex: number };
+  /** 전체 화면에서는 `닫기` 버튼 아래로 내린다 */
+  topOffset?: string;
+}) {
+  return (
+    <div className={`rounded-card shadow-card absolute right-3 z-10 overflow-hidden ${topOffset}`}>
+      <button
+        type="button"
+        aria-label="확대"
+        onClick={() => onZoom(1)}
+        disabled={zoom !== null && zoom >= MAP_MAX_ZOOM}
+        className={MAP_BUTTON_CLASS}
+        {...itemProps?.("rally-zoom-in")}
+      >
+        <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
+          <path
+            d="M12 5v14M5 12h14"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
+      <button
+        type="button"
+        aria-label="축소"
+        onClick={() => onZoom(-1)}
+        disabled={zoom !== null && zoom <= MAP_MIN_ZOOM}
+        className={`${MAP_BUTTON_CLASS} -mt-0.5`}
+        {...itemProps?.("rally-zoom-out")}
+      >
+        <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
+          <path d="M5 12h14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+        </svg>
+      </button>
+    </div>
+  );
 }
 
 /**
@@ -628,12 +972,25 @@ export function RallyMap({ clientId }: { clientId: string }) {
   const [selected, setSelected] = useState<{ id: string; index: number } | null>(null);
   /** 팝업을 박스 위·아래 중 어디에 붙일지(§25.5). **가로는 계산하지 않는다 — 박스에 고정이다** */
   const [popupSide, setPopupSide] = useState<"top" | "bottom">("bottom");
+  /** 키보드 그룹의 현재 항목(렌더용 — `+`/`−` 버튼의 `tabIndex` 가 이 값을 쓴다) */
+  const [focusedId, setFocusedId] = useState<string>(KEYBOARD_ENTRY_ID);
+  /**
+   * 전체 화면 지도(§27.6). **기본은 항상 닫힘** — 새로고침·재방문에서 열린 채 시작하지 않는다.
+   * 페이지 안에서도 드래그가 되므로 이 모드가 파는 값은 **크기**와 **탈출구**다(§27.14.1).
+   */
+  const [fullscreenOpen, setFullscreenOpen] = useState(false);
+  /** 지도 조작 그룹 안에 포커스가 있는가 — 범례 행 강조에 쓴다(§27.8.4) */
+  const [groupFocused, setGroupFocused] = useState(false);
 
   const mountRef = useRef<HTMLDivElement | null>(null);
+  /** 지도 박스 — 팝업 자리 계산과 키보드 이벤트 위임의 기준 */
+  const boxRef = useRef<HTMLDivElement | null>(null);
   const panoMountRef = useRef<HTMLDivElement | null>(null);
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   /** 모달을 연 버튼 — 닫을 때 포커스를 여기로 되돌린다(§23.1.5) */
   const roadviewButtonRef = useRef<HTMLButtonElement | null>(null);
+  /** `지도 크게 보기` — 모달을 닫을 때 포커스를 여기로 되돌린다 */
+  const fullscreenButtonRef = useRef<HTMLButtonElement | null>(null);
   /** 모달을 열 때의 스크롤 위치. 닫으면 **±0px 로** 되돌린다 */
   const scrollLockRef = useRef(0);
   const mapRef = useRef<NaverMap | null>(null);
@@ -645,6 +1002,11 @@ export function RallyMap({ clientId }: { clientId: string }) {
   const foldedRef = useRef<Set<string>>(new Set());
   /** 열린 팝업의 항목 — **한 번에 하나만**(§25.7). `null` 이면 전부 닫힘(기본 상태) */
   const selectedRef = useRef<string | null>(null);
+  /**
+   * 키보드 그룹의 **현재 항목**(§27.8.1 roving tabindex). 그룹 안에서 `tabindex="0"` 은 하나뿐이라
+   * **페이지 탭 정지점이 1개**로 유지된다. 진입 첫 지점은 **④ 코스콤지부** — 조합원이 이 페이지에 온 이유다.
+   */
+  const focusedRef = useRef<string>(KEYBOARD_ENTRY_ID);
   const boundsRef = useRef<NaverLatLngBounds | null>(null);
 
   /** 지도 폭의 60% 를 px 로 확정해 CSS 변수로 내린다 — 0폭 앵커 안에서는 %가 해석되지 않는다 */
@@ -686,21 +1048,36 @@ export function RallyMap({ clientId }: { clientId: string }) {
     syncLabelWidth();
 
     /*
-     * 조작 계약(§21.1.1). **한 손가락은 언제나 페이지 스크롤이다 — 예외 없음.**
-     * 초판이 막은 사고("스크롤하다 손가락이 지도에 닿으면 페이지가 멈춘다")는 §20.23 으로
-     * 모바일 지도가 410px 이 되면서 **오히려 위험이 커졌다.** 조작은 두 손가락과 지도 밖 버튼으로만 연다.
+     * 조작 계약(§27.13.6 — **§21.1.1 을 개정한다**).
      *
-     * - `draggable` 은 **마우스가 있을 때만**(`pointer: fine`) — 터치에서 켜면 한 손가락 팬이 열린다
-     * - `scrollWheel: false` + 직접 리스너에서 **Ctrl/⌘ + 휠만** 확대·축소(맨 휠은 페이지 스크롤)
-     * - `disableDoubleTapZoom` — 스크롤 중 오탭이 확대를 일으키면 조합원이 길을 잃는다
-     * - `keyboardShortcuts: false` — 조작은 지도 **밖** 버튼이 담당한다(§21.1.3)
+     * ⚠ **원칙이 여기서 예외를 갖는다.** §21.1.0 은 *"한 손가락은 언제나 페이지 스크롤이다. 예외 없음"* 이었고,
+     * 지금은 **"한 손가락은 페이지 스크롤이다. 단 지도 위는 사용자 결정으로 예외다"** 다.
+     *
+     * **왜 이렇게 위험한 것을 했는가 — 다음 사람에게 남긴다:**
+     * 리더가 위험을 명시적으로 고지했다("지도 위에서 페이지를 못 내리는 사고가 발생하고 회피 수단이 없다").
+     * 그 상태에서 사용자(지부 담당자)가 **"원래 지도처럼"** 조작되기를 택했다.
+     * **위험은 해소되지 않았다. 감수된 것이다**(§27.13.1). 몰라서 한 결정이 아니다 —
+     * 360×640 에서 지도가 엄지 영역의 **99.7%** 를 차지한다는 실측까지 나온 상태의 결정이다.
+     *
+     * **완화는 물리적 여백이 아니라 안내 문구가 진다**(§27.13.2 — "지도 상하 24px 여백"은 실측으로 기각됐다.
+     * 좌우 여백 16px 은 엄지가 들어가지 않고, 지도가 하단에 붙으면 아래 여백은 화면 밖이다).
+     * 그래서 `※ 지도는 손가락 하나로…` 를 **지도 박스 바로 위**에 상시 둔다(§27.15.1 · QA-247).
+     * **지도 아래가 아니다** — 지도가 화면을 덮을수록 아래에 있는 것은 화면 밖으로 나가,
+     * 위험이 최대인 순간에 완화가 0이 된다. **완화 수단은 이 문구 하나뿐이다**(§27.16.3 (A)).
+     * `지도 크게 보기` 는 **"조작 공간이 좁다"에 대한 대응이지 이 위험의 완화가 아니고**(§27.16.3 (B)),
+     * 지금은 **3단계-B 로 미뤄져 렌더되지 않는다**(§27.18 · `STAGE3B_FULLSCREEN_MAP`).
+     *
+     * **되돌리는 법**(§27.13.6): `draggable` 을 `(pointer: fine)` 분기로 되돌리고 `touch-action` 을 `pan-y` 로.
+     * ⚠ 종전 주석은 *"전체 화면 모드가 남아 있으므로 되돌려도 조작 수단이 0이 되지 않는다"* 였으나,
+     * **3단계-B 가 빠진 지금 그 근거는 성립하지 않는다** — 되돌리면 모바일 조작 수단은 지도 안 `+`/`−` 만 남는다.
+     * **발동 조건은 §27.13.8** — *"페이지가 안 내려간다"* 가 1건이라도 접수되면 리더에게 즉시 보고한다.
+     *
+     * 유지되는 것: `scrollWheel: false` + **Ctrl/⌘ + 휠만** 확대(맨 휠은 페이지 스크롤 — **이것까지 뺏지 마라**),
+     * `disableDoubleTapZoom`(오탭 확대 금지), `keyboardShortcuts: false`(키보드는 §27.8 그룹이 담당).
      */
-    const finePointer =
-      typeof window.matchMedia === "function" && window.matchMedia("(pointer: fine)").matches;
-
     const map = new maps.Map(node, {
       mapTypeId: maps.MapTypeId.NORMAL,
-      draggable: finePointer,
+      draggable: true,
       pinchZoom: true,
       scrollWheel: false,
       keyboardShortcuts: false,
@@ -754,94 +1131,16 @@ export function RallyMap({ clientId }: { clientId: string }) {
    * 접혀도 **번호 배지는 남고 범례가 번호를 설명**한다 — §0.4 은폐가 아니다.
    */
   const applyLabelVisibility = useCallback((currentZoom: number) => {
-    const entries = labelsRef.current;
-    if (entries.length === 0) return;
-
-    /*
-     * 텍스트 pill 노출 = **`textMode === "always"` 인 항목만**(§25.1).
-     * `popup` 항목은 **줌이 올라가도 텍스트를 띄우지 않는다** — 이름은 클릭 팝업이 진다
-     * (⑤⑥ 가 z17 에서 펼쳐지던 동작은 폐기됐다, §25.11).
-     * `always` 항목 안에서는 종전 등급 임계가 그대로 적용된다(② 는 z15 에서 배지가 된다).
-     */
-    const visible = new Map<string, boolean>();
-    for (const e of entries) {
-      visible.set(
-        e.feature.id,
-        e.feature.textMode === "always" &&
-          currentZoom >= LABEL_PRIORITY_MIN_ZOOM[e.feature.labelPriority],
-      );
-    }
-    const maps = window.naver?.maps;
-    const paint = () => {
-      for (const e of entries) {
-        const icon: NaverMarkerIcon = {
-          content: labelIconContent(
-            e.feature,
-            e.index,
-            visible.get(e.feature.id) === true,
-            currentZoom,
-            selectedRef.current === e.feature.id,
-          ),
-          anchor: { x: 0, y: 0 },
-        };
-        e.marker.setIcon(icon);
-        /*
-         * `minZoomOverride` 는 방향을 바꾸므로 **앵커 좌표도 함께 바뀐다**(§23.2.3).
-         * 아이콘만 갈아끼우면 라벨이 옛 앵커에 붙은 채 방향만 뒤집혀 **엉뚱한 곳을 가리킨다.**
-         */
-        if (maps !== undefined && e.feature.minZoomOverride !== undefined) {
-          const at = featureLabelAnchor(e.feature, currentZoom);
-          e.marker.setPosition(new maps.LatLng(at.lat, at.lng));
-        }
-      }
-    };
-    paint();
-
-    // 그린 뒤 실제 사각형으로 겹침을 판정하고, 낮은 등급을 접는다
-    const node = mountRef.current;
-    if (node === null) return;
-    requestAnimationFrame(() => {
-      const rects: { id: string; rank: number; r: DOMRect }[] = [];
-      for (const e of entries) {
-        if (visible.get(e.feature.id) !== true) continue;
-        const el = node.querySelector(`[data-rally-pill="${e.feature.id}"]`);
-        if (el === null) continue;
-        rects.push({
-          id: e.feature.id,
-          rank: PRIORITY_RANK[e.feature.labelPriority],
-          r: el.getBoundingClientRect(),
-        });
-      }
-      rects.sort((a, b) => a.rank - b.rank);
-      const kept: typeof rects = [];
-      const foldedNow = new Set<string>();
-      let changed = false;
-      for (const cand of rects) {
-        /*
-         * **히스테리시스**(§21.9.3): 접는 기준과 펴는 기준이 다르다.
-         * - 지금 펼쳐져 있는 라벨 → **실제로 교차할 때만** 접는다(여백 0)
-         * - 이미 접혀 있던 라벨 → **8px 이상 떨어져야** 다시 편다
-         * 한 값으로 양방향을 판정하면 경계에서 접힘/펴짐이 번갈아 일어나 **라벨이 깜빡인다.**
-         * 줌을 천천히 조작할 때 이 차이가 눈에 보인다 — 임계값을 하나로 합치지 마라.
-         */
-        const margin = foldedRef.current.has(cand.id) ? LABEL_REVEAL_GAP : LABEL_MIN_GAP;
-        const hit = kept.some(
-          (k) =>
-            Math.min(k.r.right, cand.r.right) - Math.max(k.r.left, cand.r.left) > -margin &&
-            Math.min(k.r.bottom, cand.r.bottom) - Math.max(k.r.top, cand.r.top) > -margin,
-        );
-        // `primary` 는 겹쳐도 접지 않는다 — 접으면 지도가 핵심 정보를 잃는다
-        if (hit && cand.rank > 0) {
-          visible.set(cand.id, false);
-          foldedNow.add(cand.id);
-          changed = true;
-        } else {
-          kept.push(cand);
-        }
-      }
-      foldedRef.current = foldedNow;
-      if (changed) paint();
-    });
+    paintLabels(
+      {
+        labels: labelsRef.current,
+        folded: foldedRef.current,
+        selectedId: selectedRef.current,
+        focusedId: focusedRef.current,
+        node: mountRef.current,
+      },
+      currentZoom,
+    );
   }, []);
 
   /**
@@ -883,6 +1182,92 @@ export function RallyMap({ clientId }: { clientId: string }) {
     [applyLabelVisibility],
   );
 
+  /**
+   * 키보드 그룹(§27.8 — **§26.1.4 부채 상환**).
+   *
+   * 지도 안 조작(`+`·`−` + 지점 6개 = 8개)을 **탭 정지점 1개** 뒤에 모은다:
+   * 그룹 안에서 `tabindex="0"` 은 **현재 항목 하나뿐**이고 나머지는 `-1` 이다(roving tabindex).
+   * 페이지 전체로 보면 컨트롤 행이 5→4로 줄고 그룹이 +1 이라 **정지점 순증 0**이다.
+   *
+   * **`role="application"` 을 쓰지 마라** — 스크린리더의 브라우즈 모드를 꺼서 범례 낭독이 망가진다.
+   */
+  const focusItem = useCallback(
+    (id: string) => {
+      focusedRef.current = id;
+      setFocusedId(id);
+      /*
+       * ⚠ **순서가 이 함수의 전부다**(QA 22회차 실패 1 · 2026-08-21).
+       * 종전에는 `focus()` 를 먼저 부르고 `applyLabelVisibility()` 를 나중에 불렀는데,
+       * 그 안의 `paint()` 가 **마커 아이콘을 통째로 다시 그려 방금 포커스한 DOM 노드를 없앤다.**
+       * 그러면 포커스가 `body` 로 떨어져 **방향키로 다음 지점에 갈 수 없다.**
+       * `paint()` 의 복원 가드는 `activeElement` 가 그룹 안인지 보는데 **그때는 이미 `body`** 라 안 걸린다.
+       *
+       * → **다시 그린 뒤에 그 결과 노드를 조회해 포커스한다.**
+       * (rAF 겹침 판정으로 한 번 더 그려질 수 있는데, 그때는 포커스가 마커에 있으므로
+       *  `paint()` 의 복원 가드가 정상 작동한다 — 두 장치가 한 쌍이다.)
+       * **`focus()` 를 위로 올리지 마라.**
+       */
+      const map = mapRef.current;
+      if (map !== null) applyLabelVisibility(map.getZoom());
+      const target = id.startsWith("rally-zoom")
+        ? document.getElementById(id)
+        : (mountRef.current?.querySelector<HTMLElement>(`[data-rally-hit="${id}"]`) ?? null);
+      target?.focus({ preventScroll: true });
+    },
+    [applyLabelVisibility],
+  );
+
+  useEffect(() => {
+    const box = boxRef.current;
+    if (box === null || status !== "ready") return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
+      const hit = target.closest<HTMLElement>("[data-rally-hit]");
+      const isZoomButton = target.id === "rally-zoom-in" || target.id === "rally-zoom-out";
+      if (hit === null && !isZoomButton) return;
+      const order = keyboardOrder();
+      const currentId = hit?.dataset.rallyHit ?? target.id;
+      const index = order.indexOf(currentId);
+      if (index < 0) return;
+
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        e.preventDefault();
+        focusItem(order[(index + 1) % order.length] ?? currentId);
+        return;
+      }
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        e.preventDefault();
+        focusItem(order[(index - 1 + order.length) % order.length] ?? currentId);
+        return;
+      }
+      // `+`/`−` 는 `<button>` 이라 Enter·Space 가 브라우저 기본 동작으로 눌린다 — 가로채지 않는다
+      if ((e.key === "Enter" || e.key === " ") && hit !== null) {
+        e.preventDefault();
+        selectFeature(currentId);
+      }
+    };
+    /* 그룹 안 포커스 여부 — 범례 해당 행을 함께 강조한다(§27.8.4).
+       **범례 행을 `<button>` 으로 만들지 마라**: 텍스트 등가가 범례에 의존하는 구조가 흔들리고
+       정지점도 늘어난다. 시각 강조만 준다 — 키보드+시각 사용자에게 비용 0으로 가치를 준다. */
+    const onFocusIn = (e: FocusEvent) => {
+      const t = e.target;
+      setGroupFocused(
+        t instanceof HTMLElement &&
+          (t.closest("[data-rally-hit]") !== null || t.id.startsWith("rally-zoom")),
+      );
+    };
+    const onFocusOut = () => setGroupFocused(false);
+    box.addEventListener("keydown", onKeyDown);
+    box.addEventListener("focusin", onFocusIn);
+    box.addEventListener("focusout", onFocusOut);
+    return () => {
+      box.removeEventListener("keydown", onKeyDown);
+      box.removeEventListener("focusin", onFocusIn);
+      box.removeEventListener("focusout", onFocusOut);
+    };
+  }, [focusItem, selectFeature, status]);
+
   /* 배지·pill 클릭 → 팝업. 지도 빈 곳 클릭 → 닫기(§25.7) */
   useEffect(() => {
     const maps = window.naver?.maps;
@@ -904,11 +1289,16 @@ export function RallyMap({ clientId }: { clientId: string }) {
   useEffect(() => {
     if (selected === null) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") selectFeature(null);
+      if (e.key !== "Escape") return;
+      /* 팝업만 닫는다. **로드뷰·전체 화면 모달을 함께 닫지 마라** — `<dialog>` 는 top-layer 라
+         모달이 열려 있으면 이 핸들러가 아니라 브라우저가 먼저 처리한다(§27.14.6-262) */
+      const openId = selectedRef.current;
+      selectFeature(null);
+      if (openId !== null) focusItem(openId); // 연 마커로 포커스를 되돌린다(§27.8.2)
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [selectFeature, selected]);
+  }, [focusItem, selectFeature, selected]);
 
   /*
    * 줌·팬 중에도 팝업은 **열린 채 유지**한다(박스 고정이라 흔들리지 않는다).
@@ -1027,16 +1417,16 @@ export function RallyMap({ clientId }: { clientId: string }) {
   const openRoadview = useCallback(() => {
     const dialog = dialogRef.current;
     if (dialog === null || dialog.open) return;
-    scrollLockRef.current = window.scrollY;
     setRoadviewOpen(true);
     dialog.showModal();
-    const body = document.body;
-    body.style.position = "fixed";
-    body.style.top = `-${scrollLockRef.current}px`;
-    body.style.left = "0";
-    body.style.right = "0";
-    body.style.overflow = "hidden";
+    scrollLockRef.current = lockBodyScroll();
   }, []);
+
+  /* 전체 화면 진입 — **페이지 지도의 팝업을 먼저 닫는다**(§27.6). 닫으면 페이지 지도는 손대지 않은 그대로다 */
+  const openFullscreen = useCallback(() => {
+    selectFeature(null);
+    setFullscreenOpen(true);
+  }, [selectFeature]);
 
   const closeRoadview = useCallback(() => {
     const dialog = dialogRef.current;
@@ -1048,12 +1438,6 @@ export function RallyMap({ clientId }: { clientId: string }) {
     const dialog = dialogRef.current;
     if (dialog === null) return;
     const onClose = () => {
-      const body = document.body;
-      body.style.position = "";
-      body.style.top = "";
-      body.style.left = "";
-      body.style.right = "";
-      body.style.overflow = "";
       setRoadviewOpen(false);
       /*
        * **`preventScroll: true` 를 빼지 마라.** 기본 `focus()` 는 대상을 보이게 하려고 스크롤을
@@ -1061,16 +1445,7 @@ export function RallyMap({ clientId }: { clientId: string }) {
        * 포커스를 먼저 되돌리고 **그다음에** 위치를 복원한다 — 순서가 바뀌면 같은 증상이 난다.
        */
       roadviewButtonRef.current?.focus({ preventScroll: true });
-      /*
-       * 위치 복원은 **두 가지를 동시에 처리해야** ±0px 가 된다(둘 중 하나만 빠져도 어긋난다):
-       * ① **레이아웃 강제 반영** — `position:fixed` 를 막 푼 시점에는 문서 높이가 아직
-       *    뷰포트 높이(800)로 잡혀 있어 `scrollTo` 가 **0 으로 잘린다**(실측).
-       * ② **`behavior: "instant"`** — 이 사이트는 `html { scroll-behavior: smooth }` 라
-       *    기본값으로 부르면 **애니메이션 도중 브라우저 자체 복원과 경합**해 엉뚱한 곳에 선다
-       *    (실측: 목표 3355 → 3247).
-       */
-      void document.body.offsetHeight;
-      window.scrollTo({ top: scrollLockRef.current, left: 0, behavior: "instant" });
+      unlockBodyScroll(scrollLockRef.current);
     };
     dialog.addEventListener("close", onClose);
     return () => dialog.removeEventListener("close", onClose);
@@ -1322,6 +1697,33 @@ export function RallyMap({ clientId }: { clientId: string }) {
         </p>
 
         {/*
+          드래그 개방의 **유일한 실효 완화 수단**(§27.16.3 (A) — 표에 이것 하나만 있다).
+
+          ★ **지도 "위"다. 아래로 내리지 마라**(§27.15.1 판정 · QA-247).
+          지도 아래에 두면 **위험이 최대인 순간에 완화가 0이 된다** — 지도가 화면 하단을 덮을수록
+          점유율이 오르고, 그때 지도 아래에 있는 것은 **전부 화면 밖**이기 때문이다. 우연이 아니라 기하다.
+          실측(360×800): 지도 **아래**면 문구가 안 보이는 구간의 최대 점유 **85.4%**(최악 구간 그 자체),
+          지도 **위**면 최악 구간에서 **보인다**(문구가 안 보이는 구간은 점유 25.8% 이하 —
+          그때는 지도 아래로 356px 가 비어 스크롤이 쉽다). **위험과 가시성이 같은 방향으로 움직인다.**
+          부수 이득: 문구가 지도 밖 위쪽에 있다는 사실 자체가 **"지도 밖"이 어디인지 가리킨다.**
+
+          ★ **문안에서 좌우를 가리키지 마라**(§27.16.2). 종전 `지도 밖을` 은 좌우를 포함하는 것처럼 들리는데
+          **좌우 여백은 각 16px 이라 엄지가 들어가지 않는다.** 시도하면 반드시 실패하고,
+          실패하면 **조합원이 문구 자체를 불신해** 다음에 위쪽을 시도할 이유가 사라진다.
+          **행동을 지시하는 문구는 "할 수 있는 것"을 말해야 한다.**
+          `위나 아래` 를 **둘 다** 말하는 이유: 지도가 화면 하단을 덮으면 위가 비고, 상단을 덮으면 아래가 빈다 —
+          한쪽만 말하면 나머지 상황에서 틀린다.
+
+          ⚠ **이것도 사실 주장이다** — 한 손가락으로 지도가 움직이고 **지도 위·아래 빈 곳에서 페이지가
+          실제로 스크롤돼야** 참이다. 물리적 여백으로는 못 푼다(§27.13.2 실측: 360×640 에서 지도가
+          엄지 영역의 99.7% 를 차지한다). **알리는 것이 유일하게 실효 있는 완화다.**
+          **흐리지 마라 · 접지 마라 · `sr-only` 로 돌리지 마라.**
+        */}
+        <p className="mb-2 break-keep text-caption font-semibold text-ink">
+          ※ 지도는 손가락 하나로 움직입니다. 페이지를 내릴 때는 지도 위나 아래 빈 곳을 쓸어 주세요.
+        </p>
+
+        {/*
           고정 종횡비 박스 — 실패·미로드에서도 크기가 변하지 않아 CLS 0 (§20.3.4).
 
           모바일이 **`4/5` 세로형**인 이유(§20.23): 이 지도의 지물은 의사당대로를 따라
@@ -1332,19 +1734,51 @@ export function RallyMap({ clientId }: { clientId: string }) {
           **박스를 콘텐츠의 축에 맞추는 것이 유일한 구조적 해법이다.**
           `md:aspect-[16/9]` 는 불변이며, 이 변경으로 모바일과 md 가 **같은 100m 축척**을 쓴다.
         */}
-        <div className="rounded-card relative aspect-[4/5] w-full overflow-hidden md:aspect-[16/9]">
+        <div
+          ref={boxRef}
+          className="rounded-card relative aspect-[4/5] w-full overflow-hidden md:aspect-[16/9]"
+        >
           {/* 마운트 노드에 aria-hidden 을 걸지 마라 — 네이버 로고·저작권 컨트롤에 링크가 들어가고,
               숨겨진 영역 안의 포커스 가능 요소는 WCAG 2.4.3·4.1.2 위반이 된다(§20.9).
 
-              `touchAction: "pan-y"` 가 **한 손가락 = 페이지 스크롤 계약의 본체**다(§21.1.1).
-              이것을 지우면 지도가 세로 스와이프를 먹어 조합원이 페이지를 못 내린다 —
-              초판이 비인터랙티브를 택하면서까지 막았던 바로 그 사고다. **지우지 마라.**
+              `touchAction: "none"` 은 **사용자 결정으로 열린 한 손가락 드래그의 본체**다(§27.13.6).
+              `pan-y` 였던 값을 바꾼 것이며, 이 한 줄이 "지도 위에서는 페이지가 안 내려간다"는
+              **알려진 제약**을 만든다. 되돌리려면 이 값을 `pan-y` 로, 지도 옵션의 `draggable` 을
+              `(pointer: fine)` 분기로 함께 되돌린다 — **둘은 한 쌍이다.**
 
               로드뷰는 이제 이 박스를 **덮지 않는다**(§23.1). 전체 화면 모달로 열리므로
               **지도는 페이지에서 사라지지 않는다** — §21.3.1 이 스스로 인정했던 탭 패턴과의
               유사성(§0.4 위험)이 여기서 완전히 사라진다. `inert` 는 `<dialog showModal()>` 이
               배경 전체에 자동으로 걸어 주므로 직접 걸지 않는다. */}
-          <div ref={mountRef} className="size-full" style={{ touchAction: "pan-y" }} />
+          <div ref={mountRef} className="size-full" style={{ touchAction: "none" }} />
+
+          {/*
+            키보드 그룹(§27.8.1). 마커는 네이버가 주입한 DOM 안에 있어 이 요소의 **자식이 될 수 없다** —
+            그래서 `aria-owns` 로 논리적 소유를 선언한다. 시각적으로는 아무 것도 그리지 않는다
+            (`pointer-events-none` — 클릭을 가로채면 지도 조작이 죽는다).
+            **`role="application"` 을 쓰지 마라**: 스크린리더 브라우즈 모드가 꺼져 범례 낭독이 망가진다.
+          */}
+          {status === "ready" ? (
+            <>
+              <div
+                role="group"
+                aria-label="지도 조작"
+                aria-describedby="rally-kbd-help"
+                aria-owns={keyboardOrder()
+                  .map((id) => (id.startsWith("rally-zoom") ? id : `rally-marker-${id}`))
+                  .join(" ")}
+                className="pointer-events-none absolute inset-0"
+              />
+              <span id="rally-kbd-help" className="sr-only">
+                방향키로 이동하고 엔터로 실행합니다
+              </span>
+              <MapZoomButtons
+                zoom={zoom}
+                onZoom={zoomBy}
+                itemProps={(id) => ({ id, tabIndex: focusedId === id ? 0 : -1 })}
+              />
+            </>
+          ) : null}
 
           {/*
             팝업 — **박스 안 고정 패널**이다(§25.4). 말풍선이 아니다.
@@ -1362,38 +1796,16 @@ export function RallyMap({ clientId }: { clientId: string }) {
             그래서 `닫기` 도 `tabindex={-1}` 이다: **`aria-hidden` 안에 포커스 가능 요소를 만들지 마라**(WCAG 2.4.3·4.1.2).
           */}
           {selectedFeature !== null ? (
-            <div
-              aria-hidden="true"
-              className={`rounded-card shadow-card absolute inset-x-4 z-20 mx-auto max-w-[480px] border-2 border-border-strong bg-bg p-3.5 ${
-                popupSide === "top" ? "top-4" : "bottom-4"
-              }`}
-            >
-              <p className="flex items-start gap-2 text-[17px] font-bold text-ink">
-                {/* 팝업↔지도 대응의 절반을 이 배지가 진다 — 빼지 마라(§25.6.2) */}
-                <span
-                  className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full text-[15px] font-bold text-bg"
-                  style={{ background: toneColor(selectedFeature.tone) }}
-                >
-                  {circledNumber(selectedIndex)}
-                </span>
-                <span className="break-keep break-words">{selectedFeature.label}</span>
-              </p>
-              {/* 본문은 **범례에서 파생**한다. 별도 문자열 상수를 만들지 마라 —
-                  따로 두면 언젠가 한쪽만 고쳐진다(요구 88) */}
-              <p className="mt-2 break-keep break-words text-caption leading-[1.6] text-ink">
-                {selectedFeature.legend}
-              </p>
-              <div className="mt-3 flex justify-end">
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() => selectFeature(null)}
-                  className={CONTROL_CLASS}
-                >
-                  닫기
-                </button>
-              </div>
-            </div>
+            <MapPopupPanel
+              feature={selectedFeature}
+              index={selectedIndex}
+              side={popupSide}
+              onClose={() => {
+                const openId = selectedRef.current;
+                selectFeature(null);
+                if (openId !== null) focusItem(openId);
+              }}
+            />
           ) : null}
 
           {status !== "ready" ? (
@@ -1403,86 +1815,54 @@ export function RallyMap({ clientId }: { clientId: string }) {
           ) : null}
         </div>
 
-        {/* 범례는 지도 바로 아래 붙는다. 접거나 sr-only 로 돌리지 마라(§0.4).
-            기호 글리프는 aria-hidden — 스크린리더에는 번호·확신도가 **문자**로 전달된다.
-            행은 `MAP_FEATURES` 에서 파생된다 — 배열에서 빠진 항목의 행은 자동으로 사라진다 */}
-        <figcaption className="mt-4">
-          {/*
-            어포던스 문구(요구 87 · §25.2 겹1). **이번 설계의 실질 위험은 여기 하나다** —
-            누를 수 있다는 걸 모르면 ①③⑤⑥ 의 이름은 **사라진 것과 같다.**
-            `ink-muted` 로 흐리지 마라 · 접지 마라 · `sr-only` 로 돌리지 마라.
+        {/*
+          어포던스 문구(요구 87 · §25.2 겹1). **`<figcaption>` 밖 `<p>` 로 뺐다**(§27.14.0) —
+          컨트롤 행이 범례 **위**로 올라오면서 `<figcaption>` 이 `<figure>` 의 마지막 자식이어야
+          HTML 스펙을 지킨다. 문구는 여전히 **지도 바로 아래 · 키 줄 위**라 요구 87 이 만족된다.
+          `ink-muted` 로 흐리지 마라 · 접지 마라 · `sr-only` 로 돌리지 마라.
 
-            ⚠ **이 문장은 사실 주장이다.** `번호를 누르면` 이라고 썼으므로 **번호(배지·pill)는 반드시 눌려야 하고**,
-            도형(원·밴드·부지)을 눌리게 만들면 **이 문안이 거짓이 된다**(§25.2.1).
-            문구보다 넓게 눌리는 것은 허용, 좁은 것은 금지다.
-          */}
-          <p className="break-keep text-caption font-semibold text-ink">
-            ※ 지도의 번호를 누르면 각 지점 설명이 나옵니다.
-          </p>
-          <p className="mt-1 break-keep text-caption text-ink">{LEGEND_KEY}</p>
-          <ul className="mt-2 flex flex-col gap-2">
-            {MAP_FEATURES.map((feature, index) => (
-              /* 범례 ⑤ `여의도더샵아일랜드파크` 는 공백이 없어 확대 200% 에서 327px 로 296px 를 넘친다.
-                 `break-keep`(어절 유지)은 그대로 두고 `break-words` 만 더한다 — 한 낱말이 줄 폭보다
-                 길 때에만 쪼개진다. **`break-keep` 을 빼지 마라**: 한글이 음절 단위로 끊겨 판독성이 무너진다 */
-              <li key={feature.id} className="flex gap-2 break-keep break-words text-caption text-ink">
-                <span aria-hidden="true">{feature.glyph}</span>
-                <span>
-                  {circledNumber(index)} {feature.legend}
-                </span>
-              </li>
-            ))}
-            {/* 내 위치 행은 **표시했을 때만** 나타나고 **번호가 없다**(§20.21.1) —
-                ①~⑤ 는 안내도의 지점이고 내 위치는 사용자가 만들어 낸 동적 표식이라 성질이 다르다 */}
-            {showMyLocationLegendRow
-              ? (() => {
-                  const pin = myLocationFeature({ lat: 0, lng: 0 });
-                  return (
-                    <li className="flex gap-2 break-keep break-words text-caption text-ink">
-                      <span aria-hidden="true">{pin.glyph}</span>
-                      <span>{pin.legend}</span>
-                    </li>
-                  );
-                })()
-              : null}
-          </ul>
-          <p className="mt-3 max-w-[var(--container-prose)] break-keep text-caption text-ink-muted">
-            {LEGEND_FOOTNOTE}
-          </p>
-        </figcaption>
-      </figure>
-
+          ⚠ **이 문장은 사실 주장이다.** `번호를 누르면` 이라고 썼으므로 **번호(배지·pill)는 반드시 눌려야 하고**,
+          도형(원·밴드·부지)을 눌리게 만들면 **이 문안이 거짓이 된다**(§25.2.1).
+        */}
+        <p className="mt-4 break-keep text-caption font-semibold text-ink">
+          ※ 지도의 번호를 누르면 각 지점 설명이 나옵니다.
+        </p>
       {/*
-        컨트롤 행(§21.1.3) — **전부 지도 박스 밖**이다. 지도 안 포커스 정지점은 네이버 로고·저작권뿐이라는
-        §20.9 설계가 인터랙티브 전환 이후에도 그대로 유지된다.
+        컨트롤 행 — **범례 위로 올렸다**(§27.14.0). 드래그를 열자 새 문제가 생겼기 때문이다:
+        길을 잃은 조합원이 `처음 위치로` 를 찾으려면 아래로 스크롤해야 하는데 **지도 위에서는 스크롤이 안 된다.**
+        범례 6행 뒤(약 290px)에 있던 버튼을 지도 바로 아래(약 80px)로 당겨 두 문제가 겹치는 것을 푼다.
         지도가 실패한 상태에서는 조작할 지도가 없으므로 행 전체를 렌더하지 않는다(죽은 버튼 금지).
-        컨테이너 최소 높이를 미리 잡아 미지원 판정에 따른 레이아웃 시프트를 막는다.
       */}
       <div className="mt-3 min-h-touch">
         {status === "ready" ? (
           <>
-            {/* 컨트롤 행은 **상태와 무관하게 항상 같은 5개**다(§23.0-4).
-                로드뷰가 모달로 나가면서 `지도로 돌아가기` 가 모달 안 `닫기` 로 이동했고,
-                버튼이 상황에 따라 바뀌지 않으므로 §21.1.3 의 폭 검산(2행)이 그대로 유효하다. */}
+            {/* 컨트롤 행은 **상태와 무관하게 버튼 구성이 바뀌지 않는다**(§23.0-4).
+                로드뷰가 모달로 나가면서 `지도로 돌아가기` 가 모달 안 `닫기` 로 이동했다. */}
+            {/* `축소`·`확대` 는 **지도 안 `+/−` 로 옮겼다**(§27.4.3) — 같은 기능이 두 곳에 있으면
+                조합원이 어느 것이 진짜인지 묻게 된다.
+
+                ⚠ **3단계-A 만 배포하는 지금 이 행은 3개다**(`처음 위치로`·`내 위치 표시`·`로드뷰 보기`) —
+                `지도 크게 보기` 가 3단계-B 로 미뤄졌기 때문이다(§27.18.3).
+                **§27.4.3 의 4개 기준 폭 검산(1행 280.0 / 2행 264.4)은 무효다.**
+                3단계-B 가 되살아나면 4개로 돌아가고 그 검산이 다시 기준이 된다 —
+                그때 `지도 크게 보기` 와 `로드뷰 보기` 를 **같은 행에 나란히 두지 마라**(§27.14.2):
+                둘 다 화면을 덮어 혼동되므로 행을 갈라야 한다. */}
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => zoomBy(-1)}
-                disabled={zoom !== null && zoom <= MAP_MIN_ZOOM}
-                className={CONTROL_CLASS}
-              >
-                축소
-              </button>
-              <button
-                type="button"
-                onClick={() => zoomBy(1)}
-                disabled={zoom !== null && zoom >= MAP_MAX_ZOOM}
-                className={CONTROL_CLASS}
-              >
-                확대
-              </button>
-              {/* 핀치로 화면이 틀어졌을 때의 **유일한 복귀 경로**다(§23 — 두 손가락 팬 제거 후에도 유지).
-                  지우지 마라. */}
+              {/* 3단계-B — **QA-260(모달 안 범례 부재) 판정 대기**(§27.18).
+                  코드를 지우지 마라. `STAGE3B_FULLSCREEN_MAP` 한 곳만 `true` 로 되돌리면 복구된다. */}
+              {STAGE3B_FULLSCREEN_MAP ? (
+                <button
+                  type="button"
+                  ref={fullscreenButtonRef}
+                  onClick={openFullscreen}
+                  className={CONTROL_CLASS}
+                >
+                  지도 크게 보기
+                </button>
+              ) : null}
+              {/* 드래그로 길을 잃었을 때의 **유일한 복귀 경로**다. 3단계로 팬이 더 열려
+                  중요도가 올라갔다(§27.4.3). **지우지 마라.**
+                  ⚠ 이 버튼이 고치는 것은 "길을 잃었다"이지 **"페이지를 못 내린다"가 아니다** — 혼동하지 마라. */}
               <button type="button" onClick={resetView} disabled={!moved} className={CONTROL_CLASS}>
                 처음 위치로
               </button>
@@ -1552,6 +1932,64 @@ export function RallyMap({ clientId }: { clientId: string }) {
           </>
         ) : null}
       </div>
+        {/* 범례는 지도 바로 아래 붙는다. 접거나 sr-only 로 돌리지 마라(§0.4).
+            기호 글리프는 aria-hidden — 스크린리더에는 번호·확신도가 **문자**로 전달된다.
+            행은 `MAP_FEATURES` 에서 파생된다 — 배열에서 빠진 항목의 행은 자동으로 사라진다.
+            **`<figure>` 의 마지막 자식이어야 한다**(§27.14.0 · HTML 스펙) */}
+        <figcaption className="mt-4">
+          <p className="break-keep text-caption text-ink">{LEGEND_KEY}</p>
+          <ul className="mt-2 flex flex-col gap-2">
+            {MAP_FEATURES.map((feature, index) => (
+              /* 범례 ⑤ `여의도더샵아일랜드파크` 는 공백이 없어 확대 200% 에서 327px 로 296px 를 넘친다.
+                 `break-keep`(어절 유지)은 그대로 두고 `break-words` 만 더한다 — 한 낱말이 줄 폭보다
+                 길 때에만 쪼개진다. **`break-keep` 을 빼지 마라**: 한글이 음절 단위로 끊겨 판독성이 무너진다 */
+              <li
+                key={feature.id}
+                /* `-mx-1 px-1`: 강조 배경이 글자에 붙지 않게 패딩을 주되 **음수 마진으로 상쇄**한다.
+                   패딩만 주면 텍스트 가용 폭이 줄어 **확대 200% 에서 ③ 행이 7px 넘친다**(실측). */
+                className={`-mx-1 flex gap-2 break-keep break-words rounded-card px-1 text-caption text-ink ${
+                  groupFocused && focusedId === feature.id ? "bg-primary-tint outline-2 outline-ink" : ""
+                }`}
+              >
+                <span aria-hidden="true">{feature.glyph}</span>
+                <span>
+                  {circledNumber(index)} {feature.legend}
+                </span>
+              </li>
+            ))}
+            {/* 내 위치 행은 **표시했을 때만** 나타나고 **번호가 없다**(§20.21.1) —
+                ①~⑤ 는 안내도의 지점이고 내 위치는 사용자가 만들어 낸 동적 표식이라 성질이 다르다 */}
+            {showMyLocationLegendRow
+              ? (() => {
+                  const pin = myLocationFeature({ lat: 0, lng: 0 });
+                  return (
+                    <li className="flex gap-2 break-keep break-words text-caption text-ink">
+                      <span aria-hidden="true">{pin.glyph}</span>
+                      <span>{pin.legend}</span>
+                    </li>
+                  );
+                })()
+              : null}
+          </ul>
+          <p className="mt-3 max-w-[var(--container-prose)] break-keep text-caption text-ink-muted">
+            {LEGEND_FOOTNOTE}
+          </p>
+        </figcaption>
+      </figure>
+
+
+      {/* 전체 화면 지도(§27.6) — 로드뷰와 같은 기반, **별도 인스턴스**.
+          3단계-B 로 미뤄져 **지금은 렌더되지 않는다**(§27.18 · `STAGE3B_FULLSCREEN_MAP`).
+          별도 인스턴스라 A 의 드래그·`+`/`−`·키보드 그룹·팝업과 **의존이 없다** — 렌더만 꺼도 분리가 성립한다.
+          `RallyFullscreenMap` 정의(아래)와 `FIT_MAX_ZOOM` 적용도 그대로 남겨 둔다: 렌더되지 않으므로 무해하고,
+          되살릴 때 다시 만들 것이 없어야 한다. */}
+      {STAGE3B_FULLSCREEN_MAP ? (
+        <RallyFullscreenMap
+          open={fullscreenOpen}
+          onClose={() => setFullscreenOpen(false)}
+          openerRef={fullscreenButtonRef}
+        />
+      ) : null}
 
       {/*
         로드뷰 — **전체 화면 모달**(§23.1). 지도 박스를 덮지 않는다.
@@ -1612,6 +2050,382 @@ export function RallyMap({ clientId }: { clientId: string }) {
 }
 
 /**
+ * 전체 화면 지도(§27.6 · §27.14.3) — **로드뷰 모달의 기반을 그대로 재사용한다. 새 패턴 0.**
+ *
+ * `<dialog>` + `showModal()`(포커스 트랩·`Esc`·배경 `inert`·top-layer) · `100dvh` ·
+ * 배경 스크롤 잠금·복원 3중 장치 · `::backdrop` 클릭 핸들러 없음(오탭 닫힘 금지).
+ *
+ * ⚠ **별도 지도 인스턴스다. 페이지 지도를 옮기지 마라** — 옮기면 닫았을 때 초기 뷰가 보존되지 않는다.
+ * 열 때 만들고 닫을 때 파괴하며, 진입 시 `fitBounds` 를 **다시** 실행한다(종횡비가 다르다).
+ *
+ * ⚠ **범례를 넣지 않았다.** 근거는 §27.14.3: ① 요구 90 이 막은 것은 팝업이 지점을 덮는 것이고
+ * 여기서는 지도와 팝업이 함께 있다 ② 대응 경로가 `번호 → 범례` 에서 `번호 → 팝업` 으로 바뀔 뿐
+ * **도달하는 문자열이 같다**(팝업 본문 = 범례 문장) ③ ②④ 는 pill 로 이름이 계속 보인다
+ * ④ 일시적이고 명시적으로 연 것이며 닫으면 범례가 있는 페이지로 돌아온다 ⑤ 범례를 넣으면
+ * 지도가 540px 수준으로 줄어 이 모드의 목적을 스스로 훼손한다.
+ * **그러나 이것은 §0.4 판정이고 검증 소관이다 — QA-260 이 "판정 전 배포 금지"를 걸어 뒀다.**
+ * 판정이 "범례 필수"로 나오면 **접지 말고** 하단에 넣고 지도를 그만큼 줄인다.
+ */
+function RallyFullscreenMap({
+  open,
+  onClose,
+  openerRef,
+}: {
+  open: boolean;
+  onClose: () => void;
+  openerRef: React.RefObject<HTMLButtonElement | null>;
+}) {
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const mountRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<NaverMap | null>(null);
+  const overlaysRef = useRef<NaverOverlay[]>([]);
+  const labelsRef = useRef<LabelEntry[]>([]);
+  const foldedRef = useRef<Set<string>>(new Set());
+  const selectedRef = useRef<string | null>(null);
+  const focusedRef = useRef<string>(KEYBOARD_ENTRY_ID);
+  const scrollLockRef = useRef(0);
+  /** 초기 포커스 대상 — `showModal()` 이 항상 첫 요소를 잡아 주지는 않아 **명시적으로** 옮긴다 */
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const [zoom, setZoom] = useState<number | null>(null);
+  const [moved, setMoved] = useState(false);
+  const [selected, setSelected] = useState<{ id: string; index: number } | null>(null);
+  const [popupSide, setPopupSide] = useState<"top" | "bottom">("bottom");
+  const [focusedId, setFocusedId] = useState<string>(KEYBOARD_ENTRY_ID);
+
+  const paint = useCallback((currentZoom: number) => {
+    paintLabels(
+      {
+        labels: labelsRef.current,
+        folded: foldedRef.current,
+        selectedId: selectedRef.current,
+        focusedId: focusedRef.current,
+        node: mountRef.current,
+      },
+      currentZoom,
+    );
+  }, []);
+
+  const fit = useCallback((maps: NaverMapsNamespace, map: NaverMap) => {
+    const b = MAP_FIT_BOUNDS;
+    map.fitBounds(new maps.LatLngBounds(new maps.LatLng(b.south, b.west), new maps.LatLng(b.north, b.east)), FIT_PADDING);
+    if (map.getZoom() > FIT_MAX_ZOOM) map.setZoom(FIT_MAX_ZOOM, false);
+    setMoved(false);
+  }, []);
+
+  const selectFeature = useCallback(
+    (id: string | null) => {
+      const next =
+        id === null || selectedRef.current === id
+          ? null
+          : (() => {
+              const index = MAP_FEATURES.findIndex((f) => f.id === id);
+              return index < 0 ? null : { id, index };
+            })();
+      selectedRef.current = next?.id ?? null;
+      setSelected(next);
+      const node = mountRef.current;
+      const box = boxRef.current;
+      if (next !== null && node !== null && box !== null) {
+        const el = node.querySelector(`[data-rally-label="${next.id}"]`);
+        if (el !== null) {
+          const br = box.getBoundingClientRect();
+          const r = el.getBoundingClientRect();
+          setPopupSide(r.top + r.height / 2 - br.top < br.height / 2 ? "bottom" : "top");
+        }
+      }
+      const map = mapRef.current;
+      if (map !== null) paint(map.getZoom());
+    },
+    [paint],
+  );
+
+  const focusItem = useCallback(
+    (id: string) => {
+      focusedRef.current = id;
+      setFocusedId(id);
+      /* 페이지 지도와 **같은 순서 규칙**이다 — 다시 그린 뒤 그 결과 노드를 포커스한다.
+         `focus()` 를 위로 올리면 방향키 이동이 죽는다(위 주석 참조). */
+      const map = mapRef.current;
+      if (map !== null) paint(map.getZoom());
+      const target = id.startsWith("rally-zoom")
+        ? (boxRef.current?.querySelector<HTMLElement>(`#${id}-fs`) ?? null)
+        : (mountRef.current?.querySelector<HTMLElement>(`[data-rally-hit="${id}"]`) ?? null);
+      target?.focus({ preventScroll: true });
+    },
+    [paint],
+  );
+
+  const zoomBy = useCallback((delta: number) => {
+    const map = mapRef.current;
+    if (map === null) return;
+    const next = Math.max(MAP_MIN_ZOOM, Math.min(MAP_MAX_ZOOM, map.getZoom() + delta));
+    if (next === map.getZoom()) return;
+    map.setZoom(next, !prefersReducedMotion());
+  }, []);
+
+  /* 열림 ↔ 닫힘: `showModal()` 로만 열고, 닫힐 때 스크롤·포커스를 되돌린다 */
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog === null) return;
+    if (open && !dialog.open) {
+      dialog.showModal();
+      scrollLockRef.current = lockBodyScroll();
+      closeButtonRef.current?.focus({ preventScroll: true });
+    } else if (!open && dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog === null) return;
+    const onDialogClose = () => {
+      openerRef.current?.focus({ preventScroll: true });
+      unlockBodyScroll(scrollLockRef.current);
+      onClose();
+    };
+    dialog.addEventListener("close", onDialogClose);
+    return () => dialog.removeEventListener("close", onDialogClose);
+  }, [onClose, openerRef]);
+
+  /* 지도 인스턴스 — 열려 있는 동안만 존재한다(로드뷰와 같은 규칙) */
+  useEffect(() => {
+    if (!open) return;
+    const maps = window.naver?.maps;
+    const node = mountRef.current;
+    if (maps === undefined || node === null) return;
+
+    /* 조작 계약: 여기서는 **한 손가락 팬이 설계된 동작**이다 — 뺏을 페이지 스크롤이 없다(§27.2.1) */
+    const map = new maps.Map(node, {
+      mapTypeId: maps.MapTypeId.NORMAL,
+      draggable: true,
+      pinchZoom: true,
+      scrollWheel: false,
+      keyboardShortcuts: false,
+      disableDoubleClickZoom: true,
+      disableDoubleTapZoom: true,
+      zoomControl: false,
+      mapTypeControl: false,
+      scaleControl: true,
+      center: new maps.LatLng(EXIT5.lat, EXIT5.lng),
+      zoom: MAP_MIN_ZOOM,
+      minZoom: MAP_MIN_ZOOM,
+      maxZoom: MAP_MAX_ZOOM,
+    });
+    mapRef.current = map;
+    node.querySelector("[tabindex]")?.removeAttribute("tabindex");
+
+    const overlays: NaverOverlay[] = [];
+    const labels: LabelEntry[] = [];
+    MAP_FEATURES.forEach((feature, index) => {
+      overlays.push(...drawFeature(maps, map, feature));
+      const marker = createLabelMarker(maps, map, feature, index, true, map.getZoom());
+      overlays.push(marker);
+      labels.push({ marker, feature, index });
+    });
+    overlaysRef.current = overlays;
+    labelsRef.current = labels;
+    fit(maps, map);
+    setZoom(map.getZoom());
+    paint(map.getZoom());
+
+    const listeners: NaverMapEventListener[] = [
+      map.addListener("zoom_changed", () => {
+        const z = map.getZoom();
+        setZoom(z);
+        setMoved(true);
+        paint(z);
+      }),
+      map.addListener("dragend", () => setMoved(true)),
+      map.addListener("click", () => selectFeature(null)),
+      ...labels.map((e) => e.marker.addListener("click", () => selectFeature(e.feature.id))),
+    ];
+
+    const folded = foldedRef.current;
+    return () => {
+      for (const l of listeners) maps.Event.removeListener(l);
+      for (const o of overlays) o.setMap(null);
+      overlaysRef.current = [];
+      labelsRef.current = [];
+      folded.clear();
+      selectedRef.current = null;
+      setSelected(null);
+      map.destroy();
+      mapRef.current = null;
+    };
+  }, [fit, open, paint, selectFeature]);
+
+  /*
+   * 팝업 마커 이탈 판정은 **`dragend` 후 1회**다(§27.7.2). 드래그 중 상시 판정하면
+   * 손가락을 조금 움직일 때마다 팝업이 닫혔다 열려 **경계에서 깜빡인다.**
+   */
+  useEffect(() => {
+    const maps = window.naver?.maps;
+    const map = mapRef.current;
+    if (maps === undefined || map === null || selected === null) return;
+    const feature = MAP_FEATURES[selected.index];
+    if (feature === undefined) return;
+    const check = () => {
+      const at = featureLabelAnchor(feature, map.getZoom());
+      if (!map.getBounds().hasLatLng(new maps.LatLng(at.lat, at.lng))) selectFeature(null);
+    };
+    const listener = map.addListener("idle", check);
+    return () => maps.Event.removeListener(listener);
+  }, [selectFeature, selected]);
+
+  /* 키보드 그룹 — **페이지 안과 같은 방식이다**(§27.14.4). 조작법이 두 가지가 되면 학습이 두 배다 */
+  useEffect(() => {
+    const box = boxRef.current;
+    if (box === null || !open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
+      const hit = target.closest<HTMLElement>("[data-rally-hit]");
+      const isZoom = target.id === "rally-zoom-in-fs" || target.id === "rally-zoom-out-fs";
+      if (hit === null && !isZoom) return;
+      const order = keyboardOrder();
+      const currentId = hit?.dataset.rallyHit ?? target.id.replace(/-fs$/, "");
+      const index = order.indexOf(currentId);
+      if (index < 0) return;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        e.preventDefault();
+        focusItem(order[(index + 1) % order.length] ?? currentId);
+        return;
+      }
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        e.preventDefault();
+        focusItem(order[(index - 1 + order.length) % order.length] ?? currentId);
+        return;
+      }
+      if ((e.key === "Enter" || e.key === " ") && hit !== null) {
+        e.preventDefault();
+        selectFeature(currentId);
+      }
+    };
+    /*
+     * `Esc`: **팝업이 열려 있으면 팝업만 닫는다**(§27.14.6-262).
+     * `<dialog>` 의 기본 `Esc` 가 모달을 통째로 닫아 버리므로 그때는 **기본 동작을 막는다.**
+     */
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || selectedRef.current === null) return;
+      e.preventDefault();
+      const openId = selectedRef.current;
+      selectFeature(null);
+      focusItem(openId);
+    };
+    box.addEventListener("keydown", onKeyDown);
+    dialogRef.current?.addEventListener("keydown", onEsc);
+    const dialog = dialogRef.current;
+    return () => {
+      box.removeEventListener("keydown", onKeyDown);
+      dialog?.removeEventListener("keydown", onEsc);
+    };
+  }, [focusItem, open, selectFeature]);
+
+  const selectedIndex = selected?.index ?? -1;
+  const selectedFeature = selectedIndex >= 0 ? (MAP_FEATURES[selectedIndex] ?? null) : null;
+
+  return (
+    <dialog
+      ref={dialogRef}
+      aria-label="결의대회 위치 지도 크게 보기"
+      className="m-0 h-[100dvh] max-h-none w-full max-w-none border-0 bg-bg p-0 backdrop:bg-black/80"
+    >
+      {/* 범례가 이 화면에 없다는 사실을 **명시적으로** 안내한다(문안 게이트 56 개정) */}
+      <p className="sr-only">
+        지도는 시각 자료입니다. 지점 설명은 번호를 눌러 확인하고, 전체 안내는 페이지 본문의 범례에 있습니다.
+      </p>
+      <div ref={boxRef} className="relative size-full overflow-hidden">
+        {/* `닫기` 는 이 화면의 유일한 출구다 — 상시 노출·자동 숨김 금지(§23.1.5).
+            **DOM 에서 지도보다 앞에 둔다**: 그래야 Tab 순서가 `닫기` → 지도 조작 그룹이 되어
+            §27.14.4 의 "모달에 들어온 사람은 조작하러 온 것이므로 그룹이 바로 다음"이 성립한다. */}
+        <button
+          type="button"
+          ref={closeButtonRef}
+          onClick={() => dialogRef.current?.close()}
+          className={`${CONTROL_CLASS} absolute z-20`}
+          style={{
+            top: "max(12px, env(safe-area-inset-top))",
+            right: "max(12px, env(safe-area-inset-right))",
+          }}
+        >
+          닫기
+        </button>
+
+        <div ref={mountRef} className="size-full" style={{ touchAction: "none" }} />
+
+        {open ? (
+          <>
+            <div
+              role="group"
+              aria-label="지도 조작"
+              aria-describedby="rally-kbd-help-fs"
+              aria-owns={keyboardOrder()
+                .map((id) => (id.startsWith("rally-zoom") ? `${id}-fs` : `rally-marker-${id}`))
+                .join(" ")}
+              className="pointer-events-none absolute inset-0"
+            />
+            <span id="rally-kbd-help-fs" className="sr-only">
+              방향키로 이동하고 엔터로 실행합니다
+            </span>
+            <MapZoomButtons
+              zoom={zoom}
+              onZoom={zoomBy}
+              topOffset="top-20"
+              itemProps={(id) => ({ id: `${id}-fs`, tabIndex: focusedId === id ? 0 : -1 })}
+            />
+          </>
+        ) : null}
+
+        {/* 페이지가 없으므로 텍스트 버튼을 둘 자리가 있다(§27.14.3 추가 3) */}
+        <button
+          type="button"
+          onClick={() => {
+            const maps = window.naver?.maps;
+            const map = mapRef.current;
+            if (maps !== undefined && map !== null) {
+              fit(maps, map);
+              setZoom(map.getZoom());
+            }
+          }}
+          disabled={!moved}
+          className={`${CONTROL_CLASS} absolute z-20`}
+          style={{
+            bottom: "max(56px, calc(env(safe-area-inset-bottom) + 56px))",
+            left: "max(12px, env(safe-area-inset-left))",
+          }}
+        >
+          처음 위치로
+        </button>
+
+        {/* 어포던스 문구 — 페이지와 **같은 문장**을 쓴다(§25 문안 재사용) */}
+        <p
+          className="rounded-card absolute inset-x-3 z-20 mx-auto max-w-[480px] bg-bg/95 px-3 py-2 text-center text-caption font-semibold text-ink"
+          style={{ bottom: "max(12px, env(safe-area-inset-bottom))" }}
+        >
+          ※ 지도의 번호를 누르면 각 지점 설명이 나옵니다.
+        </p>
+
+        {selectedFeature !== null ? (
+          <MapPopupPanel
+            feature={selectedFeature}
+            index={selectedIndex}
+            side={popupSide}
+            onClose={() => {
+              const openId = selectedRef.current;
+              selectFeature(null);
+              if (openId !== null) focusItem(openId);
+            }}
+          />
+        ) : null}
+      </div>
+    </dialog>
+  );
+}
+
+/**
  * 대체면 — **초기 DOM 에 존재**한다. 지도가 성공했을 때만 사라진다(§20.4.5).
  * 스켈레톤·페이드인 등장 애니메이션 금지(§0.4 지연 노출).
  *
@@ -1625,10 +2439,9 @@ function RallyMapFallback({ status }: { status: Exclude<MapStatus, "ready"> }) {
         {status === "failed" ? "지도를 불러오지 못했습니다." : "지도를 불러오는 중입니다."}
       </p>
       <p className="mt-3 break-keep text-body text-ink">집결 장소 — 국회의사당역 5번 출구</p>
-      {/* ⚠ 위치 주장을 걷어낸 자리다(검증 12회차 요구 101 · 2026-08-21). 종전 문구
+      {/* ⚠ 위치 주장을 걷어낸 자리다(검증 12회차 요구 101). 종전 문구
           (`코스콤지부 — 더샵아일랜드파크 앞 의사당대로` + `5번 출구에서 남동쪽으로 약 220~340 m`)는
-          **근거가 무효**가 됐다 — 주최측 새 배치도 기준 그 자리는 **2구역, 다른 지부 대오**다.
-          **되살리지 마라.** 구역이 확인되면 그때 다시 쓴다. */}
+          **근거가 무효**가 됐다 — 그 자리는 새 배치도 기준 **2구역**이다. 되살리지 마라. */}
       <p className="mt-1 break-keep text-body text-ink">
         코스콤지부 — 집회 3구역 배정 예정(위치 확인 중)
       </p>
