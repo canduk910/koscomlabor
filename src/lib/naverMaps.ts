@@ -98,6 +98,8 @@ export interface NaverMarker extends NaverOverlay {
   setIcon(icon: NaverMarkerIcon): void;
   /** `minZoomOverride` 로 라벨 방향이 바뀌면 앵커 좌표도 함께 옮긴다(§23.2.3) */
   setPosition(position: NaverLatLng): void;
+  /** 배지·pill 클릭 → 팝업(§25.4). `clickable: true` 인 마커에서만 발생한다 */
+  addListener(eventName: string, listener: (payload?: unknown) => void): NaverMapEventListener;
 }
 
 export interface NaverMarkerIcon {

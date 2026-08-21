@@ -209,13 +209,32 @@ function labelHtml(options: {
   textVisible: boolean;
   /** 겹침 판정 시 DOM 에서 찾기 위한 식별자 */
   id: string;
+  /**
+   * 팝업이 열려 있는 항목인가(§25.2 겹4). 열린 것에 **`--color-ink` 3px 링**을 상시 걸어
+   * "어느 것을 눌렀는지"가 계속 보이게 한다.
+   * **파랑·회색을 쓰지 마라** — 이 지도에서 그 둘은 확정도·성격 **의미색**이라(§20.20.3)
+   * 상태에 쓰면 회색 참고 지물이 순간 "갈 곳"으로 읽힌다. `ink` 는 의미를 지지 않는 중립색이다.
+   */
+  selected: boolean;
 }): string {
   /*
    * 앵커에서 라벨까지의 간격. 좌우 28px 은 실측으로 정해진 값이다 — 16px 이면 360px 에서
    * ① 5번 출구 라벨과 ④ 대오 2 라벨이 3px 겹쳤다. 4px 을 더 벌려 겹침을 0으로 만든다.
    */
-  const { badge, text, placement, gap, badgeColor, outline, outlineColor, textVisible, id } =
-    options;
+  const {
+    badge,
+    text,
+    placement,
+    gap,
+    badgeColor,
+    outline,
+    outlineColor,
+    textVisible,
+    id,
+    selected,
+  } = options;
+  /* 선택 링은 흰 테두리 **바깥**에 얹는다 — 배지·pill 모두 같은 방식(§25.6.2) */
+  const ring = selected ? `box-shadow:0 0 0 3px ${INK};` : "";
   // 배지만 남길 때는 pill 을 그리지 않는다 — 흰 면이 남으면 접은 의미가 없다
   const badgeOnly = !textVisible && badge !== null;
   const place =
@@ -242,26 +261,40 @@ function labelHtml(options: {
      * 자기 도트까지 가렸다. 라벨 배치는 "도형을 덮지 않는 방향"으로 이미 계산돼 있으므로
      * 접힌 배지도 **같은 방향·같은 간격**을 쓰는 것이 맞다. 접고 펼 때 배지가 튀지도 않는다.
      */
+    /*
+     * 히트 영역 **44×44px**(요구 D · §25.8). **시각 크기는 28px 그대로**이고 투명하게만 넓힌다.
+     * 44 가 상한이다 — ④⑤ 히트 중심 간 dx 가 **49px** 이라 더 키우면 즉시 겹치고,
+     * 그러면 조합원이 ⑤ 를 눌렀는데 ④ 가 열린다.
+     * `data-rally-badge` 는 **보이는 28px 원**에 붙는다(측정 기준이 시각 크기여야 한다).
+     */
     return [
       `<div aria-hidden="true" data-rally-label="${id}" data-rally-folded="1" style="position:relative;width:0;height:0;">`,
-      `<span data-rally-badge="${id}" style="position:absolute;${place}width:28px;height:28px;box-sizing:border-box;`,
+      `<span data-rally-hit="${id}" style="position:absolute;${place}width:28px;height:28px;cursor:pointer;">`,
+      `<span style="position:absolute;left:-8px;top:-8px;width:44px;height:44px;"></span>`,
+      `<span data-rally-badge="${id}" data-rally-number="${id}" style="position:absolute;inset:0;box-sizing:border-box;`,
       `border-radius:9999px;background:${badgeColor};border:2px solid #ffffff;color:#ffffff;`,
-      `font-size:15px;font-weight:700;line-height:24px;text-align:center;`,
-      `box-shadow:0 1px 3px rgb(0 0 0 / .35);">${badge}</span></div>`,
+      `font-size:15px;font-weight:700;line-height:24px;text-align:center;${ring}`,
+      `box-shadow:0 1px 3px rgb(0 0 0 / .35)${selected ? `,0 0 0 3px ${INK}` : ""};">${badge}</span>`,
+      `</span></div>`,
     ].join("");
   }
   return [
     `<div aria-hidden="true" data-rally-label="${id}" style="position:relative;width:0;height:0;">`,
-    `<div data-rally-pill="${id}" style="position:absolute;${place}box-sizing:border-box;display:flex;align-items:center;gap:6px;`,
+    /* pill 도 눌리면 팝업이 열린다(§25.2 겹2 · §25.3.1). 조합원이 가장 먼저 보는 것이 pill 이고,
+       눌러 본 경험이 ①③⑤⑥ 배지로 **전이**된다. ②④ 만 안 눌리면 마커가 두 종류로 갈린다.
+       **pill 히트는 실제 크기 그대로다** — 44px 로 늘리면 ⑤ 배지 히트와 5px 겹친다(§25.8.1). */
+    `<div data-rally-pill="${id}" data-rally-hit="${id}" style="position:absolute;${place}box-sizing:border-box;display:flex;align-items:center;gap:6px;cursor:pointer;`,
     `background:#ffffff;${pillBorder}border-radius:9999px;padding:${pad};`,
-    `box-shadow:0 1px 4px rgb(0 0 0 / .30);font-size:15px;font-weight:600;color:${INK};`,
+    `box-shadow:0 1px 4px rgb(0 0 0 / .30)${selected ? `,0 0 0 3px ${INK}` : ""};font-size:15px;font-weight:600;color:${INK};`,
     /* width:max-content 가 없으면 안 된다 — 앵커가 0폭 컨테이닝 블록이라 절대배치 요소의
        shrink-to-fit 가용폭이 0 으로 계산되고, 라벨이 **min-content(글자 몇 개씩)로 접힌다.** */
     "line-height:1.3;white-space:normal;word-break:keep-all;width:max-content;",
     `max-width:var(${LABEL_MAX_WIDTH_VAR},60%);">`,
     badge === null
       ? ""
-      : `<span style="flex:0 0 24px;width:24px;height:24px;border-radius:9999px;background:${badgeColor};color:#ffffff;font-size:15px;font-weight:700;line-height:24px;text-align:center;">${badge}</span>`,
+      : /* `data-rally-number` 는 **번호가 화면에 있는 것 전부**를 세는 표식이다(요구 86 검사용).
+           `data-rally-badge` 는 **접힌 배지 전용**으로 남긴다 — §22·§23 실측 기준값이 그 셀렉터에 묶여 있다 */
+        `<span data-rally-number="${id}" style="flex:0 0 24px;width:24px;height:24px;border-radius:9999px;background:${badgeColor};color:#ffffff;font-size:15px;font-weight:700;line-height:24px;text-align:center;">${badge}</span>`,
     "<span>",
     text,
     "</span></div></div>",
@@ -436,6 +469,7 @@ function labelIconContent(
   index: number,
   textVisible: boolean,
   zoom?: number,
+  selected = false,
 ): string {
   const color = toneColor(feature.tone);
   const suffix = feature.kind === "band" ? BAND_STYLE[feature.confidence].labelSuffix : "";
@@ -455,6 +489,7 @@ function labelIconContent(
       outlineColor: color,
       textVisible,
       id: feature.id,
+      selected,
     })
   );
 }
@@ -486,7 +521,9 @@ function createLabelMarker(
       content: labelIconContent(feature, index, textVisible, zoom),
       anchor: new maps.Point(0, 0),
     },
-    clickable: false,
+    // 배지·pill 을 눌러 팝업을 연다(§25.4). **도형은 클릭 대상이 아니다** — 어포던스 문구가
+    // `번호를 누르면` 이라 도형을 눌리게 만들면 그 문안이 거짓이 된다(§25.2.1)
+    clickable: true,
     zIndex: LABEL_Z_BASE + index,
   });
 }
@@ -561,6 +598,13 @@ export function RallyMap({ clientId }: { clientId: string }) {
   const [panoStatus, setPanoStatus] = useState<"idle" | "loading" | "failed">("idle");
   /** 스크립트에 파노라마 모듈이 없으면 **버튼을 아예 렌더하지 않는다**(죽은 버튼 금지, §21.3.2) */
   const [panoSupported, setPanoSupported] = useState(false);
+  /**
+   * 열린 팝업(§25.4~§25.7). **기본은 전부 닫힘** — 자동 열림을 두지 마라(§25.2.2):
+   * 초기 뷰가 바뀌고 지도 절반이 덮인 채 시작한다. 로드뷰의 "기본 상태는 항상 지도"와 같은 규칙이다.
+   */
+  const [selected, setSelected] = useState<{ id: string; index: number } | null>(null);
+  /** 팝업을 박스 위·아래 중 어디에 붙일지(§25.5). **가로는 계산하지 않는다 — 박스에 고정이다** */
+  const [popupSide, setPopupSide] = useState<"top" | "bottom">("bottom");
 
   const mountRef = useRef<HTMLDivElement | null>(null);
   const panoMountRef = useRef<HTMLDivElement | null>(null);
@@ -576,6 +620,8 @@ export function RallyMap({ clientId }: { clientId: string }) {
   const labelsRef = useRef<LabelEntry[]>([]);
   /** 겹침 때문에 접혀 있는 라벨 — 히스테리시스 판정에 쓴다(§21.9.3) */
   const foldedRef = useRef<Set<string>>(new Set());
+  /** 열린 팝업의 항목 — **한 번에 하나만**(§25.7). `null` 이면 전부 닫힘(기본 상태) */
+  const selectedRef = useRef<string | null>(null);
   const boundsRef = useRef<NaverLatLngBounds | null>(null);
 
   /** 지도 폭의 60% 를 px 로 확정해 CSS 변수로 내린다 — 0폭 앵커 안에서는 %가 해석되지 않는다 */
@@ -688,9 +734,19 @@ export function RallyMap({ clientId }: { clientId: string }) {
     const entries = labelsRef.current;
     if (entries.length === 0) return;
 
+    /*
+     * 텍스트 pill 노출 = **`textMode === "always"` 인 항목만**(§25.1).
+     * `popup` 항목은 **줌이 올라가도 텍스트를 띄우지 않는다** — 이름은 클릭 팝업이 진다
+     * (⑤⑥ 가 z17 에서 펼쳐지던 동작은 폐기됐다, §25.11).
+     * `always` 항목 안에서는 종전 등급 임계가 그대로 적용된다(② 는 z15 에서 배지가 된다).
+     */
     const visible = new Map<string, boolean>();
     for (const e of entries) {
-      visible.set(e.feature.id, currentZoom >= LABEL_PRIORITY_MIN_ZOOM[e.feature.labelPriority]);
+      visible.set(
+        e.feature.id,
+        e.feature.textMode === "always" &&
+          currentZoom >= LABEL_PRIORITY_MIN_ZOOM[e.feature.labelPriority],
+      );
     }
     const maps = window.naver?.maps;
     const paint = () => {
@@ -701,6 +757,7 @@ export function RallyMap({ clientId }: { clientId: string }) {
             e.index,
             visible.get(e.feature.id) === true,
             currentZoom,
+            selectedRef.current === e.feature.id,
           ),
           anchor: { x: 0, y: 0 },
         };
@@ -763,6 +820,95 @@ export function RallyMap({ clientId }: { clientId: string }) {
       if (changed) paint();
     });
   }, []);
+
+  /**
+   * 팝업 열기/닫기(§25.7). **한 번에 하나만** 열린다 — 그것이 "라벨 6개가 동시에 있던 포화"를
+   * 구조적으로 없앤 지점이다. 같은 항목을 다시 누르면 닫힌다(토글).
+   *
+   * 선택 상태는 `selectedRef` 에도 둔다: 아이콘을 다시 그리는 `applyLabelVisibility` 는
+   * `useCallback([])` 이라 **state 를 클로저로 읽으면 옛 값을 본다.**
+   */
+  const selectFeature = useCallback(
+    (id: string | null) => {
+      const map = mapRef.current;
+      const next =
+        id === null || selectedRef.current === id
+          ? null
+          : (() => {
+              const index = MAP_FEATURES.findIndex((f) => f.id === id);
+              return index < 0 ? null : { id, index };
+            })();
+      selectedRef.current = next?.id ?? null;
+      setSelected(next);
+      if (next !== null && map !== null) {
+        /*
+         * 세로 자리만 정한다(§25.5): **마커가 박스 위쪽이면 팝업은 아래로.**
+         * 가로는 박스에 고정이라 계산할 것이 없다 — 잘림이 계산이 아니라 **구조로** 0이다.
+         * 마커 위치는 렌더된 DOM 에서 읽는다(지리 좌표 추정 금지, §20.23.5).
+         */
+        const node = mountRef.current;
+        const el = node?.querySelector(`[data-rally-label="${next.id}"]`);
+        const boxEl = node?.parentElement;
+        if (el !== null && el !== undefined && boxEl != null) {
+          const box = boxEl.getBoundingClientRect();
+          const r = el.getBoundingClientRect();
+          setPopupSide(r.top + r.height / 2 - box.top < box.height / 2 ? "bottom" : "top");
+        }
+      }
+      if (mapRef.current !== null) applyLabelVisibility(mapRef.current.getZoom());
+    },
+    [applyLabelVisibility],
+  );
+
+  /* 배지·pill 클릭 → 팝업. 지도 빈 곳 클릭 → 닫기(§25.7) */
+  useEffect(() => {
+    const maps = window.naver?.maps;
+    const map = mapRef.current;
+    if (maps === undefined || map === null || status !== "ready") return;
+    const listeners: NaverMapEventListener[] = labelsRef.current.map((e) =>
+      e.marker.addListener("click", () => selectFeature(e.feature.id)),
+    );
+    listeners.push(map.addListener("click", () => selectFeature(null)));
+    return () => {
+      for (const l of listeners) maps.Event.removeListener(l);
+    };
+  }, [selectFeature, status]);
+
+  /*
+   * `Esc` 로 닫는다. **`document` 레벨**이라 팝업에 포커스가 없어도 동작한다 —
+   * 팝업은 `aria-hidden` 이고 포커스 가능 요소를 두지 않기 때문이다(§25.9).
+   */
+  useEffect(() => {
+    if (selected === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") selectFeature(null);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selectFeature, selected]);
+
+  /*
+   * 줌·팬 중에도 팝업은 **열린 채 유지**한다(박스 고정이라 흔들리지 않는다).
+   * 다만 **선택 마커가 박스 밖으로 나가면 닫는다** — 가리킬 대상이 없는 설명은 오독을 만든다(§25.7).
+   */
+  useEffect(() => {
+    const maps = window.naver?.maps;
+    const map = mapRef.current;
+    if (maps === undefined || map === null || selected === null) return;
+    const feature = MAP_FEATURES[selected.index];
+    if (feature === undefined) return;
+    const check = () => {
+      const at = featureLabelAnchor(feature, map.getZoom());
+      if (!map.getBounds().hasLatLng(new maps.LatLng(at.lat, at.lng))) selectFeature(null);
+    };
+    const listener = map.addListener("idle", check);
+    return () => maps.Event.removeListener(listener);
+  }, [selectFeature, selected]);
+
+  /* 로드뷰가 열리면 팝업을 닫는다(§25.7) */
+  useEffect(() => {
+    if (roadviewOpen) selectFeature(null);
+  }, [roadviewOpen, selectFeature]);
 
   /* 줌이 바뀔 때마다 라벨 접힘을 다시 계산한다 */
   useEffect(() => {
@@ -1130,6 +1276,10 @@ export function RallyMap({ clientId }: { clientId: string }) {
 
   const showMyLocationLegendRow = locStatus === "shown" && myLocation?.inBounds === true;
 
+  /* 팝업 내용은 **전부 `MAP_FEATURES` 에서 파생**된다 — 새 문자열이 0이라는 뜻이다(요구 88·89) */
+  const selectedIndex = selected?.index ?? -1;
+  const selectedFeature = selectedIndex >= 0 ? (MAP_FEATURES[selectedIndex] ?? null) : null;
+
   return (
     <>
       <Script
@@ -1173,6 +1323,56 @@ export function RallyMap({ clientId }: { clientId: string }) {
               배경 전체에 자동으로 걸어 주므로 직접 걸지 않는다. */}
           <div ref={mountRef} className="size-full" style={{ touchAction: "pan-y" }} />
 
+          {/*
+            팝업 — **박스 안 고정 패널**이다(§25.4). 말풍선이 아니다.
+
+            네이버 `InfoWindow` 와 자체 말풍선을 둘 다 버린 이유: 둘 다 **위치를 계산으로 푼다.**
+            그러면 박스 경계 클램프를 우리가 구현해야 하고, **3단계 자유 드래그에서 팝업이 마커를 따라
+            박스 밖으로 나간다.** 여기서는 **가로가 박스에 고정**이라 좌우 잘림이 계산이 아니라 **구조로 0**이고,
+            지도가 어떻게 움직여도 팝업이 흔들리지 않는다. 세로만 마커 반대편으로 붙인다.
+
+            **전체 화면 모달로 만들지 마라**(요구 90) — 지도와 범례가 **동시에** 보여야
+            지점↔설명 대응이 성립한다. 팝업은 박스 밖(범례)을 전혀 가리지 않는다.
+
+            `aria-hidden`: 본문이 **범례와 같은 문자열**이라 노출하면 스크린리더가 같은 내용을 두 번 읽는다.
+            텍스트 등가는 범례가 100% 진다 — **범례를 줄이면 이 판단이 즉시 무너진다**(§25.9.1).
+            그래서 `닫기` 도 `tabindex={-1}` 이다: **`aria-hidden` 안에 포커스 가능 요소를 만들지 마라**(WCAG 2.4.3·4.1.2).
+          */}
+          {selectedFeature !== null ? (
+            <div
+              aria-hidden="true"
+              className={`rounded-card shadow-card absolute inset-x-4 z-20 mx-auto max-w-[480px] border-2 border-border-strong bg-bg p-3.5 ${
+                popupSide === "top" ? "top-4" : "bottom-4"
+              }`}
+            >
+              <p className="flex items-start gap-2 text-[17px] font-bold text-ink">
+                {/* 팝업↔지도 대응의 절반을 이 배지가 진다 — 빼지 마라(§25.6.2) */}
+                <span
+                  className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full text-[15px] font-bold text-bg"
+                  style={{ background: toneColor(selectedFeature.tone) }}
+                >
+                  {circledNumber(selectedIndex)}
+                </span>
+                <span className="break-keep break-words">{selectedFeature.label}</span>
+              </p>
+              {/* 본문은 **범례에서 파생**한다. 별도 문자열 상수를 만들지 마라 —
+                  따로 두면 언젠가 한쪽만 고쳐진다(요구 88) */}
+              <p className="mt-2 break-keep break-words text-caption leading-[1.6] text-ink">
+                {selectedFeature.legend}
+              </p>
+              <div className="mt-3 flex justify-end">
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => selectFeature(null)}
+                  className={CONTROL_CLASS}
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           {status !== "ready" ? (
             <div className="absolute inset-0">
               <RallyMapFallback status={status} />
@@ -1184,7 +1384,19 @@ export function RallyMap({ clientId }: { clientId: string }) {
             기호 글리프는 aria-hidden — 스크린리더에는 번호·확신도가 **문자**로 전달된다.
             행은 `MAP_FEATURES` 에서 파생된다 — 배열에서 빠진 항목의 행은 자동으로 사라진다 */}
         <figcaption className="mt-4">
-          <p className="break-keep text-caption text-ink">{LEGEND_KEY}</p>
+          {/*
+            어포던스 문구(요구 87 · §25.2 겹1). **이번 설계의 실질 위험은 여기 하나다** —
+            누를 수 있다는 걸 모르면 ①③⑤⑥ 의 이름은 **사라진 것과 같다.**
+            `ink-muted` 로 흐리지 마라 · 접지 마라 · `sr-only` 로 돌리지 마라.
+
+            ⚠ **이 문장은 사실 주장이다.** `번호를 누르면` 이라고 썼으므로 **번호(배지·pill)는 반드시 눌려야 하고**,
+            도형(원·밴드·부지)을 눌리게 만들면 **이 문안이 거짓이 된다**(§25.2.1).
+            문구보다 넓게 눌리는 것은 허용, 좁은 것은 금지다.
+          */}
+          <p className="break-keep text-caption font-semibold text-ink">
+            ※ 지도의 번호를 누르면 각 지점 설명이 나옵니다.
+          </p>
+          <p className="mt-1 break-keep text-caption text-ink">{LEGEND_KEY}</p>
           <ul className="mt-2 flex flex-col gap-2">
             {MAP_FEATURES.map((feature, index) => (
               /* 범례 ⑤ `여의도더샵아일랜드파크` 는 공백이 없어 확대 200% 에서 327px 로 296px 를 넘친다.

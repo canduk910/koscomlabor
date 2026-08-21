@@ -133,3 +133,19 @@ html {
     scroll-behavior: auto !important;
   }
 }
+
+/*
+ * 결의대회 지도 라벨의 hover 링(§25.2 겹3 — 데스크톱 전용 보조).
+ * 마커 내용은 네이버 지도가 문자열로 주입하는 DOM 이라 Tailwind 클래스가 닿지 않는다.
+ * 그래서 전역 규칙으로 둔다 — 선택자는 `data-rally-hit` 하나로 좁혀져 있다.
+ * 색은 `--color-ink`(중립) 다. **파랑·회색을 쓰지 마라** — 이 지도에서 그 둘은 확정도·성격 의미색이다(§20.20.3).
+ * 터치 기기에는 hover 가 없으므로 `any-hover: hover` 로 제한한다(§25.2 겹1·2·4 가 그쪽을 담당한다).
+ */
+@media (any-hover: hover) {
+  [data-rally-hit]:hover [data-rally-badge],
+  [data-rally-pill][data-rally-hit]:hover {
+    box-shadow:
+      0 1px 3px rgb(0 0 0 / 0.35),
+      0 0 0 3px var(--color-ink);
+  }
+}
