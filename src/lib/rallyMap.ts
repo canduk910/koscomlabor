@@ -840,6 +840,37 @@ export function featureLabelAnchor(feature: MapFeature, zoom?: number): LatLngLi
   }
 }
 
+/**
+ * **로드뷰를 열 지점**(사용자 지시 2026-08-21 — 지점 팝업의 `로드뷰 보기`).
+ *
+ * ⚠ **`featureLabelAnchor` 를 쓰지 마라.** 그것은 **라벨을 어디에 다느냐**이고
+ * 도형의 **극점**(밴드 남서단 등)을 돌려준다 — 로드뷰를 거기서 열면 **구역 끝 모서리**를 본다.
+ * 여기서 원하는 것은 **그 지물을 대표하는 한 점**이라 **중심**을 쓴다.
+ *
+ * `band` 는 폴리곤 꼭짓점 평균 — 3구역처럼 긴 띠에서 **가운데 도로 위**가 나온다.
+ * 파노라마는 이 좌표에서 **가장 가까운 실제 촬영점**을 스스로 찾으므로 정밀할 필요는 없다.
+ */
+export function featureRoadviewPoint(feature: MapFeature): LatLngLiteral {
+  switch (feature.kind) {
+    case "dot":
+    case "pin":
+      return feature.position;
+    case "circle":
+      return feature.center;
+    case "outline":
+    case "band": {
+      const n = feature.polygon.length;
+      let lat = 0;
+      let lng = 0;
+      for (const [a, b] of feature.polygon) {
+        lat += a;
+        lng += b;
+      }
+      return { lat: lat / n, lng: lng / n };
+    }
+  }
+}
+
 /** 라벨 기본 간격(px) — 세로/가로. 항목이 `labelGap` 을 주면 그것이 이긴다 */
 const DEFAULT_LABEL_GAP_VERTICAL = 14;
 const DEFAULT_LABEL_GAP_HORIZONTAL = 28;

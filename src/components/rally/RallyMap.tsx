@@ -14,6 +14,7 @@ import {
   MAP_MIN_ZOOM,
   circledNumber,
   featureLabelAnchor,
+  featureRoadviewPoint,
   labelPlacementAt,
   myLocationFeature,
 } from "@/lib/rallyMap";
@@ -953,11 +954,14 @@ function MapPopupPanel({
   index,
   side,
   onClose,
+  onRoadview,
 }: {
   feature: MapFeature;
   index: number;
   side: "top" | "bottom";
   onClose: () => void;
+  /** 이 지점의 로드뷰를 연다. `null` 이면 버튼을 렌더하지 않는다(파노라마 모듈 미로드 등) */
+  onRoadview: ((feature: MapFeature) => void) | null;
 }) {
   const panelRef = useRef<HTMLDivElement | null>(null);
 
@@ -997,7 +1001,25 @@ function MapPopupPanel({
       <p className="mt-2 break-keep break-words text-caption leading-[1.6] text-ink">
         {feature.legend}
       </p>
-      <div className="mt-3 flex justify-end">
+      {/*
+        ★ **로드뷰 진입점이 여기다**(사용자 지시 2026-08-21).
+        종전에는 컨트롤 행에 `로드뷰 보기` 버튼 하나가 있었고 **위치가 5번 출구로 고정**이었다 —
+        어느 지점의 로드뷰인지 고를 수 없었다. 이제 **각 지점 팝업이 자기 로드뷰를 연다.**
+
+        ⚠ **`닫기` 보다 앞에 둔다.** 팝업을 연 다음 행동이 "더 보기"이고 `닫기` 는 마지막이다.
+        ⚠ **`onRoadview` 가 `null` 이면 렌더하지 않는다** — 파노라마 모듈이 없을 때
+        누르면 아무 일도 안 하는 버튼을 두지 않는다(§0.4 인접 — 죽은 어포던스).
+      */}
+      <div className="mt-3 flex flex-wrap justify-end gap-2">
+        {onRoadview !== null ? (
+          <button
+            type="button"
+            onClick={() => onRoadview(feature)}
+            className={CONTROL_CLASS}
+          >
+            로드뷰 보기
+          </button>
+        ) : null}
         <button type="button" onClick={onClose} className={CONTROL_CLASS}>
           닫기
         </button>
@@ -1009,6 +1031,44 @@ function MapPopupPanel({
 /** 지도 안 컨트롤 공통 — **반투명 금지**(지도 배경이 매 프레임 바뀌어 대비를 보장할 수 없다, §27.4.2) */
 const MAP_BUTTON_CLASS =
   "flex size-11 items-center justify-center border-2 border-border-strong bg-bg text-primary disabled:text-ink-muted";
+
+/**
+ * 지도 안 **거리뷰 토글**(사용자 지시 2026-08-21 · 디지털온누리 가이드 선례).
+ *
+ * `+`/`−` **아래**에 둔다 — 확대·축소는 지도를 보는 조작이고 이것은 **모드를 바꾸는** 조작이라
+ * 성격이 다르다. 같은 열에 두되 카드를 나눠 그 차이를 표면으로 드러낸다.
+ *
+ * **켜진 상태를 색으로만 말하지 않는다**(§2) — `aria-pressed` 와 라벨이 함께 진다.
+ */
+function MapStreetToggle({
+  on,
+  onToggle,
+  buttonRef,
+  itemProps,
+}: {
+  on: boolean;
+  onToggle: () => void;
+  buttonRef?: React.Ref<HTMLButtonElement>;
+  itemProps?: (id: string) => { id: string; tabIndex: number };
+}) {
+  return (
+    <div className="rounded-card shadow-card absolute right-3 top-28 z-10 overflow-hidden">
+      <button
+        type="button"
+        ref={buttonRef}
+        aria-pressed={on}
+        aria-label={on ? "거리뷰 모드 끄기" : "거리뷰 모드 켜기"}
+        onClick={onToggle}
+        className={`${MAP_BUTTON_CLASS} ${
+          on ? "bg-primary text-white" : ""
+        } px-2 text-[13px] font-bold`}
+        {...itemProps?.("rally-street-toggle")}
+      >
+        거리뷰
+      </button>
+    </div>
+  );
+}
 
 /**
  * 지도 안 확대·축소(§27.4).
@@ -1148,7 +1208,28 @@ export function RallyMap({ clientId }: { clientId: string }) {
    * 로드뷰 모달이 열려 있는가. **기본은 항상 닫힘이다**(§21.3.1 — "마지막 상태 기억"으로 바꾸지 마라).
    * 로드뷰는 §23.1 로 **전체 화면 모달**이 됐다 — 지도 박스를 덮지 않으므로 **지도는 페이지에 그대로 있다.**
    */
-  const [roadviewOpen, setRoadviewOpen] = useState(false);
+  /**
+   * 로드뷰가 열린 위치 — `null` 이면 닫혀 있다(사용자 지시 2026-08-21).
+   *
+   * ★ **종전 `roadviewOpen: boolean` 에서 바뀌었다.** 그때는 위치가 `EXIT5` 로 **고정**이라
+   * 어느 지점의 로드뷰인지 고를 수 없었다. 이제 **지점 팝업이 자기 좌표를 넘긴다.**
+   * `label` 은 시트 제목에 붙는다 — 어느 지점을 보고 있는지가 화면에 남아야 한다.
+   */
+  const [roadviewAt, setRoadviewAt] = useState<{
+    lat: number;
+    lng: number;
+    label: string | null;
+  } | null>(null);
+  /**
+   * 거리뷰 모드 — 지도에 **파란 길(`StreetLayer`)** 을 깔고 **클릭으로 위치를 옮길 수 있는** 상태.
+   * 로드뷰 시트와 **독립이다**: 모드만 켜고 아직 아무 지점도 안 열 수 있다(지도 안 토글 버튼).
+   */
+  const [streetMode, setStreetMode] = useState(false);
+  /** 파노라마 촬영 연월 — 메타에 있을 때만 표시한다(없으면 빈 문자열. 없는 것을 지어내지 않는다) */
+  const [panoDate, setPanoDate] = useState("");
+  /** 지도 위 **현재 보는 위치** 마커의 좌표·시선 방향(파노라마와 양방향 동기) */
+  const [spotAt, setSpotAt] = useState<{ lat: number; lng: number } | null>(null);
+  const [spotPan, setSpotPan] = useState(0);
   const [panoStatus, setPanoStatus] = useState<"idle" | "loading" | "failed">("idle");
   /** 스크립트에 파노라마 모듈이 없으면 **버튼을 아예 렌더하지 않는다**(죽은 버튼 금지, §21.3.2) */
   const [panoSupported, setPanoSupported] = useState(false);
@@ -1173,13 +1254,15 @@ export function RallyMap({ clientId }: { clientId: string }) {
   /** 지도 박스 — 팝업 자리 계산과 키보드 이벤트 위임의 기준 */
   const boxRef = useRef<HTMLDivElement | null>(null);
   const panoMountRef = useRef<HTMLDivElement | null>(null);
-  const dialogRef = useRef<HTMLDialogElement | null>(null);
-  /** 모달을 연 버튼 — 닫을 때 포커스를 여기로 되돌린다(§23.1.5) */
+  /**
+   * 거리뷰 토글 — 시트를 닫을 때 포커스를 여기로 되돌린다.
+   * ★ **`dialogRef`·`scrollLockRef` 는 제거됐다**(2026-08-21) — 로드뷰가 `<dialog showModal()>`
+   * 에서 **비모달 하단 시트**로 바뀌면서 배경 `inert`·스크롤 잠금이 둘 다 사라졌다.
+   * 되살리려면 그 판정(§21.3 재판정 — 지도를 눌러야 위치를 옮긴다)부터 뒤집어야 한다.
+   */
   const roadviewButtonRef = useRef<HTMLButtonElement | null>(null);
   /** `지도 크게 보기` — 모달을 닫을 때 포커스를 여기로 되돌린다 */
   const fullscreenButtonRef = useRef<HTMLButtonElement | null>(null);
-  /** 모달을 열 때의 스크롤 위치. 닫으면 **±0px 로** 되돌린다 */
-  const scrollLockRef = useRef(0);
   const mapRef = useRef<NaverMap | null>(null);
   const panoRef = useRef<NaverPanorama | null>(null);
   const overlaysRef = useRef<NaverOverlay[]>([]);
@@ -1512,10 +1595,8 @@ export function RallyMap({ clientId }: { clientId: string }) {
     return () => maps.Event.removeListener(listener);
   }, [selectFeature, selected]);
 
-  /* 로드뷰가 열리면 팝업을 닫는다(§25.7) */
-  useEffect(() => {
-    if (roadviewOpen) selectFeature(null);
-  }, [roadviewOpen, selectFeature]);
+  /* 로드뷰가 열리면 팝업을 닫는 것은 `openRoadview` 가 직접 한다(§25.7) —
+     상태 변화를 보고 뒤따라 닫으면 한 프레임 동안 둘이 겹친다 */
 
   /* 줌이 바뀔 때마다 라벨 접힘을 다시 계산한다 */
   useEffect(() => {
@@ -1616,12 +1697,25 @@ export function RallyMap({ clientId }: { clientId: string }) {
    * 배경 스크롤은 **`showModal()` 과 별도로** 잠근다: 브라우저마다 처리가 달라 가정할 수 없다.
    * `position:fixed; top:-scrollY` 로 고정하고 닫을 때 정확히 되돌린다 — **닫으면 `scrollY` 가 ±0px** 이어야 한다.
    */
-  const openRoadview = useCallback(() => {
-    const dialog = dialogRef.current;
-    if (dialog === null || dialog.open) return;
-    setRoadviewOpen(true);
-    dialog.showModal();
-    scrollLockRef.current = lockBodyScroll();
+  const openRoadview = useCallback((feature: MapFeature) => {
+    const at = featureRoadviewPoint(feature);
+    setRoadviewAt({ lat: at.lat, lng: at.lng, label: feature.label });
+    setSpotAt({ lat: at.lat, lng: at.lng });
+    setStreetMode(true);
+    setPanoDate("");
+    /* 팝업을 닫는다 — 시트가 열리면 팝업은 역할이 끝났고, 둘 다 열려 있으면 지도가 두 겹으로 덮인다 */
+    selectFeature(null);
+  }, [selectFeature]);
+
+  /** 지도 안 `거리뷰` 토글 — 시트 없이 모드만 켠다. 파란 길을 눌러 아무 지점이나 열 수 있다 */
+  const toggleStreetMode = useCallback(() => {
+    setStreetMode((on) => {
+      if (on) {
+        setRoadviewAt(null);
+        setSpotAt(null);
+      }
+      return !on;
+    });
   }, []);
 
   /* 전체 화면 진입 — **페이지 지도의 팝업을 먼저 닫는다**(§27.6). 닫으면 페이지 지도는 손대지 않은 그대로다 */
@@ -1630,73 +1724,115 @@ export function RallyMap({ clientId }: { clientId: string }) {
     setFullscreenOpen(true);
   }, [selectFeature]);
 
+  /**
+   * 시트를 닫는다. **거리뷰 모드는 함께 끈다** — 파란 길만 남으면 눌러도 열 것이 없다.
+   * 종전에는 `<dialog>` 를 닫는 일이었는데, **시트는 모달이 아니다**(지도를 눌러야 하므로).
+   */
   const closeRoadview = useCallback(() => {
-    const dialog = dialogRef.current;
-    if (dialog !== null && dialog.open) dialog.close();
-  }, []);
-
-  /* `Esc`·`닫기` 어느 쪽으로 닫혔든 **한 곳에서** 뒷정리한다 — 경로가 갈리면 하나가 빠진다 */
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (dialog === null) return;
-    const onClose = () => {
-      setRoadviewOpen(false);
-      /*
-       * **`preventScroll: true` 를 빼지 마라.** 기본 `focus()` 는 대상을 보이게 하려고 스크롤을
-       * 다시 움직여서, 복원한 위치가 그 자리에서 어긋난다(실측 818px 이탈).
-       * 포커스를 먼저 되돌리고 **그다음에** 위치를 복원한다 — 순서가 바뀌면 같은 증상이 난다.
-       */
-      roadviewButtonRef.current?.focus({ preventScroll: true });
-      unlockBodyScroll(scrollLockRef.current);
-    };
-    dialog.addEventListener("close", onClose);
-    return () => dialog.removeEventListener("close", onClose);
+    setRoadviewAt(null);
+    setSpotAt(null);
+    setStreetMode(false);
+    setPanoDate("");
+    setPanoStatus("idle");
+    roadviewButtonRef.current?.focus({ preventScroll: true });
   }, []);
 
   /*
-   * 파노라마 인스턴스는 **모달이 열려 있는 동안만** 존재한다(§21.3.1 자동 로드 금지 유지).
-   * 실패하면 **모달을 닫고** 지도 옆 상태 문구를 낸다 — **빈 검은 화면에 조합원을 두지 마라**(§23.1.5).
-   * 마운트 노드의 `touch-action` 을 건드리지 않는다: **모달 안에서는 한 손가락 회전이 정상 동작**이고
-   * (§23.1.3), 뺏을 페이지 스크롤이 없으므로 §21.1.0 원칙과 충돌하지 않는다.
+   * `Esc` 로 시트를 닫는다.
+   *
+   * ★ **`<dialog showModal()>` 을 쓰지 않는다**(2026-08-21). 그것은 배경을 `inert` 로 만드는데,
+   * **이 시트가 열려 있는 동안 조합원은 뒤의 지도를 눌러 로드뷰 위치를 옮겨야 한다.**
+   * 모달로 열면 그 조작이 원천 차단된다 — 기능과 표준 동작이 충돌하므로 표준을 포기한다.
+   * 대신 `Esc`·포커스 복귀·`aria-modal={false}` 를 직접 지고, **배경 스크롤도 잠그지 않는다**
+   * (잠그면 지도까지 못 움직인다).
    */
   useEffect(() => {
-    if (!roadviewOpen) return;
+    if (roadviewAt === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        closeRoadview();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [closeRoadview, roadviewAt]);
+
+  /*
+   * 파노라마 인스턴스는 **시트가 열려 있는 동안만** 존재한다(§21.3.1 자동 로드 금지 유지).
+   *
+   * ★ **위치가 `roadviewAt` 에서 온다**(2026-08-21). 종전에는 `EXIT5` 고정이었다.
+   * 파노라마는 준 좌표에서 **가장 가까운 실제 촬영점**을 스스로 찾으므로 정밀할 필요가 없다.
+   *
+   * ★ **`pov.pan` 을 고정하지 않는다.** 종전 `130`(의사당대로 남동쪽)은 5번 출구 전용 값이라
+   * 다른 지점에서는 엉뚱한 방향을 본다. **네이버 기본값에 맡긴다** — 촬영 진행 방향을 보여준다.
+   *
+   * 실패하면 **시트를 닫지 않고** 안내 문구를 남긴다 — 종전에는 닫아 버려서 조합원이
+   * *"눌렀는데 아무 일도 안 났다"* 로 읽었다. **파란 길을 눌러 근처 지점을 고를 수 있다**는
+   * 것을 알려야 하고, 그러려면 시트가 열려 있어야 한다.
+   */
+  useEffect(() => {
+    if (roadviewAt === null) return;
     const maps = window.naver?.maps;
     const node = panoMountRef.current;
     const Panorama = maps?.Panorama;
     if (maps === undefined || node === null || Panorama === undefined) {
       setPanoStatus("failed");
-      closeRoadview();
       return;
     }
 
     setPanoStatus("loading");
     const pano = new Panorama(node, {
-      position: new maps.LatLng(EXIT5.lat, EXIT5.lng),
-      // 5번 출구에서 **의사당대로 남동쪽**(대오 방향)을 먼저 보여준다
-      pov: { pan: 130, tilt: 0, fov: 100 },
+      position: new maps.LatLng(roadviewAt.lat, roadviewAt.lng),
+      pov: { tilt: 0, fov: 100 },
       logoControl: true,
-      zoomControl: false,
+      zoomControl: true,
       aroundControl: false,
+      /* `flightSpot` 은 하늘로 날아가는 이동 지점 — 좁은 시트에서 오탭이 잦아 끈다 */
+      flightSpot: false,
       minScale: 0,
       maxScale: 4,
     });
     panoRef.current = pano;
 
-    const fail = () => {
-      setPanoStatus("failed");
-      closeRoadview();
+    /** 촬영 연월 — 메타에 있을 때만. **없으면 빈 문자열이다. 지어내지 마라** */
+    const syncDate = () => {
+      try {
+        const loc = pano.getLocation?.();
+        const raw = loc?.photodate ?? loc?.photoDate;
+        if (raw === undefined || raw === null) return setPanoDate("");
+        const digits = String(raw).replace(/\D/g, "");
+        setPanoDate(digits.length >= 6 ? `촬영 ${digits.slice(0, 4)}.${digits.slice(4, 6)}` : "");
+      } catch {
+        setPanoDate("");
+      }
     };
+
     const listeners: NaverMapEventListener[] = [
-      pano.addListener("init", () => setPanoStatus("idle")),
+      pano.addListener("init", () => {
+        setPanoStatus("idle");
+        syncDate();
+      }),
       pano.addListener("pano_status", (payload?: unknown) => {
         const ok = maps.PanoramaStatus === undefined || payload === maps.PanoramaStatus.OK;
-        if (!ok) fail();
+        if (!ok) setPanoStatus("failed");
+      }),
+      /* 파노라마 안에서 걸어가면(화살표) 지도 위 현재 위치 마커가 따라온다 */
+      pano.addListener("pano_changed", () => {
+        setPanoStatus("idle");
+        syncDate();
+        const p = pano.getPosition?.();
+        if (p) setSpotAt({ lat: p.lat(), lng: p.lng() });
+      }),
+      /* 시선을 돌리면 지도 마커의 시야 콘도 같이 돈다 */
+      pano.addListener("pov_changed", () => {
+        const pov = pano.getPov?.();
+        if (pov) setSpotPan(pov.pan ?? 0);
       }),
     ];
     /* 파노라마가 없는 지점은 이벤트를 하나도 주지 않는 경우가 있어 시한을 함께 건다 */
     const timer = window.setTimeout(() => {
-      if (pano.getPanoId() === null) fail();
+      if (pano.getPanoId() === null) setPanoStatus("failed");
     }, LOAD_TIMEOUT_MS);
 
     return () => {
@@ -1705,7 +1841,91 @@ export function RallyMap({ clientId }: { clientId: string }) {
       pano.destroy();
       panoRef.current = null;
     };
-  }, [closeRoadview, roadviewOpen]);
+    /* `roadviewAt` 이 바뀌면 파노라마를 새로 만든다 — 지점이 바뀌었다는 뜻이다 */
+  }, [roadviewAt]);
+
+
+  /*
+   * ★ **거리뷰 모드** — 지도에 **파란 길**을 깔고 **클릭으로 로드뷰 위치를 옮긴다**
+   * (사용자 지시 2026-08-21 · 디지털온누리 가이드의 검증된 흐름을 그대로 따른다).
+   *
+   * 세 가지가 한 벌로 움직인다:
+   *   `StreetLayer`  촬영된 도로를 파랗게 — **어디를 누를 수 있는지**를 보여준다
+   *   지도 클릭      파노라마가 있으면 `setPosition`(가장 가까운 촬영점을 스스로 찾는다),
+   *                  없으면 그 자리에서 새로 연다
+   *   현재 위치 마커  주황 원 + 시야 콘. **파노라마와 양방향** — 걸어가면 따라오고, 돌아보면 콘이 돈다
+   *
+   * ⚠ **`StreetLayer` 는 지도 클릭을 가로채지 않는다**(타일 오버레이라 히트 대상이 아니다) —
+   * 2-C(마커 히트 가로채기 0)에 저촉되지 않는다. 다만 **모드가 켜져 있으면 지도 클릭이
+   * 로드뷰 이동으로 해석**되므로, 마커 팝업을 열려면 모드를 꺼야 한다. 그것이 이 모드의 계약이다.
+   */
+  useEffect(() => {
+    const maps = window.naver?.maps;
+    const map = mapRef.current;
+    if (maps === undefined || map === null) return;
+    if (!streetMode || maps.StreetLayer === undefined) return;
+
+    const layer = new maps.StreetLayer();
+    layer.setMap(map);
+
+    const listener = map.addListener("click", (payload?: unknown) => {
+      /* 네이버 클릭 이벤트는 `{ coord }` 를 준다 — 타입 선언에 없으므로 여기서 좁힌다 */
+      const coord = (payload as { coord?: { lat(): number; lng(): number } } | undefined)?.coord;
+      if (coord === undefined) return;
+      const pano = panoRef.current;
+      const lat = coord.lat();
+      const lng = coord.lng();
+      if (pano !== null) {
+        /* 이미 열려 있으면 **인스턴스를 다시 만들지 않고** 위치만 옮긴다 —
+           새로 만들면 시트가 깜빡이고 촬영일자가 잠깐 비는 것이 보인다 */
+        pano.setPosition(new maps.LatLng(lat, lng));
+      } else {
+        setRoadviewAt({ lat, lng, label: null });
+        setSpotAt({ lat, lng });
+        setPanoDate("");
+      }
+    });
+
+    return () => {
+      layer.setMap(null);
+      maps.Event.removeListener(listener);
+    };
+  }, [streetMode]);
+
+  /* 현재 보는 위치 마커 — 주황 원 + 시선 방향 콘. 모드가 꺼지면 함께 사라진다 */
+  useEffect(() => {
+    const maps = window.naver?.maps;
+    const map = mapRef.current;
+    if (maps === undefined || map === null || !streetMode || spotAt === null) return;
+
+    const marker = new maps.Marker({
+      map,
+      position: new maps.LatLng(spotAt.lat, spotAt.lng),
+      /* 라벨(1000+)보다 아래, 도형(≤25)보다 위 — **안내도 라벨을 가리지 않는다**(2-C 계열 판단) */
+      zIndex: 900,
+      /* ★ **`false` 를 바꾸지 마라** — 이 마커가 클릭을 먹으면 그 자리를 다시 누를 수 없어
+         "현재 보는 위치 주변으로 조금 옮기기"가 막힌다. 2-C(히트 가로채기 0)의 직접 적용이다 */
+      clickable: false,
+      icon: {
+        content:
+          `<div style="width:44px;height:44px;position:relative;transform:rotate(${spotPan}deg)">` +
+          `<div style="position:absolute;left:50%;bottom:50%;transform:translateX(-50%);width:0;height:0;` +
+          `border-left:15px solid transparent;border-right:15px solid transparent;` +
+          `border-top:22px solid rgba(242,107,29,.38)"></div>` +
+          `<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);` +
+          `width:18px;height:18px;border-radius:9999px;background:#f26b1d;border:3px solid #fff;` +
+          `box-shadow:0 0 0 2px #f26b1d,0 2px 8px rgba(20,22,26,.45)"></div></div>`,
+        anchor: new maps.Point(22, 22),
+      },
+    });
+
+    return () => {
+      marker.setMap(null);
+    };
+  }, [spotAt, spotPan, streetMode]);
+
+  /* ★ 마커 좌표는 **상태를 만드는 쪽에서 함께 세운다**(`openRoadview`·지도 클릭·`closeRoadview`).
+     이펙트로 파생시키면 한 프레임 늦게 따라와 시트가 먼저 열리고 마커가 뒤늦게 튄다. */
 
   /* 컨트롤 행(§21.1.3) — 조작은 전부 지도 **밖** 버튼이 담당한다 */
   const zoomBy = useCallback((delta: number) => {
@@ -1993,6 +2213,15 @@ export function RallyMap({ clientId }: { clientId: string }) {
                 onZoom={zoomBy}
                 itemProps={(id) => ({ id, tabIndex: focusedId === id ? 0 : -1 })}
               />
+              {/* ★ 거리뷰 토글 — 파노라마 모듈이 있을 때만. 없으면 눌러도 열 것이 없다 */}
+              {panoSupported ? (
+                <MapStreetToggle
+                  on={streetMode}
+                  onToggle={toggleStreetMode}
+                  buttonRef={roadviewButtonRef}
+                  itemProps={(id) => ({ id, tabIndex: focusedId === id ? 0 : -1 })}
+                />
+              ) : null}
             </>
           ) : null}
 
@@ -2019,6 +2248,7 @@ export function RallyMap({ clientId }: { clientId: string }) {
               feature={selectedFeature}
               index={selectedIndex}
               side={popupSide}
+              onRoadview={panoSupported ? openRoadview : null}
               onClose={() => {
                 const openId = selectedRef.current;
                 selectFeature(null);
@@ -2095,23 +2325,17 @@ export function RallyMap({ clientId }: { clientId: string }) {
                   {locStatus === "shown" ? "다시 확인" : "내 위치 표시"}
                 </button>
               ) : null}
-              {panoSupported ? (
-                <button
-                  type="button"
-                  ref={roadviewButtonRef}
-                  onClick={openRoadview}
-                  className={CONTROL_CLASS}
-                >
-                  로드뷰 보기
-                </button>
-              ) : null}
-            </div>
+              {/*
+                ★ **`로드뷰 보기` 버튼은 여기서 삭제됐다**(사용자 지시 2026-08-21). 되살리지 마라.
+                그 버튼은 **위치가 5번 출구로 고정**이라 어느 지점의 로드뷰인지 고를 수 없었고,
+                안내 문구도 `국회의사당역 5번 출구 주변을 볼 수 있습니다` 로 그 한계를 적고 있었다.
 
-            {panoSupported ? (
-              <p className="mt-2 break-keep text-caption text-ink-muted">
-                국회의사당역 5번 출구 주변을 볼 수 있습니다.
-              </p>
-            ) : null}
+                **로드뷰 진입점은 이제 둘이다:**
+                  ① **지점 팝업의 `로드뷰 보기`** — 그 지점의 로드뷰가 열린다
+                  ② **지도 안 `거리뷰` 토글** — 파란 길을 눌러 아무 지점이나 연다
+                둘 다 지도 **안**이나 지도에서 파생한 UI 라, 컨트롤 행에 다시 만들 이유가 없다.
+              */}
+            </div>
 
             {/* idle 에도 DOM 에 존재해야 한다 — 나중에 생긴 노드의 내용을 못 읽는 SR 이 있다.
                 `assertive` 를 쓰지 마라(읽던 것을 끊는다). 거부를 role="alert"·적색으로
@@ -2214,59 +2438,75 @@ export function RallyMap({ clientId }: { clientId: string }) {
       ) : null}
 
       {/*
-        로드뷰 — **전체 화면 모달**(§23.1). 지도 박스를 덮지 않는다.
+        ★ **로드뷰 하단 시트**(사용자 지시 2026-08-21 — *"네이버지도의 로드뷰처럼 부분 팝업 형태"*).
+        디지털온누리 가이드의 검증된 형태를 그대로 따른다.
 
-        왜 모달인가: 페이지 안 박스에 파노라마가 있으면 **"한 손가락 = 페이지 스크롤"** 과
-        **파노라마 회전**이 같은 제스처를 두고 싸운다. 네이버 뷰어는 중첩 div 3겹이 전부
-        `touch-action: auto` 이고 한 손가락 드래그를 스스로 `preventDefault` 한다 —
-        `pan-y !important` 로 이기려 들면 **로드뷰를 회전할 수 없어 기능이 목적을 잃고**,
-        네이버가 내부 DOM 을 바꾸면 조용히 깨진다. **불안정한 것 위에 최우선 원칙을 세우지 않는다.**
-        모달에는 **뺏을 페이지 스크롤이 없으므로 충돌 자체가 존재하지 않는다** —
-        절충이 아니라 소멸이다. 모달 안에서 한 손가락이 파노라마를 돌리는 것은 **정상 동작**이다.
+        ★★ **`<dialog showModal()>` 을 쓰지 않는다.** 그것은 배경을 `inert` 로 만드는데,
+        **이 시트가 열려 있는 동안 조합원은 뒤의 지도를 눌러 로드뷰 위치를 옮겨야 한다.**
+        모달로 열면 그 조작이 원천 차단된다 — 기능과 표준 동작이 충돌하므로 표준을 포기하고
+        `Esc`·포커스 복귀를 직접 진다(§21.3 재판정).
+        **배경 스크롤도 잠그지 않는다** — 잠그면 지도까지 못 움직인다.
 
-        `showModal()` 로만 연다(→ 포커스 트랩·`Esc`·배경 `inert`·top-layer 표준 제공).
-        `::backdrop` 클릭 핸들러를 **붙이지 않는 것이 곧 구현**이다 — 회전 중 오탭으로 닫히면 안 된다.
-        높이는 **`100dvh`** 다. `100vh` 를 쓰지 마라 — 모바일 URL 바 때문에 파노라마 아래가 잘린다.
+        **화면을 덮지 않는다**: 뷰포트 하단 고정 · 파노라마 높이 `32dvh` ·
+        위에 지도가 보인 채로 **파란 길을 다시 누를 수 있어야** 이동이 성립한다.
+        높이를 키우지 마라 — 지도가 가려지면 이 기능의 전제가 무너진다.
       */}
-      <dialog
-        ref={dialogRef}
-        aria-label="국회의사당역 5번 출구 로드뷰"
-        className="m-0 h-[100dvh] max-h-none w-full max-w-none border-0 bg-black p-0 backdrop:bg-black/80"
-      >
-        {/* 로드뷰는 스크린리더에 완전히 무의미하다 — 텍스트 등가를 만들 수 없다(§21.3.2).
-            **로드뷰에만 있는 정보를 만들지 마라** — 모달이 커졌다고 안내 문구를 옮기지 않는다 */}
-        <p className="sr-only">
-          로드뷰는 시각 자료입니다. 위치 안내는 페이지 본문 텍스트를 참고해 주세요.
-        </p>
-
-        {/*
-          `닫기` 는 **이 화면의 유일한 출구**다 — 자동 숨김 금지, 상시 노출.
-          상단 우측인 이유: 하단은 **회전 드래그 구역**이라 오탭이 난다.
-          사진 위에 반투명 버튼을 얹지 마라 — 배경이 매 프레임 바뀌어 대비를 보장할 수 없다.
-          불투명 아웃라인 필(§20.14.3, 11.37)을 그대로 쓴다.
-        */}
-        <button
-          type="button"
-          autoFocus
-          onClick={closeRoadview}
-          className={`${CONTROL_CLASS} absolute z-10`}
-          style={{
-            top: "max(12px, env(safe-area-inset-top))",
-            right: "max(12px, env(safe-area-inset-right))",
-          }}
+      {roadviewAt !== null ? (
+        <div
+          role="dialog"
+          aria-label={
+            roadviewAt.label !== null ? `${roadviewAt.label} 로드뷰` : "로드뷰"
+          }
+          className="rounded-t-panel fixed inset-x-0 bottom-0 z-40 border-t-2 border-border-strong bg-bg shadow-hero"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         >
-          닫기
-        </button>
+          <div className="flex items-center gap-2 px-4 py-3">
+            <p className="text-body font-bold text-ink">
+              {roadviewAt.label !== null ? `로드뷰 — ${roadviewAt.label}` : "로드뷰"}
+            </p>
+            {/* 촬영 연월 — **메타에 있을 때만.** 없으면 이 자리가 빈다(지어내지 않는다) */}
+            {panoDate !== "" ? (
+              <span className="ml-auto text-caption tabular-nums text-ink-muted">{panoDate}</span>
+            ) : null}
+            <button
+              type="button"
+              onClick={closeRoadview}
+              className={`${panoDate !== "" ? "" : "ml-auto"} ${CONTROL_CLASS}`}
+            >
+              닫기
+            </button>
+          </div>
 
-        {/* `touch-action` 을 건드리지 않는다 — 여기서는 한 손가락 회전이 설계된 동작이다(§23.1.3) */}
-        {roadviewOpen ? <div ref={panoMountRef} className="size-full" /> : null}
-
-        {panoStatus === "loading" ? (
-          <p className="absolute inset-0 flex items-center justify-center bg-surface text-body font-semibold text-ink">
-            로드뷰를 불러오는 중입니다.
+          {/* 로드뷰는 스크린리더에 무의미하다 — 텍스트 등가를 만들 수 없다(§21.3.2).
+              **로드뷰에만 있는 정보를 만들지 마라** */}
+          <p className="sr-only">
+            로드뷰는 시각 자료입니다. 위치 안내는 페이지 본문 텍스트를 참고해 주세요.
           </p>
-        ) : null}
-      </dialog>
+
+          <div className="relative h-[32dvh] bg-surface">
+            {/* `touch-action` 을 건드리지 않는다 — 여기서는 한 손가락 회전이 설계된 동작이다(§23.1.3) */}
+            <div ref={panoMountRef} className="size-full" />
+            {panoStatus === "loading" ? (
+              <p className="absolute inset-0 flex items-center justify-center bg-surface text-body font-semibold text-ink">
+                로드뷰를 불러오는 중입니다.
+              </p>
+            ) : null}
+            {panoStatus === "failed" ? (
+              /* ★ **시트를 닫지 마라.** 종전에는 실패 시 모달을 닫아 버려서 조합원이
+                 *"눌렀는데 아무 일도 안 났다"* 로 읽었다. **다음에 할 일을 알려야 한다** */
+              <p className="absolute inset-0 flex items-center justify-center break-keep bg-surface px-6 text-center text-body text-ink">
+                이 지점 주변에는 로드뷰가 없습니다. 지도의 파란 길을 눌러 근처 촬영 지점을 골라
+                주세요.
+              </p>
+            ) : null}
+          </div>
+
+          <p className="break-keep px-4 py-3 text-caption leading-[1.6] text-ink">
+            지도의 <b>파란 길</b>을 누르면 그 지점 로드뷰로 이동합니다(주황 원 = 지금 보는 위치).
+            로드뷰 안에서는 드래그로 둘러보고, 화살표로 길을 따라 걸을 수 있습니다.
+          </p>
+        </div>
+      ) : null}
     </>
   );
 }
@@ -2703,6 +2943,11 @@ function RallyFullscreenMap({
               feature={selectedFeature}
               index={selectedIndex}
               side={popupSide}
+              onRoadview={null}
+              /* ★ 전체 화면 모달 안에서는 로드뷰를 열지 않는다 —
+                 시트가 모달 위에 또 뜨면 표면이 3겹이 되고, 모달을 닫아야 지도를 눌러
+                 위치를 옮길 수 있어 거리뷰 모드의 계약이 성립하지 않는다.
+                 로드뷰는 페이지 지도에서 연다(모달을 닫으면 그 자리 그대로다). */
               onClose={() => {
                 const openId = selectedRef.current;
                 selectFeature(null);

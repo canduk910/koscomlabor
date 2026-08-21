@@ -73,7 +73,14 @@ export type NaverMapEventListener = object;
 /** 로드뷰 파노라마 — 별도 API 다(§21.3) */
 export interface NaverPanoramaOptions {
   position: NaverLatLng;
-  pov: { pan: number; tilt: number; fov: number };
+  /**
+   * `pan` 은 **선택이다**(2026-08-21). 종전에는 필수였는데 그때는 로드뷰가 5번 출구 고정이라
+   * `130`(의사당대로 남동쪽)이 늘 옳았다. **지점마다 로드뷰를 여는 지금은 고정값이 틀린다** —
+   * 생략하면 네이버가 촬영 진행 방향을 잡아 준다.
+   */
+  pov: { pan?: number; tilt: number; fov: number };
+  /** 하늘로 날아가는 이동 지점 — 좁은 시트에서 오탭이 잦아 끈다 */
+  flightSpot?: boolean;
   /** 지도와 같은 조작 규칙: 컨트롤 0, 한 손가락은 페이지 스크롤 */
   logoControl: boolean;
   zoomControl: boolean;
@@ -86,6 +93,12 @@ export interface NaverPanorama {
   addListener(eventName: string, listener: (payload?: unknown) => void): NaverMapEventListener;
   getPanoId(): string | null;
   destroy(): void;
+  /** 거리뷰 모드 — 지도 클릭 지점으로 옮긴다. **가장 가까운 실제 촬영점을 스스로 찾는다** */
+  setPosition(position: NaverLatLng): void;
+  getPosition?(): NaverLatLng | undefined;
+  getPov?(): { pan?: number; tilt?: number; fov?: number } | undefined;
+  /** 촬영 메타 — `photodate` 가 **없을 수 있다.** 없으면 표시하지 않는다(지어내지 마라) */
+  getLocation?(): { photodate?: string; photoDate?: string } | undefined;
 }
 
 /** 사각형·원·폴리곤의 공통 부분 — 생성 후 제거만 한다 */
@@ -159,6 +172,11 @@ export interface NaverMapsNamespace {
    * 없을 때 `로드뷰 보기` 버튼을 아예 렌더하지 않으려면(죽은 버튼 금지) 타입이 그 사실을 말해야 한다.
    */
   Panorama?: new (element: HTMLElement, options: NaverPanoramaOptions) => NaverPanorama;
+  /**
+   * 거리뷰 커버리지(파란 길) 레이어 — **어디를 누를 수 있는지**를 보여주는 유일한 수단이다.
+   * `Panorama` 와 같은 `submodules=panorama` 로 들어오므로 **선택 필드**로 둔다.
+   */
+  StreetLayer?: new () => NaverOverlay;
   Event: { removeListener(listener: NaverMapEventListener): void };
   /** `PanoramaStatus.OK` 비교용 — 로드뷰 로드 성공 판정(§21.3.2) */
   PanoramaStatus?: { readonly OK: string };
