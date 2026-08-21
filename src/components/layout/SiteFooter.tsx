@@ -24,20 +24,46 @@ export function SiteFooter() {
         <p className="text-body font-bold text-white">
           전국금융산업노동조합 코스콤(한국증권전산)지부
         </p>
-        <div className="rounded-card mt-5 inline-flex items-center gap-4 bg-bg px-4 py-3">
+        {/*
+          텍스트 확대 200% 가로 스크롤 해소 (FOLLOWUPS #7 · 2026-08-21).
+
+          **원인은 높이가 rem 이고 폭이 종횡비로 따라오는 것**이다. `h-7` 은 1.75rem 이라
+          root 200% 에서 **56px** 이 되고 폭이 그만큼 늘어난다 — 실측·계산 일치:
+            kfiu    247×192 → h56 에서 폭 **72.0px**
+            koscom  387×96  → h56 에서 폭 **225.8px**   ← 한 장이 대부분을 차지한다
+            합계 297.8 + gap 32 + 좌우 패딩 64 = **393.8px**
+          360px 뷰포트에서 쓸 수 있는 폭은 **296px**(패딩도 rem 이라 함께 늘어난다)이다.
+
+          **2겹으로 막는다:**
+            `flex-wrap`  — 한 줄에 안 들어가면 쌓인다. 200% 에서 koscom(225.8)이 혼자
+                           들어가므로 대부분 여기서 해소된다
+            `max-w-full object-contain` — 한 장조차 안 들어가는 폭(320px 등)의 보험.
+                           **`object-contain` 이 없으면 `h-7` 과 충돌해 로고가 찌그러진다**
+
+          ⚠ **`inline-flex` 를 `flex` 로 바꾸지 마라** — 흰 면이 로고를 감싸는 록업인데
+          `flex` 면 전폭으로 퍼진다. `inline-flex` 는 `flex-wrap` 과 함께 써도 shrink-to-fit 이다.
+          ⚠ **`h-7`(rem)을 px 로 내리지 마라** — 확대 대응의 역방향이고 나쁜 선례다.
+          푸터는 세로가 늘어도 비용이 0인 자리다.
+          ⚠ **`alt` 를 비우지 마라** — "장식에 준한다"는 배치 판단이고 대체텍스트는 접근성
+          계약이다. 둘을 같은 결정으로 묶지 마라.
+
+          **100% 에서는 아무것도 바뀌지 않는다**: 두 로고 합 148.9 + gap 16 + 패딩 32 = 196.9px
+          로 328px 예산 안이라 `flex-wrap` 이 발동하지 않고 `max-w-full` 도 걸리지 않는다.
+        */}
+        <div className="rounded-card mt-5 inline-flex flex-wrap items-center gap-4 bg-bg px-4 py-3">
           <Image
             src="/brand/kfiu-mark.png"
             alt="전국금융산업노동조합"
             width={247}
             height={192}
-            className="h-7 w-auto"
+            className="h-7 w-auto max-w-full object-contain"
           />
           <Image
             src="/brand/koscom-logo.png"
             alt="코스콤"
             width={387}
             height={96}
-            className="h-7 w-auto"
+            className="h-7 w-auto max-w-full object-contain"
           />
         </div>
         <div className="mt-5 flex flex-wrap items-center justify-between gap-x-6">
