@@ -14,6 +14,9 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // 백엔드(server/)는 자체 패키지·tsconfig로 검증한다 — 프론트 lint 대상 아님
     "server/**",
+    // QA 측정 도구(Playwright MCP)가 남기는 산출물 — .gitignore 대상이므로 lint 대상도 아니다.
+    // 측정 중에 계속 새로 생기므로 지우는 것이 아니라 범위에서 빼는 것이 맞다(`server/**` 와 같은 계열).
+    ".playwright-mcp/**",
   ]),
 ]);
 
