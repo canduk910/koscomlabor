@@ -3,7 +3,6 @@
 import Script from "next/script";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
-  DISTANCE_TEXT_SHORT,
   EXIT5,
   LABEL_PRIORITY_MIN_ZOOM,
   LEGEND_FOOTNOTE,
@@ -1602,11 +1601,13 @@ function RallyMapFallback({ status }: { status: Exclude<MapStatus, "ready"> }) {
         {status === "failed" ? "지도를 불러오지 못했습니다." : "지도를 불러오는 중입니다."}
       </p>
       <p className="mt-3 break-keep text-body text-ink">집결 장소 — 국회의사당역 5번 출구</p>
-      {/* 대체면은 지도를 못 보는 사람이 읽는 **산문**이라 여기서도 대오 식별자를 뺀다(§21.6.2) */}
+      {/* ⚠ 위치 주장을 걷어낸 자리다(검증 12회차 요구 101 · 2026-08-21). 종전 문구
+          (`코스콤지부 — 더샵아일랜드파크 앞 의사당대로` + `5번 출구에서 남동쪽으로 약 220~340 m`)는
+          **근거가 무효**가 됐다 — 주최측 새 배치도 기준 그 자리는 **2구역, 다른 지부 대오**다.
+          **되살리지 마라.** 구역이 확인되면 그때 다시 쓴다. */}
       <p className="mt-1 break-keep text-body text-ink">
-        코스콤지부 — 더샵아일랜드파크 앞 의사당대로
+        코스콤지부 — 집회 3구역 배정 예정(위치 확인 중)
       </p>
-      <p className="mt-1 text-caption text-ink-muted">{DISTANCE_TEXT_SHORT}</p>
     </div>
   );
 }
