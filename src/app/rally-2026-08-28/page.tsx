@@ -2,14 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
-import { ArrowLeftIcon, ExternalLinkIcon } from "@/components/ui/icons";
+import { ArrowLeftIcon } from "@/components/ui/icons";
 import { RallyMap } from "@/components/rally/RallyMap";
 import { QrAttendanceCard } from "@/components/rally/QrAttendanceCard";
 import { RallySchedule } from "@/components/rally/RallySchedule";
+import { WayfindingBlock } from "@/components/rally/WayfindingBlock";
 import { RALLY_PAST_NOTE, RallyStatusBadge } from "@/components/rally/RallyStatus";
 import { rallyPhase } from "@/lib/rally";
 import { ZONE_STATUS } from "@/lib/rallyMap";
-import { EXTERNAL_LINKS, NAVER_DIRECTIONS_DISPLAY_HOST, ROUTES } from "@/lib/routes";
+import { ROUTES } from "@/lib/routes";
 
 /**
  * 8/28 총력투쟁 결의대회 참석 안내 (디자인 스펙 §20.3).
@@ -142,14 +143,19 @@ export default function RallyPage() {
               </p>
 
               {/*
-                행 순서는 **집회 시간 → 본대회 → 장소**다(§28.4.2).
+                행 순서는 **참석 시간 → 본대회 → 장소**다(요구 126 · §28.4.2).
                 **큰 범위 → 그 안의 한 지점 → 장소** 순이고, 유일한 비시각 항목인 `장소` 가 맨 아래다.
               */}
               <dl className="mt-6 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 md:mt-8">
                 {/*
                   ⚠ **`코스콤지부 | 20:30까지 참가 계획` 행이 제거되고 이 행으로 교체됐다**
-                  (사용자 지시 · §28.4). 사용자 원 요청이 **집회 시간을 `18:30 ~ 20:30` 으로 표기**해
-                  달라는 것이었고, 그 행과 각주의 해당 절을 **"쓸데없는 사족"으로 지목**했다.
+                  (사용자 지시 · 검증 15회차 요구 122·123). 사용자 원 요청이 `18:30 ~ 20:30` 표기였고,
+                  그 행과 각주 1 을 **"쓸데없는 사족"으로 지목**했다.
+
+                  ⚠ **`집회 시간`·`행사 시간` 으로 바꾸지 마라**(요구 123 금지):
+                  그것은 **주최측 종료를 단정**하는 표기이고, 사용자가 명시한 **`20:20 이 공식 행사종료`** 와
+                  충돌한다. **`참석 시간`** 은 페이지 제목(`…결의대회 **참석** 안내`)의 용어 재사용이라 **창작 0** 이다.
+                  주어(`코스콤지부 …`)를 되살리지도 마라 — **사용자가 명시적으로 지운 것**이다.
 
                   **대형 `18:30` 에 `~ 20:30` 을 붙이지 않는다**(§28.4.1): 캡션이 `집결` 이라
                   범위를 붙이면 *"집결이 2시간"* 으로 읽히고, 캡션을 `집회` 로 바꾸면
@@ -160,7 +166,7 @@ export default function RallyPage() {
                   `<time>` 은 대형 `18:30` 전용을 유지한다 — 한 표에서 한 행만 마크업이 다르면
                   그 차이 자체가 의미로 읽힌다(§22.13.5).
                 */}
-                <dt className="text-caption font-semibold text-ink-muted">집회 시간</dt>
+                <dt className="text-caption font-semibold text-ink-muted">참석 시간</dt>
                 <dd className="break-keep text-body text-ink">
                   <span aria-hidden="true">18:30 ~ 20:30</span>
                   <span className="sr-only">오후 6시 30분부터 오후 8시 30분까지</span>
@@ -172,64 +178,33 @@ export default function RallyPage() {
               </dl>
 
               {/*
-                네이버 길찾기 링크(§24.4·§24.5 · 검증 10회차 요구 71~77).
+                오시는 길(§29 · 검증 17회차 요구 118·135). 링크 카드와 **교통 안내가 한 컴포넌트**다 —
+                **교통 안내 없는 길찾기 링크를 만들 방법 자체를 없앤다**(네이버 화면 상단의 `자동차` 탭을
+                누르면 자가용 경로가 나오는데 당일 인근 도로는 통제된다).
 
                 **자리가 근거다**: 링크의 도착지가 곧 위 `장소` 행의 내용이라 그 바로 아래가
-                인접성이 성립하는 유일한 자리이고, "여기 어떻게 가지?"는 페이지를 열자마자 드는
-                생각인데 블록 1 은 지도보다 위에 있다. **지도 컨트롤 행에 6번째 버튼으로 붙이지 마라** —
-                우리 지도 조작과 외부 이동이 한 줄에 섞이고 §21.1.3 폭 검산(2행)이 3행으로 깨진다.
-                `※` 2행보다 **위**인 이유: 링크는 `장소` 에 묶이고 `※` 는 시각에 묶이며,
-                마지막 자리는 **당일 해야 하는 행동**(2차 출석)이 갖는 것이 맞다.
+                인접성이 성립하는 자리이고, "여기 어떻게 가지?"는 페이지를 열자마자 드는 생각인데
+                블록 1 은 지도보다 위에 있다. `※` 2행보다 **위**인 이유: 링크는 `장소` 에 묶이고
+                `※` 는 시각에 묶이며, 마지막 자리는 **당일 해야 하는 행동**(2차 출석)이 갖는 것이 맞다.
 
-                **아웃라인 필 버튼(§20.14.3) 모양을 쓰지 마라** — 그것은 우리 페이지 안에서 일어나는
-                조작의 형태다. 외부 이동은 다르게 생겨야 한다. **오렌지(accent)도 쓰지 마라**(온누리·CI 전용).
-
-                외부 이동 **3중 병행**(§14.1): ↗ 아이콘 + 메타 문구 + 접근성 이름(카드 전체가 단일 `<a>` 라
-                내부 텍스트가 접근성 이름에 자동 포함된다 — 별도 `sr-only` 불필요).
-                **↗ 를 텍스트 문자로 쓰지 마라**(서체마다 위치·크기가 튄다). SVG 컴포넌트를 재사용한다.
-                보조 문구를 **`ink-muted` 로 흐리지 마라** — "빈 화면이 떴다"를 막는 문장이라 읽어야 한다.
-                **이 링크는 내장 지도·텍스트 안내를 대체하지 않는다**(요구 77 · §0.4). 지도를 지우지 마라.
+                **hairline 으로 `<dl>` 과 가른다**: 집결 정보(`18:30`·`<dl>`)와 오시는 길은 **다른 층위**다.
+                **새 카드를 중첩하지 마라** — 링크 카드가 이미 테두리를 갖고 있다.
               */}
-              <a
-                href={EXTERNAL_LINKS.naverDirections}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-card ease-out-soft group mt-6 block border-2 border-border-strong bg-bg p-4 transition-colors duration-150 hover:outline-2 hover:outline-primary focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
-              >
-                {/* 카드 어디에 hover 해도 제목에 밑줄이 뜬다 — 온누리 카드와 같은 규칙(§16.9.7) */}
-                <span className="block break-keep text-body font-bold text-primary group-hover:underline">
-                  네이버 지도로 길찾기
-                  <ExternalLinkIcon className="ml-1 inline size-4 align-[-2px]" />
-                </span>
-                <span className="mt-1 block break-keep text-caption text-ink">
-                  도착지는 국회의사당역 5번 출구입니다. 출발지를 입력하면 경로가 나옵니다.
-                </span>
-                {/* URL 전체를 노출하지 않는다 — 네이버 내부 인코딩이라 판독 가치가 0이다(§24.6) */}
-                <span className="mt-1.5 block text-caption text-ink-muted">
-                  외부 링크(새 창) · {NAVER_DIRECTIONS_DISPLAY_HOST}
-                </span>
-              </a>
+              <WayfindingBlock className="mt-6 border-t border-border-soft pt-5" />
 
               {/*
-                각주 2줄(검증 요구 59·60). **`ink-muted` 로 흐리지 마라 — 읽어야 하는 문장이다.**
+                ⚠ **각주 1(`※ 20:30 은 코스콤지부의 참가 계획입니다…`)은 전체 삭제됐다**
+                (검증 15회차 요구 122 — 요구 58·59 폐기, 12회차 요구 100 이 여기에 흡수).
+                사용자가 **"쓸데없는 사족"으로 지목**했고, `20:30` 의 성격이 §6.8.1 로 정리되면서
+                주어를 설명하던 그 각주의 근거 자체가 사라졌다. **되살리지 마라.**
 
-                1행: **`종료 시각은 안내되지 않았습니다` 절은 삭제됐다**(검증 12회차 요구 100).
-                그 절은 **"주최측이 안내한 적이 없다"는 부정 주장**인데, §6.9 배치도 하단에
-                `8/28 (금) 18:30 ~ 20:30` 이 있어 **거짓 진술이 될 수 있다** —
-                **부정 주장은 반례 하나로 무너진다.** 남은 두 문장은 어느 해석에서도 참이다
-                (폐회선언 `20:20~` 은 원문 식순표 대조 사실).
-                ⚠ **요구 58(`20:30까지 참가 계획` 행 무수정)은 폐기됐다** — 사용자가 그 행을
-                "쓸데없는 사족"으로 지목해 삭제를 지시했고, `집회 시간 | 18:30 ~ 20:30` 으로 교체됐다(§28.4).
-
-                2행: 6회차의 `대회가 끝난 뒤라도 21:00 전에` 를 **이 문장으로 교체**한 것이다.
-                옛 문안은 "끝난 뒤에 찍어도 된다"로 읽혀 **지부가 20:30 에 자리를 뜨는 계획과 어긋난다.**
-                `자리를 뜨면 출석이 되지 않습니다` 로 **강화하지 마라** — 출석 지오펜스 반경이
-                미확인이라 그것은 미검증 단정이 된다.
-                `20:00~21:00` 에 **색 강조 금지**(요구 13) — 색 강조는 QR 카드의 출석 시각 2개 전용이다.
+                **아래 각주 2 는 무수정 유지다**(요구 124 · 60). `ink-muted` 로 흐리지도 마라 —
+                읽어야 하는 문장이다. `20:30` 을 드러낼수록 **이 문장이 더 필요해진다**:
+                참석 시간이 20:30 에 끝나는데 2차 출석 창은 21:00 까지라 **30분 공백**이 생기고,
+                이 문장이 "자리를 뜨기 전에 찍으라"로 그 공백을 메운다.
+                **`자리를 뜨면 출석이 되지 않습니다` 로 강화하지 마라** — 지오펜스 반경이 미확인이다.
+                `20:00~21:00` 에 **색 강조 금지**(요구 13).
               */}
-              <p className="mt-3 max-w-[var(--container-prose)] break-keep text-body text-ink">
-                ※ 20:30 은 코스콤지부의 참가 계획입니다. 주최측 식순상 폐회선언은 20:20~ 입니다.
-              </p>
               <p className="mt-1 max-w-[var(--container-prose)] break-keep text-body text-ink">
                 ※ 2차 출석은 20:00~21:00 입니다. 현장에서 위치가 확인돼야 하니 자리를 뜨기 전에 완료해
                 주세요.
@@ -332,6 +307,21 @@ export default function RallyPage() {
                 </p>
               </div>
               <RallyMap clientId={NAVER_MAP_CLIENT_ID} />
+
+              {/*
+                오시는 길 — **`<figure>` 밖, 지도 섹션의 마지막**이다(§29.2).
+
+                읽기 순서가 맞다: 지도를 본다 → 범례로 지점을 확인한다 → **"그래서 어떻게 가지?"** → 길찾기.
+                의미 구조도 맞다 — `<figure>`/`<figcaption>` 은 **그림과 그 설명**이고
+                길찾기는 지도의 설명이 아니라 **별개의 행동 수단**이다.
+
+                ⚠ **`<figure>` 안으로 옮기지 마라**: 3단계(드래그·전체 화면·지도 안 `+/−`)가
+                `<figure>` 내부를 재구성한다. 밖에 두는 것이 그 변경과 충돌을 0으로 만든다.
+                컨트롤 행에 버튼으로 붙이는 것도 같은 이유로 안 된다(그리고 길찾기는 버튼이 아니라 카드다).
+
+                **블록 1 의 것과 같은 컴포넌트다** — 문자열·URL 이 한 벌이라 한쪽만 고쳐질 수 없다.
+              */}
+              <WayfindingBlock className="mt-section" />
             </section>
           ) : null}
 
