@@ -30,8 +30,17 @@ const QR_IMAGE = {
   src: "/images/rally-2026-08-28/qr-guide.png",
   width: 1920,
   height: 1080,
-  /** 검증 §5-4 제시 문자열 그대로. **`alt=""` 로 두지 마라** — 요약이며 대체 본문은 위 텍스트다 */
-  alt: "주최측 배포 “QR 출석체크 안내” 원본 이미지 — 같은 내용이 위 텍스트에 있습니다",
+  /**
+   * 검증 §5-4 제시 문자열 기반. **`alt=""` 로 두지 마라** — 요약이며 대체 본문은 이 카드다.
+   *
+   * ★ **방향어를 넣지 마라**(검증 §38-2 권고 · 2026-08-21).
+   * 종전에는 `…같은 내용이 **위** 텍스트에 있습니다` 였는데, 이미지가 카드 **위**로 올라가면서
+   * **그 한 낱말이 거짓이 됐다** — 스크린리더 사용자를 **존재하지 않는 방향으로 보낸다.**
+   * §19-1 A 유형(상태가 바뀌어 거짓이 된 서술)과 같은 성질이고, 배포 블로커였다.
+   * `아래` 로 바꾸는 것으로도 지금은 참이지만 **배치가 또 바뀌면 같은 일이 반복된다.**
+   * → **방향 대신 대상을 가리킨다.** 카드가 어디 있든 참이다.
+   */
+  alt: "주최측 배포 “QR 출석체크 안내” 원본 이미지 — 같은 내용을 이 카드에 텍스트로 적었습니다",
 } as const;
 
 /** 출석 2회 — 이 카드 안에서 유일한 대형 타이포이자 유일한 채색 면 */
@@ -43,19 +52,62 @@ const ATTENDANCE_SLOTS = [
 export function QrAttendanceCard() {
   return (
     <>
-      <div className="rounded-panel shadow-card mt-6 bg-bg p-5 md:p-6">
+      {/*
+        ★ **`<figure>` 가 카드보다 먼저 온다**(사용자 지시 2026-08-21 — "제목과 내용 사이에 그림").
+        **요구 20 의 두 제약(`카드 밖` · `이미지 캡션 자리`)은 그대로 유지된다** — 통째로 위로
+        옮겼을 뿐 카드 **안**으로 들어가지 않았다. 카드 안으로 넣는 것만이 위반이다.
+
+        **위계는 순서가 아니라 크기·표면이 진다**(§36.9-5): 카드는 `shadow-card` 면 +
+        유일한 대형 타이포(24px) + 유일한 채색 면이고, 이미지는 캡션만 딸린 평면이다.
+        위로 올라가도 본체가 뒤집히지 않는다.
+
+        원본 이미지 — **보조**다. 표시 폭 480px 상한: 스캔 대상이 아니므로 크게 낼 이유가 없다.
+        ⚠ 같은 페이지 블록 2 의 **배치도는 상한이 없다** — 그쪽은 안에 읽어야 할 문자가 있다.
+        **같은 값이 아니라 같은 규칙에서 나온 다른 값이다**(§36.9-7).
+
+        ⚠ **`unoptimized` 를 지우지 마라 (리더 승인 2026-08-18).**
+        Next 이미지 최적화는 기본이 **WebP 손실 압축**이다. 원본 QR 은 모듈당 3px 경계선이라
+        (검증 §5-4) 재인코딩이 들어가면 **판독 가능성이 더 나빠진다.** `next/image` 를 쓰는 목적은
+        **CLS 방지와 크기 지정**(`width`/`height`)이지 재인코딩이 아니다 — 스펙 §20.19.4 의
+        `unoptimized` 의도와 같다. "왜 최적화를 껐지"라고 되돌리지 말 것.
+        ⚠ **블록 2 배치도에는 반대 판정이 적용된다**(위성사진이라 손실 압축 적합).
+
+        **스캔 유도 문구도, 스캔 금지 문구도 넣지 마라** — 전자는 해상도·대상 URL 미확인이라
+        위험하고, 후자는 원문에 없는 제약이라 현장의 조합원을 불필요하게 막는다.
+        라이트박스·모달을 만들지 마라 — §0.4 은폐 패턴에 인접하고 브라우저 확대로 충분하다.
+      */}
+      <figure className="mt-6">
+        <Image
+          src={QR_IMAGE.src}
+          width={QR_IMAGE.width}
+          height={QR_IMAGE.height}
+          alt={QR_IMAGE.alt}
+          unoptimized
+          className="rounded-badge border border-border-soft block h-auto w-full max-w-[480px]"
+        />
+        <figcaption className="mt-3 text-caption text-ink">주최측 배포 안내자료</figcaption>
+        {/* 출석 **운영은 확정**, QR 의 **배포는 예정**. 두 확정도를 뒤섞지 않도록 카드 밖에 둔다 */}
+        <p className="mt-2 break-keep text-caption text-ink">
+          ※ 출석 QR은 손피켓에 넣어 배포할 예정입니다. (주최측 안내자료 기준)
+        </p>
+      </figure>
+      <div className="rounded-panel shadow-card mt-5 bg-bg p-5 md:p-6">
         {/* ① 출발 전 확인 — 위치서비스 동의는 **집을 나서기 전에 하는 유일한 준비물**이다.
             현장에서 처음 알면 늦으므로 카드 맨 앞에 온다(검증 §5-3 · §5-10) */}
         <p className="text-lead text-ink">출발 전 확인</p>
         <p className="mt-2 break-keep text-body text-ink">
           아이폰 SAFARI · 갤럭시 인터넷에서 위치서비스 이용 동의 설정
         </p>
-        {/* `※` 두 줄을 흐리지 마라 — 보조 텍스트가 아니라 행동 지시다 */}
+        {/*
+          `※` 를 흐리지 마라 — 보조 텍스트가 아니라 행동 지시다.
+
+          ★ **두 조각을 지웠다**(§5.3 문안 절제 · 검증 §37 · 2026-08-21):
+            `안내자료에 명시된 브라우저입니다` — **우리 근거 설명**이다. 조합원의 행동을 안 바꾼다
+            `현장에서 설정하려면 늦습니다. 출발 전에 확인해 주세요.` — **제목이 이미 `출발 전 확인`** 이다
+          **남은 한 문장은 행동 지시라 유지한다** — 동의를 안 누르면 출석이 안 된다.
+        */}
         <p className="mt-2 break-keep text-caption text-ink">
-          ※ 안내자료에 명시된 브라우저입니다. 위치 접근 요청이 표시되면 동의해 주세요.
-        </p>
-        <p className="mt-1 break-keep text-caption text-ink">
-          ※ 현장에서 설정하려면 늦습니다. 출발 전에 확인해 주세요.
+          ※ 위치 접근 요청이 표시되면 동의해 주세요.
         </p>
 
         {/* ② 출석 2회 — 이 블록의 유일한 색 강조 */}
@@ -83,7 +135,8 @@ export function QrAttendanceCard() {
           ))}
         </dl>
 
-        <p className="mt-3 break-keep text-body text-ink">※ 두 시간대 모두 확인해 주세요.</p>
+        {/* ★ `※ 두 시간대 모두 확인해 주세요.` 를 되살리지 마라(§5.3 · 검증 §37 · 2026-08-21) —
+            **소제목 `출석체크는 총 2회 진행됩니다` 와 바로 위 표가 같은 말을 하고 있었다. 3중이다.** */}
         {/* **이 문장을 생략하지 마라**(요구 15). 원문 두 사실(2차 20:00~21:00 · 폐회 20:20~)의
             병치이며 "폐회했으니 간다"는 오독을 막는 유일한 수단이다 */}
         <p className="mt-2 break-keep text-body text-ink">
@@ -115,33 +168,6 @@ export function QrAttendanceCard() {
         </div>
       </div>
 
-      {/*
-        원본 이미지 — **보조**다. 표시 폭 480px 상한: 스캔 대상이 아니므로 크게 낼 이유가 없다.
-
-        ⚠ **`unoptimized` 를 지우지 마라 (리더 승인 2026-08-18).**
-        Next 이미지 최적화는 기본이 **WebP 손실 압축**이다. 원본 QR 은 모듈당 3px 경계선이라
-        (검증 §5-4) 재인코딩이 들어가면 **판독 가능성이 더 나빠진다.** `next/image` 를 쓰는 목적은
-        **CLS 방지와 크기 지정**(`width`/`height`)이지 재인코딩이 아니다 — 스펙 §20.19.4 의
-        `unoptimized` 의도와 같다. "왜 최적화를 껐지"라고 되돌리지 말 것.
-        **스캔 유도 문구도, 스캔 금지 문구도 넣지 마라** — 전자는 해상도·대상 URL 미확인이라
-        위험하고, 후자는 원문에 없는 제약이라 현장의 조합원을 불필요하게 막는다.
-        라이트박스·모달을 만들지 마라 — §0.4 은폐 패턴에 인접하고 브라우저 확대로 충분하다.
-      */}
-      <figure className="mt-5">
-        <Image
-          src={QR_IMAGE.src}
-          width={QR_IMAGE.width}
-          height={QR_IMAGE.height}
-          alt={QR_IMAGE.alt}
-          unoptimized
-          className="rounded-badge border border-border-soft block h-auto w-full max-w-[480px]"
-        />
-        <figcaption className="mt-3 text-caption text-ink">주최측 배포 안내자료</figcaption>
-        {/* 출석 **운영은 확정**, QR 의 **배포는 예정**. 두 확정도를 뒤섞지 않도록 카드 밖에 둔다 */}
-        <p className="mt-2 break-keep text-caption text-ink">
-          ※ 출석 QR은 손피켓에 넣어 배포할 예정입니다. (주최측 안내자료 기준)
-        </p>
-      </figure>
     </>
   );
 }

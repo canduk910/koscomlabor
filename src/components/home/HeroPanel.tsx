@@ -25,6 +25,23 @@ import { ArrowRightIcon } from "@/components/ui/icons";
  * 자간·굵기는 --text-hero / --text-hero-lg 토큰에 내장되어 있다(§16.3.1 — 클래스 중복 불요).
  */
 export function HeroPanel({ post }: { post: PostListItem | null }) {
+  /*
+   * ★ **urgent 공지가 없으면 아무것도 렌더하지 않는다**(§36.2 · 2026-08-21).
+   *
+   * 종전에는 모드 2(`26년 임단협 투쟁 안내` + `/bargaining-2026` CTA)가 폴백이었는데
+   * **사용자가 그것을 삭제하라고 지시**했다. 빈 `<section>` 을 남기면 **딥블루 면만 덩그러니
+   * 남으므로** 컴포넌트째 사라지는 것이 맞다.
+   *
+   * 히어로 자리를 무엇이 채우는지는 **호출부가 정한다**(`src/app/page.tsx`):
+   *   urgent 있음                 → 이 컴포넌트(공지)  + `RallyBanner surface="panel"` 이 아래
+   *   urgent 없음 · 8/28 전·당일   → `RallyBanner surface="hero"` 가 이 자리에
+   *   urgent 없음 · 8/28 이후      → **비운다** → 최상단이 미니달력(9/4 총파업)이 된다
+   *
+   * 마지막 줄이 설계의 요점이다 — **9/4 를 말할 승인 문자열이 없으므로 만들지 않는다.**
+   * 비우면 미니달력이 최상단으로 올라오고 그것이 이미 9/4 를 `peak` 로 갖고 있다.
+   * **날짜가 지나면 페이지가 스스로 옳아진다.**
+   */
+  if (post === null) return null;
   return (
     <section
       aria-label="주요 소식"
@@ -52,31 +69,7 @@ export function HeroPanel({ post }: { post: PostListItem | null }) {
             </Link>
           </p>
         </>
-      ) : (
-        /*
-         * §17.1 모드 2 — 투쟁 안내 진입점.
-         * 문구는 사용자 지정 문자열 그대로(신규 카피 창작 금지). 이전 문구
-         * "코스콤 조합원을 위한 정보 공유"는 1280px 에서 넘쳐 "유" 한 글자가 둘째 줄로
-         * 고립되던 결함이 있었고(배포 화면 실측), 교체로 해소된다.
-         * 요소는 <p> 유지 — <h2> 로 올리면 헤딩 아웃라인 `h1 지부명 → h2×4 섹션`
-         * 목차가 깨진다(§15.9.1). CTA 는 모드 1 과 동일 클래스·동일 라벨 재사용.
-         * `nowrap` 금지: 360·768px 에서는 2줄이 정상이며 어절 경계에서 끊긴다.
-         */
-        <>
-          <p className="font-display text-hero text-white md:text-hero-lg">
-            26년 임단협 투쟁 안내
-          </p>
-          <p className="mt-8 md:mt-10">
-            <Link
-              href={ROUTES.bargaining}
-              className="font-display ease-out-soft inline-flex min-h-touch items-center gap-2 rounded-full bg-white px-7 text-body font-medium tracking-[-0.01em] text-primary transition-colors duration-150 hover:bg-primary-soft focus-visible:outline-3 focus-visible:outline-white focus-visible:outline-offset-2"
-            >
-              자세히 보기
-              <ArrowRightIcon className="size-5" />
-            </Link>
-          </p>
-        </>
-      )}
+      ) : null}
     </section>
   );
 }
