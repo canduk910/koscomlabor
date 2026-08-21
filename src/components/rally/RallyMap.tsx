@@ -93,6 +93,30 @@ const GEO_OPTIONS: PositionOptions = {
  */
 const FIT_PADDING = { top: 48, right: 24, bottom: 48, left: 56 } as const;
 
+/**
+ * **초기 화면(`fitBounds`)의 줌 상한**(QA 23회차 실패 1건 · 2026-08-21).
+ *
+ * ⑤ 더샵 부지를 제거하면서 `fitBounds` 범위의 **남쪽 앵커가 사라져 범위가 좁아졌다.**
+ * 그 결과 **1280px(896×504)에서 z17(50m)이 걸리고**, ② pill 이 원 위쪽에 붙는데
+ * **원이 올라가 박스를 24px 벗어난다**(실측: ② 좌표 y **−24**).
+ *
+ * ⚠ **이 결함은 1280px 에서만 발현한다** — 360·768 은 100m 로 정상이다.
+ * 박스가 가장 커서 같은 범위에 더 큰 확대가 걸리기 때문이다.
+ * **360px 실측만으로는 잡히지 않는다.** 프로덕션에서도 창 폭 400px 대에서
+ * `축척 50m · ② pill 미노출`로 관측됐다.
+ *
+ * ⚠ **사용자 조작 상한(`MAP_MAX_ZOOM` = 19)과 다른 값이다. 합치지 마라** —
+ * 이것은 *처음 보여 주는 화면*의 상한이고, 그것은 *확대 버튼으로 갈 수 있는 끝*이다.
+ * 합치면 조합원이 지도를 확대할 수 없게 되고 §21.1.1 의 `minZoom 15 / maxZoom 19` 계약이 깨진다.
+ * (실측 확인: 이 상한을 16으로 둬도 지도 밖 `확대` 는 100→50→30→**20m(z19)** 까지,
+ *  `축소` 는 **300m(z15)** 까지 그대로 동작한다.)
+ *
+ * 대안(`FIT_PADDING.top` 증가 · ② `labelGap` 축소)을 쓰지 않은 이유는
+ * **라벨 배치를 다시 흔들지 않기 위해서다**(§22·§23 에서 반복한 실측 지옥).
+ * **지점이 늘거나 범위가 넓어지면 이 상한을 재검토하라.**
+ */
+const FIT_MAX_ZOOM = 16;
+
 /** 라벨 마커의 zIndex 시작값 — 도형보다 항상 위에 오도록 넉넉히 띄운다 */
 const LABEL_Z_BASE = 1_000;
 
@@ -646,7 +670,7 @@ export function RallyMap({ clientId }: { clientId: string }) {
         return created;
       })();
     map.fitBounds(bounds, FIT_PADDING);
-    if (map.getZoom() > MAP_MAX_ZOOM) map.setZoom(MAP_MAX_ZOOM, false);
+    if (map.getZoom() > FIT_MAX_ZOOM) map.setZoom(FIT_MAX_ZOOM, false);
     setMoved(false);
   }, []);
 
