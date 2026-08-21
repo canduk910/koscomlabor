@@ -146,28 +146,25 @@ const FIT_PADDING = { top: 52, right: 20, bottom: 76, left: 32 } as const;
 const FIT_MAX_ZOOM = 16;
 
 /**
- * **3단계-B 렌더 스위치**(§27.18 — 디자이너 분할 판정 2026-08-21).
+ * **3단계-B 렌더 스위치** — **복원됨**(§31 · QA-260 판정 · 2026-08-21).
  *
- * 3단계는 **A(즉시 배포) / B(대기)** 로 쪼개졌다.
- * - **A**: 한 손가락 드래그 · 지도 안 `+`/`−` · 키보드 roving group · 팝업 접근성 · 완화 문구
- * - **B**: **전체 화면 지도**(`지도 크게 보기` 버튼 + 전용 `<dialog>`) — **QA-260 검증 판정 대기**
+ * 3단계는 A(즉시 배포) / B(대기)로 쪼개져 있었고, **B 를 막던 것이 QA-260**(*"전체 화면 모달 안에 범례가 없다"*)이었다.
+ * **§31.2 가 판정했다: 모달에는 `LEGEND_KEY` 한 줄만 넣는다. 범례 5행은 넣지 않는다.**
  *
- * **QA-260 은 "전체 화면 모달 안에 범례가 없다" 이므로, 모달을 렌더하지 않으면 문제 자체가 없다.**
- * 모달은 **별도 지도 인스턴스**(§27.6)라 A 의 기능과 의존이 없다 — 렌더만 끄면 분리가 끝난다.
+ * **왜 키 줄만인가** — 팝업 본문이 `feature.legend` **파생**이라(요구 88·97) **5행 전부 팝업으로 도달 가능**한데,
+ * **`LEGEND_KEY` 만 소유 feature 가 없어 어느 팝업에도 나오지 않는 고아 문자열**이다.
+ * 그것이 없으면 **④ 옅은 면이 "근사"를 뜻한다는 문자**와 **⑤ 점선 도트가 ① 꽉 찬 도트와 다르다는 문자**가
+ * 모달 화면에 하나도 없어 **§2(색·형태 단독 의미 전달 금지) 위반**이 성립한다.
  *
- * ⚠ **코드를 지우지 마라. 판정이 오면 이 값을 `true` 로 되돌리는 것이 곧 복구다.**
- * 그때 함께 되살릴 것:
- * 1. 컨트롤 행이 3개 → **4개**가 된다. §27.4.3 의 2행 폭 검산(1행 280.0 / 2행 264.4)이 **다시** 기준이 된다
- *    (지금 유효한 것은 3개 기준 실측이다 — §27.18.3).
- * 2. 판정이 **"범례 필수"** 면 §27.15.4 **안 B**(지도 500px + 범례 200px 내부 스크롤)를 함께 구현한다.
- *    **`더 보기` 접기를 쓰지 마라**(§0.4 패턴표).
- * 3. §27.16.3 (B) 완화 목록의 *"페이지 안에서 조작 공간이 좁다 → `지도 크게 보기`"* 항목이 되살아난다.
- *    **(A) 목록은 영향을 받지 않는다** — "페이지를 못 내린다"의 유일한 완화는 여전히 **안내 문구 1건**이다.
+ * **§0.4 은폐가 아니다**: 은폐는 *"콘텐츠에 도달할 경로가 없는 것"* 인데, 모든 행이 팝업으로 도달 가능하고
+ * 그 경로를 하단 바의 어포던스 문구가 지시한다. **기본 상태가 `hidden` 인 구조가 아니다.**
  *
- * 타입을 `boolean` 으로 명시한 이유: 리터럴 `false` 로 좁혀지면 되살릴 코드가
- * "도달 불가"로 취급돼 **다음 사람이 죽은 코드로 오해하고 지운다.**
+ * ⚠ **`false` 로 되돌릴 일이 생기면** 함께 되돌릴 것: 컨트롤 행이 4개 → 3개가 되고(§31.6),
+ * 문안 게이트 55·56·74 가 무효가 된다.
+ *
+ * 타입을 `boolean` 으로 명시한 것은 그대로 둔다 — 리터럴로 좁히면 반대쪽 분기가 "도달 불가"로 보인다.
  */
-const STAGE3B_FULLSCREEN_MAP: boolean = false;
+const STAGE3B_FULLSCREEN_MAP: boolean = true;
 
 /** 라벨 마커의 zIndex 시작값 — 도형보다 항상 위에 오도록 넉넉히 띄운다 */
 const LABEL_Z_BASE = 1_000;
@@ -690,7 +687,32 @@ function createLabelMarker(
     // 배지·pill 을 눌러 팝업을 연다(§25.4). **도형은 클릭 대상이 아니다** — 어포던스 문구가
     // `번호를 누르면` 이라 도형을 눌리게 만들면 그 문안이 거짓이 된다(§25.2.1)
     clickable: true,
-    zIndex: LABEL_Z_BASE + index,
+    /*
+     * 적층(§34 · §22.10 **2-C 신설** · 2026-08-21).
+     *
+     * **번호가 없는 라벨 = 사용자 표식(`내 위치`)** 은 **안내도 라벨 전체보다 아래**에 둔다.
+     * 실측 결함: 3구역 북서단에서 `내 위치` pill 이 **⑤ 배지를 59.8% 덮고 중심 탭을 가로채
+     * 팝업이 열리지 않았다**(무대3 옆에서도 34.8%). **막힌 것이 시각이 아니라 조작이다.**
+     *
+     * **손해의 종류가 다르다**: 시각 가림은 조합원이 지도를 움직여 스스로 해소하지만,
+     * **히트 가로채기는 해소할 수 없다** — *"눌렀는데 안 열린다"* 이고 원인을 알 방법이 없다.
+     * 누르는 것은 §25.2 어포던스 문구가 **약속한 동작**이라, 가로채는 순간 **그 문안이 거짓이 된다.**
+     * → **2-C: 히트 영역 가로채기 0. 양보 불가.**
+     *
+     * ⚠ **`id === "my-location"` 로 분기하지 마라**(§20.20.2 와 같은 계열).
+     * 판정의 실제 기준은 *"번호가 없는 것 = 안내도 지물이 아닌 사용자 표식"* 이므로
+     * **`numbered === false` 로 분기한다** — 그래야 다음 사용자 표식이 생겨도 규칙이 따라온다.
+     *
+     * ⚠ **999 는 도형 z(10~50)보다 여전히 위다 — 핀이 밴드·원에 가리지 않는다. 이것이 유지돼야 한다.**
+     *   더 내리지 마라(회귀 항목 387: *"핀이 도형 뒤로 사라지면 z 를 너무 낮춘 것"*).
+     * ⚠ **핀과 pill 은 같은 마커다**(`labelIconContent` 가 `shape + labelHtml` 을 함께 만든다) →
+     *   **핀도 함께 내려간다. 허용한 것이다** — 가려지는 최대 면적이 배지 28px 하나이고
+     *   핀(24×32)·pill(58.9×34)이 그보다 크다.
+     * ⚠ **`MY_LOCATION_Z`(도형 z)와 다른 축이다. 그것을 건드리지 마라.**
+     *
+     * **아무것도 옮기지 않는다 — 누가 위인가만 바꾼다.** 배치 규칙(§32)은 그대로다.
+     */
+    zIndex: feature.numbered === false ? LABEL_Z_BASE - 1 : LABEL_Z_BASE + index,
   });
 }
 
@@ -1008,7 +1030,14 @@ function MapZoomButtons({
   zoom: number | null;
   onZoom: (delta: number) => void;
   itemProps?: (id: string) => { id: string; tabIndex: number };
-  /** 전체 화면에서는 `닫기` 버튼 아래로 내린다 */
+  /**
+   * 지도 영역 안 세로 위치. **현재 두 호출부 모두 기본값(`top-3`)을 쓴다.**
+   *
+   * ⚠ 종전 주석은 *"전체 화면에서는 `닫기` 버튼 아래로 내린다"* 였고 모달이 `top-20` 을 넘겼는데,
+   * §31.4 로 **`닫기` 가 지도 밖 상단 바로 나가면서** 피할 대상이 사라졌다.
+   * **인자가 지금은 쓰이지 않는다** — 지우지 않은 이유는 지도 영역 안에 다른 오버레이가 생기면
+   * 다시 필요해지기 때문이고, 지운다면 그것은 별도 정리 작업이다.
+   */
   topOffset?: string;
 }) {
   return (
@@ -1441,8 +1470,15 @@ export function RallyMap({ clientId }: { clientId: string }) {
   }, [selectFeature, status]);
 
   /*
-   * `Esc` 로 닫는다. **`document` 레벨**이라 팝업에 포커스가 없어도 동작한다 —
-   * 팝업은 `aria-hidden` 이고 포커스 가능 요소를 두지 않기 때문이다(§25.9).
+   * `Esc` 로 닫는다. **`document` 레벨**이라 팝업에 포커스가 없어도 동작한다.
+   *
+   * ⚠ **근거 교체**(§31.7 · 2026-08-21). 종전 근거는 *"팝업은 `aria-hidden` 이고 포커스 가능 요소를
+   * 두지 않기 때문"* 이었는데 **3단계에서 그 둘이 다 해제됐다** — 팝업의 `aria-hidden` 이 풀렸고
+   * 마커가 포커스 가능해졌다(§27.8.2). **거짓 근거를 믿고 팝업 구조를 바꾸면 판단이 어긋난다.**
+   *
+   * **새 근거**: **팝업 안에 포커스 트랩이 없고 포커스가 마커에 남아 있으므로 `document` 레벨이 옳다.**
+   * 팝업에 포커스를 옮겨도(§27.8.2) 사용자가 그 뒤 다른 곳을 클릭하면 포커스가 팝업 밖으로 나가는데,
+   * 그때도 `Esc` 가 동작해야 한다. **패널에만 핸들러를 걸지 마라.**
    */
   useEffect(() => {
     if (selected === null) return;
@@ -1971,9 +2007,12 @@ export function RallyMap({ clientId }: { clientId: string }) {
             **전체 화면 모달로 만들지 마라**(요구 90) — 지도와 범례가 **동시에** 보여야
             지점↔설명 대응이 성립한다. 팝업은 박스 밖(범례)을 전혀 가리지 않는다.
 
-            `aria-hidden`: 본문이 **범례와 같은 문자열**이라 노출하면 스크린리더가 같은 내용을 두 번 읽는다.
-            텍스트 등가는 범례가 100% 진다 — **범례를 줄이면 이 판단이 즉시 무너진다**(§25.9.1).
-            그래서 `닫기` 도 `tabindex={-1}` 이다: **`aria-hidden` 안에 포커스 가능 요소를 만들지 마라**(WCAG 2.4.3·4.1.2).
+            ⚠ **주석 갱신**(§31.7 · 2026-08-21). 2단계에는 팝업에 `aria-hidden` 이 걸려 있었고
+            *"그래서 `닫기` 도 `tabindex={-1}` 이다"* 라고 적혀 있었는데 **둘 다 3단계에서 해제됐다.**
+            **현행**: 팝업에 `aria-hidden` **없음** · `닫기` 는 **정상 포커스 가능**(`tabindex` 미지정) ·
+            팝업이 열리면 패널로 포커스가 이동한다(`tabIndex={-1}` 은 **패널 자신**에만 있다).
+            **마커를 포커스 가능하게 만든 이상 `aria-hidden` 유지는 WCAG 2.4.3·4.1.2 즉시 위반이라
+            둘은 반드시 한 쌍으로 움직인다**(§27.8.2). 되돌리려면 둘을 함께 되돌려라.
           */}
           {selectedFeature !== null ? (
             <MapPopupPanel
@@ -2290,6 +2329,27 @@ function RallyFullscreenMap({
     );
   }, []);
 
+  /**
+   * 라벨 최대 폭을 px 로 확정해 CSS 변수로 내린다 — **페이지 지도(`:1175`)와 같은 것을 여기에도 둔다**
+   * (2026-08-21 정정 · §N-3 결함 1).
+   *
+   * ⚠ **없으면 모달 pill 이 통째로 깨진다.** `labelHtml` 의 `max-width:var(--rally-label-max,60%)` 에서
+   * **폴백 `60%` 가 걸리는데 앵커가 0폭 컨테이닝 블록이라 60% = 0** 이 된다 →
+   * pill 이 min-content 로 접혀 **폭 16px · 2~3줄**이 됐다(실측). 페이지는 240px · 1줄이었다.
+   * **"크게 보기"가 페이지보다 라벨을 못 읽게 만드는 상태였다.**
+   *
+   * ⚠ **페이지 쪽과 공통화하지 마라** — 두 컴포넌트가 각자의 `mountRef` 를 본다.
+   * 공통화는 별도 정리 작업이고, 지금 필요한 것은 **동등성 복원**이다.
+   */
+  const syncLabelWidth = useCallback(() => {
+    const node = mountRef.current;
+    if (node === null) return;
+    node.style.setProperty(
+      LABEL_MAX_WIDTH_VAR,
+      `${Math.round(node.clientWidth * LABEL_MAX_WIDTH_RATIO)}px`,
+    );
+  }, []);
+
   const fit = useCallback((maps: NaverMapsNamespace, map: NaverMap) => {
     const b = MAP_FIT_BOUNDS;
     map.fitBounds(new maps.LatLngBounds(new maps.LatLng(b.south, b.west), new maps.LatLng(b.north, b.east)), FIT_PADDING);
@@ -2398,7 +2458,15 @@ function RallyFullscreenMap({
       maxZoom: MAP_MAX_ZOOM,
     });
     mapRef.current = map;
-    node.querySelector("[tabindex]")?.removeAttribute("tabindex");
+    /*
+     * ⚠ **`node.querySelector("[tabindex]")` 이 아니다**(2026-08-21 정정 · §N-3 결함 2).
+     * **네이버가 `tabindex="0"` 을 붙이는 것은 마운트 노드 *자신*** 이라 자손을 뒤지면 **빗나간다** —
+     * 실측: 모달 마운트 div 가 `tabindex="0"`(페이지는 `null`)이라 **빈 탭 정지점이 하나 더 생기고**
+     * §31.8-370 의 탭 순서(`처음 위치로` → `닫기` → 마커 그룹 → `+`/`−`)가 깨졌다.
+     * 게다가 종전 코드는 **자손 중 첫 `[tabindex]` 를 지워** 대상이 불확정했다.
+     * **페이지 지도(`:1263`)와 같은 코드여야 한다.**
+     */
+    node.removeAttribute("tabindex");
 
     const overlays: NaverOverlay[] = [];
     const labels: LabelEntry[] = [];
@@ -2410,6 +2478,8 @@ function RallyFullscreenMap({
     });
     overlaysRef.current = overlays;
     labelsRef.current = labels;
+    /* **`fit()` 보다 먼저다** — 라벨 폭이 정해진 뒤에 그려야 pill 이 접히지 않는다 */
+    syncLabelWidth();
     fit(maps, map);
     setZoom(map.getZoom());
     paint(map.getZoom());
@@ -2438,7 +2508,33 @@ function RallyFullscreenMap({
       map.destroy();
       mapRef.current = null;
     };
-  }, [fit, open, paint, selectFeature]);
+  }, [fit, open, paint, selectFeature, syncLabelWidth]);
+
+  /*
+   * 컨테이너 폭이 바뀌면 라벨 폭을 다시 내리고 재적합한다 — **페이지 지도와 같은 관측**이다.
+   * 모달에서도 필요하다: 기기 회전·창 크기 변경이 열려 있는 동안 일어난다.
+   * **`syncLabelWidth()` 를 빼지 마라** — 빼면 회전 후 pill 이 옛 폭을 쓴다.
+   */
+  useEffect(() => {
+    const node = mountRef.current;
+    if (node === null || !open) return;
+    let timer = 0;
+    const observer = new ResizeObserver(() => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const maps = window.naver?.maps;
+        const map = mapRef.current;
+        if (maps === undefined || map === null) return;
+        syncLabelWidth();
+        fit(maps, map);
+      }, RESIZE_DEBOUNCE_MS);
+    });
+    observer.observe(node);
+    return () => {
+      window.clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [fit, open, syncLabelWidth]);
 
   /*
    * 팝업 마커 이탈 판정은 **`dragend` 후 1회**다(§27.7.2). 드래그 중 상시 판정하면
@@ -2516,93 +2612,133 @@ function RallyFullscreenMap({
       aria-label="결의대회 위치 지도 크게 보기"
       className="m-0 h-[100dvh] max-h-none w-full max-w-none border-0 bg-bg p-0 backdrop:bg-black/80"
     >
-      {/* 범례가 이 화면에 없다는 사실을 **명시적으로** 안내한다(문안 게이트 56 개정) */}
+      {/* 문안 게이트 56 **개정**(§31.9) — 키 줄이 모달에 들어왔으므로 종전
+          *"전체 안내는 페이지 본문의 범례에 있습니다"* 는 더 이상 정확하지 않다. */}
       <p className="sr-only">
-        지도는 시각 자료입니다. 지점 설명은 번호를 눌러 확인하고, 전체 안내는 페이지 본문의 범례에 있습니다.
+        지도는 시각 자료입니다. 기호의 뜻은 아래 줄에 있고, 지점 설명은 번호를 눌러 확인해 주세요.
       </p>
-      <div ref={boxRef} className="relative size-full overflow-hidden">
-        {/* `닫기` 는 이 화면의 유일한 출구다 — 상시 노출·자동 숨김 금지(§23.1.5).
-            **DOM 에서 지도보다 앞에 둔다**: 그래야 Tab 순서가 `닫기` → 지도 조작 그룹이 되어
-            §27.14.4 의 "모달에 들어온 사람은 조작하러 온 것이므로 그룹이 바로 다음"이 성립한다. */}
-        <button
-          type="button"
-          ref={closeButtonRef}
-          onClick={() => dialogRef.current?.close()}
-          className={`${CONTROL_CLASS} absolute z-20`}
+      {/*
+        ★ **`flex-col` 3단**(§31.4 — §27.14.3 개정 2건). 종전에는 전체가 `relative size-full` 이고
+        컨트롤·문구가 **지도 위 오버레이**였다.
+
+        **오버레이를 되살리지 마라**: 오버레이는 지도를 덮는다. **§30.6 에서 `estimated` 밴드가
+        대비 1.15:1 로 안 보이는 문제를 방금 고쳤는데**, 그 위에 반투명 패널을 얹을 이유가 없다.
+        그리고 `flex-col` 로 나누면 **`fitBounds` 가 실제로 지도가 쓰는 박스를 보고 계산**한다 —
+        오버레이 아래 가려진 영역까지 지도로 치는 문제가 사라진다.
+      */}
+      <div ref={boxRef} className="flex h-full flex-col bg-bg">
+        {/*
+          상단 바 — **모달 자체를 다루는 두 컨트롤**이 한 행에 모인다(§31.4 추가 3 개정).
+          `처음 위치로` 가 종전 하단 좌측에서 여기로 올라왔다: 하단이 문자 바가 됐기 때문이다.
+
+          **DOM 순서를 바꾸지 마라** — 탭 순서가 `처음 위치로` → `닫기` → 마커 그룹 → `+`/`−` 여야 한다.
+          바가 지도보다 앞에 있으므로 §27.14.4(*"모달에 들어온 사람은 조작하러 온 것이므로
+          그룹이 바로 다음"*)가 그대로 성립한다.
+          `닫기` 는 이 화면의 **유일한 출구**다 — 상시 노출·자동 숨김 금지(§23.1.5).
+        */}
+        <div
+          className="flex shrink-0 items-center justify-between gap-2 px-3 pb-2"
           style={{
-            top: "max(12px, env(safe-area-inset-top))",
-            right: "max(12px, env(safe-area-inset-right))",
+            paddingTop: "max(12px, env(safe-area-inset-top))",
+            paddingLeft: "max(12px, env(safe-area-inset-left))",
+            paddingRight: "max(12px, env(safe-area-inset-right))",
           }}
         >
-          닫기
-        </button>
-
-        <div ref={mountRef} className="size-full" style={{ touchAction: "none" }} />
-
-        {open ? (
-          <>
-            <div
-              role="group"
-              aria-label="지도 조작"
-              aria-describedby="rally-kbd-help-fs"
-              aria-owns={keyboardOrder()
-                .map((id) => (id.startsWith("rally-zoom") ? `${id}-fs` : `rally-marker-${id}`))
-                .join(" ")}
-              className="pointer-events-none absolute inset-0"
-            />
-            <span id="rally-kbd-help-fs" className="sr-only">
-              방향키로 이동하고 엔터로 실행합니다
-            </span>
-            <MapZoomButtons
-              zoom={zoom}
-              onZoom={zoomBy}
-              topOffset="top-20"
-              itemProps={(id) => ({ id: `${id}-fs`, tabIndex: focusedId === id ? 0 : -1 })}
-            />
-          </>
-        ) : null}
-
-        {/* 페이지가 없으므로 텍스트 버튼을 둘 자리가 있다(§27.14.3 추가 3) */}
-        <button
-          type="button"
-          onClick={() => {
-            const maps = window.naver?.maps;
-            const map = mapRef.current;
-            if (maps !== undefined && map !== null) {
-              fit(maps, map);
-              setZoom(map.getZoom());
-            }
-          }}
-          disabled={!moved}
-          className={`${CONTROL_CLASS} absolute z-20`}
-          style={{
-            bottom: "max(56px, calc(env(safe-area-inset-bottom) + 56px))",
-            left: "max(12px, env(safe-area-inset-left))",
-          }}
-        >
-          처음 위치로
-        </button>
-
-        {/* 어포던스 문구 — 페이지와 **같은 문장**을 쓴다(§25 문안 재사용) */}
-        <p
-          className="rounded-card absolute inset-x-3 z-20 mx-auto max-w-[480px] bg-bg/95 px-3 py-2 text-center text-caption font-semibold text-ink"
-          style={{ bottom: "max(12px, env(safe-area-inset-bottom))" }}
-        >
-          ※ 지도의 번호를 누르면 각 지점 설명이 나옵니다.
-        </p>
-
-        {selectedFeature !== null ? (
-          <MapPopupPanel
-            feature={selectedFeature}
-            index={selectedIndex}
-            side={popupSide}
-            onClose={() => {
-              const openId = selectedRef.current;
-              selectFeature(null);
-              if (openId !== null) focusItem(openId);
+          <button
+            type="button"
+            onClick={() => {
+              const maps = window.naver?.maps;
+              const map = mapRef.current;
+              if (maps !== undefined && map !== null) {
+                fit(maps, map);
+                setZoom(map.getZoom());
+              }
             }}
-          />
-        ) : null}
+            disabled={!moved}
+            className={CONTROL_CLASS}
+          >
+            처음 위치로
+          </button>
+          <button
+            type="button"
+            ref={closeButtonRef}
+            onClick={() => dialogRef.current?.close()}
+            className={CONTROL_CLASS}
+          >
+            닫기
+          </button>
+        </div>
+
+        {/* 지도 — `flex-1`. **`min-h-0` 을 빼지 마라**: flex 자식의 기본 `min-height:auto` 때문에
+            지도가 줄어들지 못해 하단 바를 밀어내고 `100dvh` 를 넘긴다. */}
+        <div className="relative min-h-0 flex-1 overflow-hidden">
+          <div ref={mountRef} className="size-full" style={{ touchAction: "none" }} />
+
+          {open ? (
+            <>
+              <div
+                role="group"
+                aria-label="지도 조작"
+                aria-describedby="rally-kbd-help-fs"
+                aria-owns={keyboardOrder()
+                  .map((id) => (id.startsWith("rally-zoom") ? `${id}-fs` : `rally-marker-${id}`))
+                  .join(" ")}
+                className="pointer-events-none absolute inset-0"
+              />
+              <span id="rally-kbd-help-fs" className="sr-only">
+                방향키로 이동하고 엔터로 실행합니다
+              </span>
+              {/* 상단 바가 지도 밖으로 나갔으므로 `+`/`−` 는 **지도 영역 우상단**이다 —
+                  페이지 안 지도와 같은 `top-3`. 종전 `top-20` 은 `닫기` 오버레이를 피하던 값이라 무효다. */}
+              <MapZoomButtons
+                zoom={zoom}
+                onZoom={zoomBy}
+                itemProps={(id) => ({ id: `${id}-fs`, tabIndex: focusedId === id ? 0 : -1 })}
+              />
+            </>
+          ) : null}
+
+          {selectedFeature !== null ? (
+            <MapPopupPanel
+              feature={selectedFeature}
+              index={selectedIndex}
+              side={popupSide}
+              onClose={() => {
+                const openId = selectedRef.current;
+                selectFeature(null);
+                if (openId !== null) focusItem(openId);
+              }}
+            />
+          ) : null}
+        </div>
+
+        {/*
+          하단 바 — **오버레이가 아니라 지도 밖**이다(§31.4 추가 5 개정).
+
+          ★ **`LEGEND_KEY` 전문 그대로**(문안 게이트 74 · 요구 49·156). **모달용 축약판을 만들지 마라.**
+          **왜 이 한 줄만인가**(§31.2): 팝업 본문은 `feature.legend` **파생**이라 범례 5행 전부가
+          팝업으로 도달 가능한데, **`LEGEND_KEY` 만 소유 feature 가 없어 어느 팝업에도 나오지 않는다.**
+          그것이 없으면 **④ 옅은 면 = 근사**와 **⑤ 점선 도트 ≠ ① 꽉 찬 도트**를 말하는 문자가
+          이 화면에 하나도 없어 **§2 위반**이 된다.
+          ⚠ **범례 5행을 여기 넣지 마라** — 360px 에서 약 575px 이라 지도가 이름값을 잃는다(§31.3 안 B 폐기).
+
+          어포던스 문구는 **키 줄 바로 아래**에 `mt-1` 로 붙인다 — **두 줄을 한 덩어리로 읽게 한다.**
+          그 문구가 *"5행은 번호를 눌러 본다"* 는 경로를 지시하므로 §0.4 은폐가 성립하지 않는다.
+          **접지 마라 · 흐리게 하지 마라 · `sr-only` 로 돌리지 마라.**
+        */}
+        <div
+          className="shrink-0 px-3 pt-2"
+          style={{
+            paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+            paddingLeft: "max(12px, env(safe-area-inset-left))",
+            paddingRight: "max(12px, env(safe-area-inset-right))",
+          }}
+        >
+          <p className="break-keep text-caption text-ink">{LEGEND_KEY}</p>
+          <p className="mt-1 break-keep text-caption font-semibold text-ink">
+            ※ 지도의 번호를 누르면 각 지점 설명이 나옵니다.
+          </p>
+        </div>
       </div>
     </dialog>
   );
