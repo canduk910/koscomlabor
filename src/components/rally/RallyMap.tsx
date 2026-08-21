@@ -615,6 +615,66 @@ function drawFeature(
   }
 }
 
+/**
+ * 선택된 항목의 **헤일로**(강조 층) — 도형 *아래*에 깔리는 별도 오버레이다(2026-08-21).
+ *
+ * ★ **도형 자신의 스타일을 바꾸지 않는 이유.** 밴드·원의 선굵기·채움·선종은 `confidence` 에서만
+ * 파생된다(§20.20.3). 선택했다고 그 값을 흔들면 **"확신도가 올라갔다"로 읽힌다** —
+ * 이 지도에서 굵기와 채움은 장식이 아니라 **뜻을 가진 축**이다.
+ * 헤일로는 별개 층이라 두 축이 섞이지 않고, 선택을 풀면 원래 도형이 **손대지 않은 채** 남는다.
+ *
+ * **새 색을 만들지 않는다**(§2 3종 상한). 항목 자신의 `tone` 색을 그대로 쓰고 구분은
+ * **굵기·불투명도**가 진다. 그리고 헤일로는 **항상 팝업과 함께** 뜨므로 색·형태만으로
+ * 뜻을 전달하지 않는다(§2 — 의미는 팝업의 문자가 진다).
+ *
+ * **점·핀은 헤일로를 만들지 않는다.** 라벨 마커가 선택 시 이미 3px `INK` 링을 두르고(`labelIconContent`),
+ * 미터 반경 원은 줌에 따라 크기가 뒤집혀 **축소하면 도트보다 작아진다.**
+ * ⚠ 여기서 `zIndex` 를 casing 위로 올리지 마라 — 헤일로가 흰 casing 을 덮으면
+ * **어두운 타일에서 도형 경계 대비를 만드는 두 겹 구조가 무너진다**(§20.4.2).
+ */
+function createHighlight(
+  maps: NaverMapsNamespace,
+  map: NaverMap,
+  feature: MapFeature,
+): NaverOverlay[] {
+  const color = toneColor(feature.tone);
+  /** casing(`z - 1`)보다 **한 단 더 아래**. 두 겹 구조를 덮지 않는다 */
+  const z = featureZIndex(feature) - 2;
+  const style = {
+    map,
+    strokeColor: color,
+    strokeWeight: 14,
+    strokeOpacity: 0.3,
+    strokeStyle: "solid" as const,
+    fillColor: color,
+    fillOpacity: 0.18,
+    clickable: false,
+    zIndex: z,
+  };
+
+  switch (feature.kind) {
+    case "dot":
+    case "pin":
+      return [];
+    case "circle":
+      return [
+        new maps.Circle({
+          ...style,
+          center: new maps.LatLng(feature.center.lat, feature.center.lng),
+          radius: feature.radiusMeters,
+        }),
+      ];
+    case "outline":
+    case "band":
+      return [
+        new maps.Polygon({
+          ...style,
+          paths: [feature.polygon.map(([lat, lng]) => new maps.LatLng(lat, lng))],
+        }),
+      ];
+  }
+}
+
 /** 변하지 않는 외부 상태의 구독자 — `useSyncExternalStore` 계약을 만족시키는 no-op */
 const subscribeNever = (): (() => void) => () => {};
 
@@ -1029,8 +1089,11 @@ function MapPopupPanel({
 }
 
 /** 지도 안 컨트롤 공통 — **반투명 금지**(지도 배경이 매 프레임 바뀌어 대비를 보장할 수 없다, §27.4.2) */
-const MAP_BUTTON_CLASS =
-  "flex size-11 items-center justify-center border-2 border-border-strong bg-bg text-primary disabled:text-ink-muted";
+/** 지도 안 버튼의 **공통 외형** — 크기는 포함하지 않는다(아이콘 버튼과 글자 버튼의 폭이 다르다) */
+const MAP_BUTTON_BASE =
+  "flex items-center justify-center border-2 border-border-strong bg-bg text-primary disabled:text-ink-muted";
+/** 아이콘 1글자 버튼(`+`·`−`·`↺`) — 정사각 44px */
+const MAP_BUTTON_CLASS = `${MAP_BUTTON_BASE} size-11`;
 
 /**
  * 지도 안 **거리뷰 토글**(사용자 지시 2026-08-21 · 디지털온누리 가이드 선례).
@@ -1059,9 +1122,16 @@ function MapStreetToggle({
         aria-pressed={on}
         aria-label={on ? "거리뷰 모드 끄기" : "거리뷰 모드 켜기"}
         onClick={onToggle}
-        className={`${MAP_BUTTON_CLASS} ${
+        /*
+         * ⚠ **`MAP_BUTTON_CLASS`(정사각 `size-11`)를 쓰지 마라** — 2026-08-21 실측 결함.
+         * 폭이 44px 로 못박혀 테두리·패딩을 뺀 **가용 폭이 24px** 이 되고,
+         * 13px `거리뷰`(약 39px)가 **`거리`/`뷰` 두 줄로 깨진다.**
+         * 높이 44px(터치 타깃)는 `h-11` 이 지키고, 폭은 글자가 정한다(`min-w-11` 이 하한).
+         * `whitespace-nowrap` 은 폰트가 바뀌어도 줄바꿈이 재발하지 않게 하는 보험이다.
+         */
+        className={`${MAP_BUTTON_BASE} ${
           on ? "bg-primary text-white" : ""
-        } px-2 text-[13px] font-bold`}
+        } h-11 min-w-11 whitespace-nowrap px-3 text-[13px] font-bold`}
         {...itemProps?.("rally-street-toggle")}
       >
         거리뷰
@@ -1266,6 +1336,8 @@ export function RallyMap({ clientId }: { clientId: string }) {
   const mapRef = useRef<NaverMap | null>(null);
   const panoRef = useRef<NaverPanorama | null>(null);
   const overlaysRef = useRef<NaverOverlay[]>([]);
+  /** 선택 강조 헤일로 — 살아 있는 값은 0개 아니면 1개다(`createHighlight`) */
+  const highlightRef = useRef<NaverOverlay[]>([]);
   const myOverlaysRef = useRef<NaverOverlay[]>([]);
   const labelsRef = useRef<LabelEntry[]>([]);
   /** 겹침 때문에 접혀 있는 라벨 — 히스테리시스 판정에 쓴다(§21.9.3) */
@@ -1576,6 +1648,34 @@ export function RallyMap({ clientId }: { clientId: string }) {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [focusItem, selectFeature, selected]);
+
+  /*
+   * **선택된 항목의 도형을 강조한다**(2026-08-21 · 요구 "지도 위의 배너나 번호를 누를 때
+   * 해당 구역이 하이라이트되게").
+   *
+   * 종전에는 선택이 **라벨 배지의 링**만 바꿨다 — 배지는 도형 밖에 떠 있어서
+   * *"④ 를 눌렀는데 어느 띠가 ④ 인지"* 가 여전히 안 보였다. 헤일로가 그 연결을 만든다.
+   *
+   * **매번 새로 만들고 지운다**(도형을 미리 저장해 두고 `setOptions` 로 토글하지 않는다):
+   * 선택은 한 번에 **하나뿐**이라 살아 있는 오버레이가 0개 아니면 1개이고,
+   * 그래야 언마운트·재생성 경로에서 **떠도는 참조가 남지 않는다.**
+   * ⚠ 정리 함수에서 `setMap(null)` 을 빠뜨리지 마라 — 네이버 오버레이는 지도에서 직접 떼야 사라진다.
+   * ⚠ 점·핀은 `createHighlight` 가 빈 배열을 준다(근거는 그 주석). **여기서 특례를 만들지 마라.**
+   */
+  useEffect(() => {
+    const maps = window.naver?.maps;
+    const map = mapRef.current;
+    const clear = () => {
+      for (const overlay of highlightRef.current) overlay.setMap(null);
+      highlightRef.current = [];
+    };
+    clear();
+    if (maps === undefined || map === null || selected === null) return clear;
+    const feature = MAP_FEATURES[selected.index];
+    if (feature === undefined) return clear;
+    highlightRef.current = createHighlight(maps, map, feature);
+    return clear;
+  }, [selected, status]);
 
   /*
    * 줌·팬 중에도 팝업은 **열린 채 유지**한다(박스 고정이라 흔들리지 않는다).
@@ -2542,6 +2642,8 @@ function RallyFullscreenMap({
   const mountRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<NaverMap | null>(null);
   const overlaysRef = useRef<NaverOverlay[]>([]);
+  /** 선택 강조 헤일로 — 살아 있는 값은 0개 아니면 1개다(`createHighlight`) */
+  const highlightRef = useRef<NaverOverlay[]>([]);
   const labelsRef = useRef<LabelEntry[]>([]);
   const foldedRef = useRef<Set<string>>(new Set());
   const selectedRef = useRef<string | null>(null);
@@ -2775,6 +2877,36 @@ function RallyFullscreenMap({
       observer.disconnect();
     };
   }, [fit, open, syncLabelWidth]);
+
+  /*
+   * **선택된 항목의 도형을 강조한다**(2026-08-21 · 요구 "지도 위의 배너나 번호를 누를 때
+   * 해당 구역이 하이라이트되게").
+   *
+   * 종전에는 선택이 **라벨 배지의 링**만 바꿨다 — 배지는 도형 밖에 떠 있어서
+   * *"④ 를 눌렀는데 어느 띠가 ④ 인지"* 가 여전히 안 보였다. 헤일로가 그 연결을 만든다.
+   *
+   * **매번 새로 만들고 지운다**(도형을 미리 저장해 두고 `setOptions` 로 토글하지 않는다):
+   * 선택은 한 번에 **하나뿐**이라 살아 있는 오버레이가 0개 아니면 1개이고,
+   * 그래야 언마운트·재생성 경로에서 **떠도는 참조가 남지 않는다.**
+   * ⚠ 정리 함수에서 `setMap(null)` 을 빠뜨리지 마라 — 네이버 오버레이는 지도에서 직접 떼야 사라진다.
+   * ⚠ 점·핀은 `createHighlight` 가 빈 배열을 준다(근거는 그 주석). **여기서 특례를 만들지 마라.**
+   */
+  useEffect(() => {
+    const maps = window.naver?.maps;
+    const map = mapRef.current;
+    const clear = () => {
+      for (const overlay of highlightRef.current) overlay.setMap(null);
+      highlightRef.current = [];
+    };
+    clear();
+    if (maps === undefined || map === null || selected === null) return clear;
+    const feature = MAP_FEATURES[selected.index];
+    if (feature === undefined) return clear;
+    highlightRef.current = createHighlight(maps, map, feature);
+    return clear;
+    /* `status` 를 넣지 마라 — 이 컴포넌트의 바깥 스코프 값이라 의존성으로 성립하지 않는다.
+       모달은 `open` 에서 지도를 만들고 **이 효과가 소스 순서상 그 뒤**라 `mapRef` 가 이미 차 있다. */
+  }, [open, selected]);
 
   /*
    * 팝업 마커 이탈 판정은 **`dragend` 후 1회**다(§27.7.2). 드래그 중 상시 판정하면
