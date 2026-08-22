@@ -20,8 +20,10 @@ import { useSyncExternalStore } from "react";
  *
  * ## 값의 범위
  *
- * 기본 100%(본문 18px — 설계 기준값). **90~130%.**
- * 하한을 90 으로 둔 것은 조합원 중 다수가 야외에서 작은 화면으로 본다는 전제 때문이고,
+ * 기본 100%(본문 18px — 설계 기준값). **75~130%.**
+ * 하한은 처음 90 이었고 사용자 요청으로 **75** 로 내렸다(2026-08-22 — *"최저를 더 작게"*).
+ * 75% 면 본문이 13.5px 다 — `--text-body` 의 *"18px 하한"* 은 **기본값의 하한**이지
+ * 사용자가 스스로 줄이는 것까지 막는 규칙이 아니다(WCAG 가 막는 것은 **확대를 못 하게** 하는 쪽이다).
  * 상한 130 은 **`flex-wrap` 이 이미 검증된 200% 확대의 절반 수준**이라 레이아웃이 견딘다.
  *
  * ⚠ **브라우저 자체 확대와 곱해진다** — 사용자가 브라우저에서 200% 를 걸고 여기서 130% 를 주면
@@ -30,7 +32,7 @@ import { useSyncExternalStore } from "react";
 
 /** localStorage 키 — 값은 퍼센트 정수 문자열. `layout.tsx` 의 선반영 스크립트와 **같은 키를 쓴다** */
 const STORAGE_KEY = "koscomlabor:font-scale";
-const MIN = 90;
+const MIN = 75;
 const MAX = 130;
 const STEP = 5;
 const DEFAULT = 100;

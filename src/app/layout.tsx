@@ -30,7 +30,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         dangerouslySetInnerHTML={{
           __html:
             "try{var v=localStorage.getItem('koscomlabor:font-scale');" +
-            "if(v){v=Math.min(130,Math.max(90,parseInt(v,10)||100));" +
+            "if(v){v=Math.min(130,Math.max(75,parseInt(v,10)||100));" +
             "document.documentElement.style.fontSize=v+'%'}}catch(e){}",
         }}
       />

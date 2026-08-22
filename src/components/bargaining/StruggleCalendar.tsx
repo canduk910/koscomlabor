@@ -99,8 +99,16 @@ const CARD_BASE = "rounded-panel bg-bg shadow-card p-3 md:p-6";
  * 월 경계 `9/1` 표기(슬래시 뒤가 줄바꿈 기회)와 `오늘`(한글은 글자 사이에서 끊긴다)도
  * 같은 위험을 갖기에 라벨별로 붙이지 않고 **공통 클래스 한 곳**에서 처리한다.
  */
+/*
+ * 셀 — 숫자 위, `D-n`/`오늘` 아래.
+ *
+ * ★ **`gap-1`(4px)** — 종전 `gap-0.5`(2px). 모바일 셀 세로 예산 실측이 문제였다:
+ * 박스 44px 에 내용 35px(peak 은 37px) → **상하 여백이 4.5px, peak 은 3.5px** 였다.
+ * *"포인트 박스에 텍스트가 꽉 들어찬 느낌"*(사용자 지적)의 정체가 이 숫자다.
+ * md+ 는 같은 내용이 56px 박스라 10.5px 였다 — **모바일만의 문제**였다.
+ */
 const CELL_BASE =
-  "font-display flex w-full flex-col items-center justify-center gap-0.5 rounded-badge leading-none whitespace-nowrap";
+  "font-display flex w-full flex-col items-center justify-center gap-1 rounded-badge leading-none whitespace-nowrap";
 
 /** size 별 치수·배치 (§19.1.1). 여기 없는 것은 전부 두 size 가 공유한다 */
 const SIZE_PRESET: Record<
@@ -117,7 +125,7 @@ const SIZE_PRESET: Record<
 > = {
   full: {
     card: "",
-    cell: "h-14 md:h-18",
+    cell: "h-16 md:h-20",
     eventName: "text-lead text-ink",
     countdown: "font-display text-hero md:text-hero-lg mt-1",
     headlineGroup: "",
@@ -138,7 +146,7 @@ const SIZE_PRESET: Record<
      * 여유 17.9 → 13.3px. **재측정 트리거**다(§19.4.1)
      */
     card: "md:grid md:grid-cols-[12rem_1fr] md:grid-rows-[auto_1fr] md:gap-x-6 md:items-start",
-    cell: "h-11 md:h-14",
+    cell: "h-14 md:h-16",
     // min-w-0 · shrink-0: 일정명이 길어지면 2줄로 흐르고 D-n 은 줄지 않는다(§19.4.3)
     eventName: "text-caption text-ink min-w-0",
     countdown: "font-display text-title md:text-h1 mt-1 shrink-0",
@@ -158,9 +166,20 @@ const CELL_EVENT_PEAK = "bg-urgent-strong text-lead font-bold text-white";
 const CELL_PLAIN = "text-body text-ink";
 
 /** 2번째 줄 라벨 — 15px 는 §16.3 하한이라 더 줄일 수 없다. 3글자 이상 라벨 금지(§18.6.1) */
-const LABEL_TODAY = "text-caption font-medium text-primary";
-const LABEL_MAJOR = "text-caption font-medium text-white";
-const LABEL_PEAK = "text-caption font-semibold text-white";
+/*
+ * `D-n`·`오늘` 라벨 — **13px**(종전 `text-caption` 15px).
+ *
+ * ⚠ **`--text-caption` 의 *"15px 하한"* 을 어긴 것이 아니라 적용 대상이 다르다.**
+ * 그 하한은 **보조 «문장»** 의 것이고, 여기는 **숫자 배지 안의 라벨**이다.
+ * 가로 예산이 근거다: 360px 에서 셀 배지 폭이 **약 39px** 인데 `D-13` 이 15px 로 **34px** —
+ * 좌우 2.5px 씩밖에 안 남아 글자가 테두리에 붙었다. 13px 면 약 29px 로 5px 씩 남는다.
+ * **전문은 `sr-only` 가 그대로 읽는다** — 스크린리더 사용자에게 줄어드는 정보는 0 이다.
+ * `rem` 이라 **글자 크기 슬라이더를 따라 함께 커진다.**
+ */
+const LABEL_SIZE = "text-[0.8125rem] leading-none";
+const LABEL_TODAY = `${LABEL_SIZE} font-medium text-primary`;
+const LABEL_MAJOR = `${LABEL_SIZE} font-medium text-white`;
+const LABEL_PEAK = `${LABEL_SIZE} font-semibold text-white`;
 
 /**
  * 격자 안 숫자 표기. 매월 1일은 `9/1` 형식 — 격자에서 월 전환을 알리는 유일한 표지라
