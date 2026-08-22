@@ -101,7 +101,10 @@
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);  /* 클래스: ease-out-soft */
 
   /* ---- 간격·레이아웃 (§16.7) ---- */
-  --spacing-touch: 2.75rem;      /* 44px 최소 터치 대상 */
+  /* ★ **`rem` 이 아니라 `px` 다**(2026-08-22). 글자 크기 슬라이더가 루트 `font-size` 를 바꾸는데,
+     이 값이 `rem` 이면 75% 에서 **44px → 33px 로 줄어든다.** 터치 대상은 손가락 크기의 문제라
+     글자 크기를 따라가면 안 된다. **되돌리지 마라.** (`min-height` 이므로 글자가 커지면 늘어난다) */
+  --spacing-touch: 44px;         /* 44px 최소 터치 대상 */
   --spacing-section: 4.5rem;     /* 72px 대섹션 간(모바일) — 신규 */
   --spacing-section-lg: 7.5rem;  /* 120px 대섹션 간(md+) — 신규 */
   --container-prose: 42rem;      /* 672px 본문 줄 길이 상한(한글 약 37자) */
@@ -110,7 +113,12 @@
 }
 
 html {
-  font-size: 100%;
+  /* ★ **기본 75%**(사용자 지시 2026-08-22 — *"폰트크기는 슬라이더 좌측끝을 기본값으로"*).
+     `rem` 토큰이 전부라 **글자·여백·제목·모서리가 함께** 75% 로 내려간다 — 이것이 «세련되게» 의 본체다.
+     ⚠ **`FontScaleControl.DEFAULT` 와 반드시 같은 값이어야 한다.** 어긋나면 첫 방문자가
+     보는 크기와 슬라이더 손잡이 위치가 달라진다.
+     ⚠ 터치 대상(`--spacing-touch`)은 **px 라 여기 영향을 받지 않는다** — 위 주석 참조. */
+  font-size: 75%;
   color: var(--color-ink);
   background: var(--color-bg);
 }

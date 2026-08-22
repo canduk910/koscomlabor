@@ -57,7 +57,7 @@ export function WayfindingBlock({ className = "" }: { className?: string }) {
         href={WAYFINDING.url}
         target="_blank"
         rel="noopener noreferrer"
-        className="rounded-card ease-out-soft group block border-2 border-border-strong bg-bg p-4 transition-colors duration-150 hover:outline-2 hover:outline-primary focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
+        className="rounded-card ease-out-soft group block border border-border-strong bg-bg p-4 transition-colors duration-150 hover:outline-2 hover:outline-primary focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
       >
         {/* 카드 어디에 hover 해도 제목에 밑줄이 뜬다 — 온누리 카드와 같은 규칙(§16.9.7) */}
         <span className="block break-keep text-body font-bold text-primary group-hover:underline">
@@ -65,7 +65,7 @@ export function WayfindingBlock({ className = "" }: { className?: string }) {
           <ExternalLinkIcon className="ml-1 inline size-4 align-[-2px]" />
         </span>
         <span className="mt-1 block break-keep text-caption text-ink">
-          도착지는 KDB산업은행입니다. 출발지를 입력하면 경로가 나옵니다.
+          도착지는 국회의사당역 3번 출구입니다. 출발지를 입력하면 경로가 나옵니다.
         </span>
         {/* URL 전체를 노출하지 않는다 — 네이버 내부 인코딩이라 판독 가치가 0이다(§24.6) */}
         <span className="mt-1.5 block text-caption text-ink-muted">

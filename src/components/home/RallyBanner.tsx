@@ -48,7 +48,7 @@ export function RallyBanner({
         hero
           ? "rounded-panel bg-primary shadow-hero p-5 md:rounded-panel-lg md:p-12"
           : /* past 는 시각적 강도만 낮춘다. border-border-soft(1.24)는 UI 경계로 3:1 미달이라 금지(§20.6) */
-            `rounded-panel border-2 bg-bg p-5 md:p-6 ${past ? "border-border-strong" : "border-primary"}`,
+            `rounded-panel border bg-bg p-5 md:p-6 ${past ? "border-border-strong" : "border-primary"}`,
         className ?? "",
       ]
         .filter((c) => c)
@@ -79,11 +79,15 @@ export function RallyBanner({
       <p
         className={
           hero
-            ? "font-display text-hero text-balance text-white md:text-hero-lg"
+            ? /* ★ **`break-keep` 을 빼지 마라**(2026-08-22 — 사용자 화면에서 잡힌 결함).
+                 없으면 한글이 **음절 단위로 잘려** `8/28(금) 저녁 결` / `의대회 참석 안내` 처럼
+                 낱말 중간에서 줄이 바뀐다. `text-balance` 는 줄 길이를 고르게 할 뿐
+                 **어디서 끊을지는 정하지 않는다** — 둘은 다른 축이고 **둘 다 필요하다.** */
+              "font-display text-hero text-balance break-keep text-white md:text-hero-lg"
             : "text-h2 text-balance break-keep text-ink"
         }
       >
-        8/28(금) 저녁 결의대회 참석 안내
+        8/28(금) 18:30 결의대회 참석안내
       </p>
       {/* 360px 에서 2행이 설계값이다 — nowrap 을 넣지 마라(§20.2.4) */}
       <p

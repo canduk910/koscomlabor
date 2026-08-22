@@ -1097,7 +1097,8 @@ const POPUP_BUTTON_CLASS =
 const MAP_BUTTON_BASE =
   "flex items-center justify-center border-2 border-border-strong bg-bg text-primary disabled:text-ink-muted";
 /** 아이콘 1글자 버튼(`+`·`−`·`↺`) — 정사각 44px */
-const MAP_BUTTON_CLASS = `${MAP_BUTTON_BASE} size-11`;
+/* `size-[44px]`: **`size-11`(2.75rem)이 아니다** — 글자 크기 75% 에서 33px 로 줄어든다 */
+const MAP_BUTTON_CLASS = `${MAP_BUTTON_BASE} size-[44px]`;
 
 /**
  * 지도 안 **거리뷰 토글**(사용자 지시 2026-08-21 · 디지털온누리 가이드 선례).
@@ -1140,7 +1141,7 @@ function MapStreetToggle({
          */
         className={`${MAP_BUTTON_BASE} ${
           on ? "bg-primary text-white" : ""
-        } h-11 min-w-11 whitespace-nowrap px-3 text-[13px] font-bold`}
+        } h-[44px] min-w-[44px] whitespace-nowrap px-3 text-[13px] font-bold`}
       >
         거리뷰
       </button>
@@ -1647,7 +1648,7 @@ function RoadviewSheet({
           type="button"
           onClick={onClose}
           aria-label="로드뷰 닫기"
-          className="ease-out-soft flex size-11 shrink-0 items-center justify-center rounded-full border-2 border-primary bg-bg text-primary transition-colors duration-150 hover:bg-primary-tint focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
+          className="ease-out-soft flex size-[44px] shrink-0 items-center justify-center rounded-full border-2 border-primary bg-bg text-primary transition-colors duration-150 hover:bg-primary-tint focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
         >
           <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
             <path
