@@ -50,7 +50,7 @@ export function QrAttendanceCard() {
 
       {/* 이미지에 **없는** 것만. 순서는 조합원이 하는 순서다 — 받는다 → 켠다 → 끝나도 남는다 */}
       <p className="mt-3 break-keep text-caption text-ink">
-        ※ 출석 QR은 손피켓에 넣어 배포할 예정입니다. (주최측 안내자료 기준)
+        ※ 출석 QR은 손피켓에 넣어 배포합니다. (주최측 안내자료 기준)
       </p>
       <p className="mt-2 break-keep text-caption text-ink">
         ※ 위치 접근 요청이 표시되면 동의해 주세요.

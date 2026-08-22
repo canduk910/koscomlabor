@@ -77,8 +77,7 @@ const RESIZE_DEBOUNCE_MS = 150;
 /**
  * 라벨 최대 폭 = 지도 폭의 **70%**(§30.4.5). CSS 변수로 내려 리사이즈 시 마커 재생성 없이 갱신한다.
  *
- * 0.60 → 0.70. 0.60 의 근거는 *"`③ 대오 1 (범위는 근사)`(165.6px)가 2줄로 깨지지 않게"* 였고
- * **바닥값이지 상한 근거가 아니었다.** 그 라벨은 사라졌고 새 병목은 **④ `코스콤지부 3구역(예정)` = 188.9px** 다.
+ * 0.60 → 0.70. 0.60 은 지금은 사라진 라벨을 기준으로 잡은 **바닥값이지 상한 근거가 아니었다.**
  * 320px 뷰포트에서 `0.60 × 288 = 172.8px` 라 **2줄로 깨지고 pill 높이가 34 → 약 47px 로 늘어
  * 하단 여백 계산이 무너진다.** 0.70 이면 320px 에서 201.6px, 폴더블 280px 에서도 173.6px 다.
  *
@@ -252,7 +251,6 @@ const BAND_STYLE: Record<
     /*
      * **`" (범위는 근사)"` 를 되살리지 마라**(§22.0-2 · 검증 7회차 승인 · 요구 156).
      * 접미어가 붙으면 라벨이 길어져 pill 이 인접 도형과 겹치고, 확신도는 이미 **4개 채널**이 진다:
-     * **점선 테두리 · 옅은 면 · 라벨의 `(예정)` · 범례 ④ 행(`근사 구간이라 실제 경계와 다를 수 있습니다`)**.
      * 그중 **2개가 문자다** — §2 색·형태 단독 의존 금지가 이미 충족돼 있다.
      */
     labelSuffix: "",
@@ -262,7 +260,7 @@ const BAND_STYLE: Record<
   },
 };
 
-/** 겹칠 때 중요한 것이 위에 온다(§20.20.1): 랜드마크 → 예정 원 → 밴드 → 도트 → 내 위치 */
+
 function featureZIndex(feature: MapFeature): number {
   switch (feature.kind) {
     case "outline":
@@ -1037,14 +1035,14 @@ function MapPopupPanel({
     <div
       ref={panelRef}
       tabIndex={-1}
-      className={`rounded-card shadow-card absolute inset-x-4 z-20 mx-auto max-w-[480px] border-2 border-border-strong bg-bg p-3.5 focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2 ${
+      className={`rounded-card shadow-card absolute inset-x-4 z-20 mx-auto max-w-[480px] border-2 border-border-strong bg-bg p-3 focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2 ${
         side === "top" ? "top-4" : "bottom-4"
       }`}
     >
-      <p className="flex items-start gap-2 text-[17px] font-bold text-ink">
+      <p className="flex items-start gap-2 text-[16px] font-bold leading-snug text-ink">
         {/* 팝업↔지도 대응의 절반을 이 배지가 진다 — 빼지 마라(§25.6.2) */}
         <span
-          className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full text-[15px] font-bold text-bg"
+          className="mt-px inline-flex size-5 shrink-0 items-center justify-center rounded-full text-[13px] font-bold text-bg"
           style={{ background: toneColor(feature.tone) }}
         >
           {circledNumber(index)}
@@ -1053,7 +1051,7 @@ function MapPopupPanel({
       </p>
       {/* 본문은 **범례에서 파생**한다. 별도 문자열 상수를 만들지 마라 —
           따로 두면 언젠가 한쪽만 고쳐진다(요구 88) */}
-      <p className="mt-2 break-keep break-words text-caption leading-[1.6] text-ink">
+      <p className="mt-1.5 break-keep break-words text-caption leading-[1.55] text-ink">
         {feature.legend}
       </p>
       {/*
@@ -1065,17 +1063,17 @@ function MapPopupPanel({
         ⚠ **`onRoadview` 가 `null` 이면 렌더하지 않는다** — 파노라마 모듈이 없을 때
         누르면 아무 일도 안 하는 버튼을 두지 않는다(§0.4 인접 — 죽은 어포던스).
       */}
-      <div className="mt-3 flex flex-wrap justify-end gap-2">
+      <div className="mt-2.5 flex flex-wrap justify-end gap-2">
         {onRoadview !== null ? (
           <button
             type="button"
             onClick={() => onRoadview(feature)}
-            className={CONTROL_CLASS}
+            className={POPUP_BUTTON_CLASS}
           >
             로드뷰 보기
           </button>
         ) : null}
-        <button type="button" onClick={onClose} className={CONTROL_CLASS}>
+        <button type="button" onClick={onClose} className={POPUP_BUTTON_CLASS}>
           닫기
         </button>
       </div>
@@ -1085,6 +1083,17 @@ function MapPopupPanel({
 
 /** 지도 안 컨트롤 공통 — **반투명 금지**(지도 배경이 매 프레임 바뀌어 대비를 보장할 수 없다, §27.4.2) */
 /** 지도 안 버튼의 **공통 외형** — 크기는 포함하지 않는다(아이콘 버튼과 글자 버튼의 폭이 다르다) */
+/**
+ * 팝업 안 버튼 — `CONTROL_CLASS` 의 **좁은 면 판**(사용자 지시 2026-08-22 *"팝업이 불필요하게 너무 커"*).
+ *
+ * 지도 위 팝업은 폭이 박스에 묶여 있어 컨트롤 행과 예산이 다르다. 줄인 것은 **글자(18→15px)와
+ * 좌우 여백(px-5→px-4)** 뿐이다.
+ * ⚠ **`min-h-touch`(44px)를 줄이지 마라** — 터치 대상 하한이고, 팝업 버튼은 장갑 낀 손으로
+ * 야외에서 눌린다. 더 작아 보이게 하려면 **높이가 아니라 글자·여백**을 건드려라.
+ */
+const POPUP_BUTTON_CLASS =
+  "ease-out-soft inline-flex min-h-touch shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full border-2 border-primary bg-bg px-4 text-caption font-semibold text-primary transition-colors duration-150 hover:bg-primary-tint focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2";
+
 const MAP_BUTTON_BASE =
   "flex items-center justify-center border-2 border-border-strong bg-bg text-primary disabled:text-ink-muted";
 /** 아이콘 1글자 버튼(`+`·`−`·`↺`) — 정사각 44px */
@@ -3408,11 +3417,10 @@ function RallyMapFallback({ status }: { status: Exclude<MapStatus, "ready"> }) {
       </p>
       <p className="mt-3 break-keep text-body text-ink">집결 장소 — 국회의사당역 3번 출구 KDB산업은행 앞</p>
       {/* 검증 19회차 §19-5 확정본(요구 159). `(위치 확인 중)` 은 **상태가 끝나 삭제**했고
-          `(배정 예정)` 은 **남긴다**(요구 160 B 유형 — 배치도 원문).
           ⚠ 옛 문구(`코스콤지부 — 더샵아일랜드파크 앞 의사당대로` + `약 220~340 m`)를 되살리지 마라 —
           그 자리는 새 배치도 기준 **2구역**이다. `더샵아일랜드파크` 는 **금지어**다(요구 163-2).
           ⚠ 거리는 **범위**로만 쓴다(요구 151). 단일 수치(`약 327 m`)·좌표 노출 금지. */}
-      <p className="mt-1 break-keep text-body text-ink">코스콤지부 — 집회 3구역(배정 예정)</p>
+      <p className="mt-1 break-keep text-body text-ink">코스콤지부 — 집회 3구역</p>
       {/*
           파생 근거(요구 188) — 채택 좌표 §23-1 기준
           5번 출구 ↔ 3구역 : 폴리곤 최근접 249 m ~ 최원 꼭짓점 396 m
