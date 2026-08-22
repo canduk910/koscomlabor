@@ -71,6 +71,28 @@ export function HomeTabs({ items, className }: { items: HomeTabItem[]; className
   const hashIndex = items.findIndex((item) => item.id === hash);
   const activeIndex = hashIndex >= 0 ? hashIndex : fallbackIndex;
 
+  /*
+   * ⚠ **딥링크 «자동 스크롤»은 넣었다가 뺐다**(2026-08-22). 다시 시도하기 전에 읽어라.
+   *
+   * 상세 페이지 *"목록으로 돌아가기"*(`/#notices`)로 들어오면 **탭은 올바르게 열리지만
+   * 화면은 페이지 맨 위에 머문다.** 브라우저 기본 앵커 이동이 안 되는 이유는 명확하다 —
+   * 서버는 해시를 모르므로 기본 탭을 그리고, 그 시점에 목표 패널은 `hidden` 이며
+   * **브라우저는 숨은 요소로 스크롤하지 않는다.**
+   *
+   * 그래서 `useEffect` + `scrollIntoView` 로 보완하려 했고 **네 가지를 시도해 전부 실패**했다:
+   *   ① `[items]` 의존 → 첫 커밋에 호출돼 대상이 아직 `hidden`
+   *   ② `[activeIndex, items]` 로 그 탭이 열린 뒤에 호출
+   *   ③ `behavior: "instant"`(이 사이트는 `scroll-behavior: smooth` 라 로드 직후 `smooth` 는 무동작 —
+   *      **이건 실측으로 확인된 사실이다**: 수동 호출에서 `instant` 334px / `smooth` 0px)
+   *   ④ `load` + `requestAnimationFrame` 뒤 호출, 대상도 항상 보이는 **탭 줄**로 변경
+   * 넷 다 `scrollY` 가 0 에 머물렀다. **원인을 특정하지 못했다.**
+   *
+   * **확인하지 못한 코드를 남기지 않는다**는 이유로 제거했다. 지금 동작은
+   * *"탭은 맞게 열리되 화면은 맨 위"* 이고, 이는 **기능적으로 문제가 없다**(조합원은 바로
+   * 그 목록으로 스크롤해 내려가면 된다).
+   * 다시 붙일 사람에게: **`scrollY` 가 실제로 0 이 아닌 값이 되는지 실측으로 확인한 뒤에만** 넣어라.
+   */
+
   const select = (index: number) => {
     const item = items[index];
     if (item === undefined) return;
@@ -103,7 +125,7 @@ export function HomeTabs({ items, className }: { items: HomeTabItem[]; className
         role="tablist"
         aria-label="게시판"
         onKeyDown={onKeyDown}
-        className="border-border-soft flex gap-1 overflow-x-auto border-b"
+        className="border-border-soft flex scroll-mt-[80px] gap-1 overflow-x-auto border-b"
       >
         {items.map((item, index) => {
           const selected = index === activeIndex;
@@ -157,7 +179,15 @@ export function HomeTabs({ items, className }: { items: HomeTabItem[]; className
           /* 패널 자신이 포커스를 받는다 — 탭에서 Tab 키를 누르면 내용으로 들어간다(WAI-ARIA) */
           tabIndex={0}
           hidden={index !== activeIndex}
-          className="scroll-mt-6 pt-6 focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2 md:scroll-mt-8 md:pt-7"
+          /*
+           * `scroll-mt-[80px]` — **헤더가 `sticky` 라서 필요하다**(2026-08-22).
+           * 딥링크(`/#notices` — 상세 페이지 "목록으로 돌아가기")로 들어오면 브라우저가 이 패널을
+           * 뷰포트 맨 위에 붙이는데, **그 자리를 고정 헤더가 덮는다.**
+           * 값은 실측 헤더 높이(75% 기준 67px)에 여유를 더한 것이고 **`px` 다** —
+           * `rem` 이면 글자 크기 슬라이더를 따라 움직여 헤더 높이와 어긋난다.
+           * ⚠ 헤더 패딩·로고 크기를 바꾸면 **이 값을 다시 재라.**
+           */
+          className="scroll-mt-[80px] pt-6 focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2 md:pt-7"
         >
           {item.panel}
         </div>

@@ -24,7 +24,20 @@ import { ROUTES } from "@/lib/routes";
 export function SiteHeader({ asHeading = true }: { asHeading?: boolean }) {
   const LogoTag = asHeading ? "h1" : "p";
   return (
-    <header className="border-t-2 border-primary bg-bg py-3.5 md:py-5">
+    /*
+     * ★ **스크롤해도 붙어 있는다**(사용자 지시 2026-08-22 — 캡처에 표시한 영역).
+     *
+     * `z-[200]` 인 이유(값을 낮추지 마라):
+     *   - 네이버 지도가 만드는 컨트롤·저작권은 **`z-index: 100`** 이다. `z-40` 이면
+     *     **지도 위를 지날 때 헤더가 그 아래로 깔린다**(로드뷰 시트에서 이미 겪은 실패다).
+     *   - 로드뷰 하단 시트는 `z-[300]` 이라 **여전히 헤더보다 위**다 — 그게 맞다.
+     *     시트가 열려 있는 동안은 시트가 주역이다.
+     *   - 전체 화면 지도는 `<dialog showModal()>` 의 **top layer** 라 z-index 와 무관하게 위다.
+     *
+     * `border-b`: 붙어 있을 때 아래 내용과의 경계가 없으면 글자가 헤더로 흘러 들어오는 것처럼 보인다.
+     * ⚠ **배경을 반투명으로 바꾸지 마라** — 뒤 글자가 비쳐 지부명 대비가 무너진다(§0.4 저대비 금지).
+     */
+    <header className="border-b border-border-soft sticky top-0 z-[200] border-t-2 border-t-primary bg-bg py-3.5 md:py-5">
       {/* 로고 ↔ 글자 크기 슬라이더 한 행.
           ⚠ **`flex-wrap` 을 빼지 마라** — 로고 록업이 `whitespace-nowrap` 이라 줄일 수 없고,
           텍스트 확대에서 두 덩어리가 한 줄에 못 들어가면 **가로 스크롤이 난다**(푸터 로고 선례). */}

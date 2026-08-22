@@ -2508,7 +2508,16 @@ export function RallyMap({ clientId }: { clientId: string }) {
         */}
         <div
           ref={boxRef}
-          className="rounded-card relative aspect-[4/5] w-full overflow-hidden md:aspect-[16/9]"
+          /*
+           * ★ **`isolate`(= `isolation: isolate`)를 빼지 마라**(2026-08-22).
+           * 네이버가 마커에 붙이는 `z-index` 는 **1000 대**(라벨 `LABEL_Z_BASE + index`)인데,
+           * `position: relative` 만으로는 **쌓임 맥락이 만들어지지 않아** 그 값이 **문서 최상위에서
+           * 경쟁한다.** 그 결과 **지도 마커 배지가 고정 헤더(z-200) 위로 뚫고 올라왔다**(실측:
+           * ⑥ z=1005 · ⑦ z=1006 이 헤더 사각형과 교차).
+           * `isolate` 는 지도 내부 z 를 이 박스 안에 가둔다 — 팝업(z-20)·컨트롤(z-10)의
+           * **박스 안 상대 순서는 그대로**다.
+           */
+          className="rounded-card relative isolate aspect-[4/5] w-full overflow-hidden md:aspect-[16/9]"
         >
           {/* 마운트 노드에 aria-hidden 을 걸지 마라 — 네이버 로고·저작권 컨트롤에 링크가 들어가고,
               숨겨진 영역 안의 포커스 가능 요소는 WCAG 2.4.3·4.1.2 위반이 된다(§20.9).
@@ -3297,7 +3306,8 @@ function RallyFullscreenMap({
 
         {/* 지도 — `flex-1`. **`min-h-0` 을 빼지 마라**: flex 자식의 기본 `min-height:auto` 때문에
             지도가 줄어들지 못해 하단 바를 밀어내고 `100dvh` 를 넘긴다. */}
-        <div className="relative min-h-0 flex-1 overflow-hidden">
+        {/* `isolate` — 페이지 지도와 같은 이유(마커 z 가 전역으로 새는 것을 막는다) */}
+        <div className="relative isolate min-h-0 flex-1 overflow-hidden">
           <div ref={mountRef} className="size-full" style={{ touchAction: "none" }} />
 
           {open ? (
