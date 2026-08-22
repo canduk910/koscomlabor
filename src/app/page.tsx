@@ -15,8 +15,7 @@ import { HeroPanel } from "@/components/home/HeroPanel";
 import { DeadlineStrip } from "@/components/home/DeadlineStrip";
 import { OnnuriGuideCard } from "@/components/home/OnnuriGuideCard";
 import { RallyBanner } from "@/components/home/RallyBanner";
-import { SectionNav } from "@/components/home/SectionNav";
-import { HomeSection } from "@/components/home/HomeSection";
+import { HomeTabs, type HomeTabItem } from "@/components/home/HomeTabs";
 import { StruggleCalendar } from "@/components/bargaining/StruggleCalendar";
 import { STRUGGLE_SCHEDULE, nextStruggleEvent } from "@/lib/struggleSchedule";
 import { rallyPhase } from "@/lib/rally";
@@ -84,7 +83,7 @@ export default async function Home() {
    * HOME_SECTIONS 에 섹션을 추가하면 컴파일 에러로 누락이 잡힌다.
    * 공지·소식·노동교육은 같은 `PostList` 를 쓴다 — 분류별 시각 규칙 0건.
    */
-  const sectionContent: Record<HomeSectionId, ReactNode> = {
+  const panels: Record<HomeSectionId, ReactNode> = {
     notices: <PostList posts={notices.posts} kind="notice" status={notices.status} />,
     news: <PostList posts={news.posts} kind="news" status={news.status} />,
     education: (
@@ -92,6 +91,24 @@ export default async function Home() {
     ),
     guestbook: <GuestbookPanel />,
   };
+  /*
+   * 탭 라벨에 붙는 **건수** — §0.4 사고(빈 기본 탭이 콘텐츠를 가림) 재발 방지 장치다.
+   * 근거와 규칙은 `HomeTabs` 머리 주석에 있다.
+   * ⚠ 방명록은 **목록이 아니라 패널**이라 `null` 이다. **0 으로 적지 마라** —
+   *   0 은 "글이 없다"는 사실 주장이고, 방명록 패널은 자기 상태를 스스로 말한다.
+   */
+  const counts: Record<HomeSectionId, number | null> = {
+    notices: notices.posts.length,
+    news: news.posts.length,
+    education: education.posts.length,
+    guestbook: null,
+  };
+  const tabItems: HomeTabItem[] = HOME_SECTIONS.map((section) => ({
+    id: section.id,
+    label: section.label,
+    count: counts[section.id],
+    panel: panels[section.id],
+  }));
 
   return (
     <>
@@ -156,22 +173,19 @@ export default async function Home() {
             <OnnuriGuideCard />
           </div>
 
-          {/* ── 섹션 스택 (§16.7.2 간격표) ── */}
-          <SectionNav className="mt-14 md:mt-18" />
-          {HOME_SECTIONS.map((section, index) => (
-            <HomeSection
-              key={section.id}
-              id={section.id}
-              label={section.label}
-              /* 첫 섹션은 바로가기 내비와 한 그룹(40/56px), 이후 섹션 간은 72/120px.
-                 72/24 = 3.0배 · 120/28 = 4.3배 — "섹션 위 여백 ≥ 내부 여백 2배" 충족(§16.7.2) */
-              className={
-                index === 0 ? "mt-10 md:mt-14" : "mt-section md:mt-section-lg"
-              }
-            >
-              {sectionContent[section.id]}
-            </HomeSection>
-          ))}
+          {/*
+            ── 게시판 **탭** (사용자 지시 2026-08-22) ──
+
+            종전에는 `SectionNav`(앵커 칩) + 4개 섹션 세로 스택이었다. 사용자 사유:
+            *"방명록에서 스크롤 올리는게 힘들어"* — 맨 아래 방명록에서 위로 돌아오기가 어려웠다.
+
+            ⚠ **`HomeTabs` 머리 주석을 읽고 나서 손대라.** 이 프로젝트는 **탭 때문에 사고가
+            난 적이 있고**(기본 탭이 비어 사이트의 유일한 콘텐츠가 가려졌다), 그 재발을 막는
+            장치 두 개(**건수 배지** · **내용 있는 탭을 기본으로**)가 거기 들어 있다.
+
+            `SectionNav`·`HomeSection` 은 **사용처가 0 이 됐다.** 되살리려면 위 지시부터 뒤집어라.
+          */}
+          <HomeTabs className="mt-14 md:mt-18" items={tabItems} />
         </div>
       </main>
       <SiteFooter />
