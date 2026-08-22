@@ -1225,7 +1225,7 @@ function prefersReducedMotion(): boolean {
  * `px-5` 는 폭 검산(360px 2행)의 전제다 — 넓히면 3행이 된다.
  */
 const CONTROL_CLASS =
-  "ease-out-soft inline-flex min-h-touch items-center gap-2 rounded-full border-2 border-primary bg-bg px-5 text-body font-semibold text-primary transition-colors duration-150 hover:bg-primary-tint focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:border-border-strong disabled:text-ink-muted";
+  "ease-out-soft inline-flex min-h-touch shrink-0 items-center gap-2 whitespace-nowrap rounded-full border-2 border-primary bg-bg px-5 text-body font-semibold text-primary transition-colors duration-150 hover:bg-primary-tint focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:border-border-strong disabled:text-ink-muted";
 
 /** 등급 순위 — 겹쳤을 때 **낮은 쪽을 접는다**(§21.2.3) */
 const PRIORITY_RANK: Record<LabelPriority, number> = { primary: 0, secondary: 1, tertiary: 2 };
@@ -1599,23 +1599,61 @@ function RoadviewSheet({
     <div
       role="dialog"
       aria-label={at.label !== null ? `${at.label} 로드뷰` : "로드뷰"}
-      className="rounded-t-panel fixed inset-x-0 bottom-0 z-40 border-t-2 border-border-strong bg-bg shadow-hero"
+      /*
+       * ★ **`z-40` 에서 올렸다 — 이게 사용자가 본 "글자 겹침"의 원인이었다**(2026-08-22 실측).
+       * 네이버 지도가 만드는 `.map_copyright`(`© NAVER Corp.`)와 축척·로고는 **`z-index: 100`** 이라
+       * `z-40` 시트 **위에** 그려져 안내문과 글자가 포개졌다.
+       *
+       * ⚠ **`pointer-events: none` 이라 `elementFromPoint` 로는 안 잡힌다.** 이 겹침은
+       * **기하(사각형 교차)로만** 검출된다 — 히트 테스트로 "겹침 0"을 확인하고 넘어가면 놓친다.
+       * (실제로 한 번 그렇게 잘못 판정했다.)
+       *
+       * 값은 네이버 컨트롤(100)보다 확실히 위인 300. **40 으로 되돌리지 마라.**
+       * 저작권 표기는 사라지지 않는다 — 시트 안 파노라마가 자기 로고·저작권을 직접 그린다.
+       */
+      className="rounded-t-panel fixed inset-x-0 bottom-0 z-[300] border-t-2 border-border-strong bg-bg shadow-hero"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <div className="flex items-center gap-2 px-4 py-3">
-        <p className="text-body font-bold text-ink">
-          {at.label !== null ? `로드뷰 — ${at.label}` : "로드뷰"}
-        </p>
-        {/* 촬영 연월 — **메타에 있을 때만.** 없으면 이 자리가 빈다(지어내지 않는다) */}
-        {panoDate !== "" ? (
-          <span className="ml-auto text-caption tabular-nums text-ink-muted">{panoDate}</span>
-        ) : null}
+      {/*
+        헤더 **2단 구성**(2026-08-22 · 사용자 지적 *"모바일에서 텍스트 배치가 보기 좋지 않다"*).
+
+        ★ **종전에는 제목·촬영일·`닫기` 가 한 행에서 서로를 밀었다.** 390px 실측:
+        셋 다 `flex-shrink:1` · `word-break:normal` 이라 **전부 2줄로 깨졌다** —
+        `로드뷰 — 2호 개나리 화장`/`실` · `촬영`/`2025.04` · `닫`/`기`.
+        헤더가 89px 로 부풀어 시트가 뷰포트 **54%**(설계 48%)를 먹었다.
+
+        **고친 방식**: 세로로 쌓을 것(제목 + 촬영일)과 옆에 고정할 것(`닫기`)을 나눈다.
+        - 제목: `min-w-0` + **`break-keep`**(어절 유지 — 이것이 없어서 낱말 중간이 잘렸다)
+        - 촬영일: 제목 **아래 줄**로 내린다. 같은 행에 두면 셋이 폭을 다툰다
+        - `닫기`: **`×` 아이콘 44px**. 글자 `닫기` 는 `text-body`(18px 하한) + `px-5` 라
+          좁은 헤더에서 가장 큰 폭 소비자였다. 사용자가 제시한 온누리 화면도 `×` 다.
+          **`aria-label` 이 뜻을 진다**(§2 — 형태만으로 전달하지 않는다).
+      */}
+      <div className="flex items-start gap-3 px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <p className="break-keep text-body font-bold leading-snug text-ink">
+            {at.label !== null ? `로드뷰 — ${at.label}` : "로드뷰"}
+          </p>
+          {/* 촬영 연월 — **메타에 있을 때만.** 없으면 이 줄이 아예 없다(지어내지 않는다) */}
+          {panoDate !== "" ? (
+            <p className="mt-1 text-caption tabular-nums text-ink-muted">{panoDate}</p>
+          ) : null}
+        </div>
         <button
           type="button"
           onClick={onClose}
-          className={`${panoDate !== "" ? "" : "ml-auto"} ${CONTROL_CLASS}`}
+          aria-label="로드뷰 닫기"
+          className="ease-out-soft flex size-11 shrink-0 items-center justify-center rounded-full border-2 border-primary bg-bg text-primary transition-colors duration-150 hover:bg-primary-tint focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
         >
-          닫기
+          <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
+            <path
+              d="M6 6l12 12M18 6L6 18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+            />
+          </svg>
         </button>
       </div>
 
@@ -1625,7 +1663,10 @@ function RoadviewSheet({
         로드뷰는 시각 자료입니다. 위치 안내는 페이지 본문 텍스트를 참고해 주세요.
       </p>
 
-      <div className="relative h-[32dvh] bg-surface">
+      {/* ★ **`overflow-hidden` 을 빼지 마라**(2026-08-22 실측). 없으면 네이버 파노라마가
+          내부에 그리는 큐브 면·로고·저작권·축척이 박스 밖으로 **1150px 넘게 삐져나와**
+          아래 안내문 위에 겹쳐 찍힌다(첨부 화면에서 `©NAVER Corp`·`100m` 가 문장 위에 있었다). */}
+      <div className="relative h-[32dvh] overflow-hidden bg-surface">
         {/* `touch-action` 을 건드리지 않는다 — 여기서는 한 손가락 회전이 설계된 동작이다(§23.1.3) */}
         <div ref={mountRef} className="size-full" />
         {panoStatus === "loading" ? (
@@ -1642,9 +1683,17 @@ function RoadviewSheet({
         ) : null}
       </div>
 
+      {/*
+        ★ **둘째 문장을 지웠다**(§5.3 · 2026-08-22). 종전 *"로드뷰 안에서는 드래그로 둘러보고,
+        화살표로 길을 따라 걸을 수 있습니다"* 는 **로드뷰의 보편 조작**이고 화살표는 화면에 보인다 —
+        판정 기준(*"이 문장이 없으면 조합원이 다르게 행동하는가"*)에 걸리지 않는다.
+        390px 실측 **4줄 → 2줄**.
+
+        ⚠ **첫 문장은 지우지 마라.** 지도를 눌러 위치를 옮기는 것은 **화면에 단서가 없어
+        발견 자체가 불가능**하다. 파란 길이 무엇인지도 여기서만 말한다.
+      */}
       <p className="break-keep px-4 py-3 text-caption leading-[1.6] text-ink">
         지도의 <b>파란 길</b>을 누르면 그 지점 로드뷰로 이동합니다(주황 원 = 지금 보는 위치).
-        로드뷰 안에서는 드래그로 둘러보고, 화살표로 길을 따라 걸을 수 있습니다.
       </p>
     </div>
   );
@@ -3178,7 +3227,16 @@ function RallyFullscreenMap({
           `닫기` 는 이 화면의 **유일한 출구**다 — 상시 노출·자동 숨김 금지(§23.1.5).
         */}
         <div
-          className="flex shrink-0 items-center justify-between gap-2 px-3 pb-2"
+          /*
+           * ★ **`flex-wrap` 을 빼지 마라**(2026-08-22 실측 회귀 대응).
+           * `CONTROL_CLASS` 에 `shrink-0 whitespace-nowrap` 을 넣으면서(라벨이 `닫`/`기` 로
+           * 세로로 깨지던 것을 막으려고) 이 행이 **줄일 수 없는 두 버튼**을 갖게 됐다.
+           * 텍스트 확대 200% · 360px 실측: `처음 위치로` 247 + `닫기` 146 + gap 8 + 패딩 24
+           * = **421px 로 61px 넘쳤다.** `flex-wrap` 이 그때 두 줄로 쌓아 해소한다.
+           * (100% 에서는 231px 라 발동하지 않는다 — 평상시 배치는 그대로다.)
+           * `gap-y-2` 는 쌓였을 때 버튼이 붙지 않게 한다.
+           */
+          className="flex shrink-0 flex-wrap items-center justify-between gap-2 gap-y-2 px-3 pb-2"
           style={{
             paddingTop: "max(12px, env(safe-area-inset-top))",
             paddingLeft: "max(12px, env(safe-area-inset-left))",
