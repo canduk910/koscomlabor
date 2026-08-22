@@ -318,6 +318,11 @@ function labelHtml(options: {
    * 그룹 안에서 `tabindex="0"` 은 **하나뿐**이어야 페이지 탭 정지점이 1개로 유지된다.
    */
   focused: boolean;
+  /**
+   * **번호 배지를 앵커 위에 정확히 얹는다**(2026-08-22 · `kind: "dot"` 전용).
+   * 근거는 `labelIconContent` 의 dot 분기 주석에 있다.
+   */
+  anchored?: boolean;
 }): string {
   /*
    * 앵커에서 라벨까지의 간격. 좌우 28px 은 실측으로 정해진 값이다 — 16px 이면 360px 에서
@@ -335,6 +340,7 @@ function labelHtml(options: {
     id,
     selected,
     focused,
+    anchored = false,
   } = options;
   /*
    * 마커는 이제 **포커스 가능한 버튼**이다(§27.8.2). 2단계의 `aria-hidden` 은 **해제됐다** —
@@ -381,12 +387,31 @@ function labelHtml(options: {
      * 그러면 조합원이 ⑤ 를 눌렀는데 ④ 가 열린다.
      * `data-rally-badge` 는 **보이는 28px 원**에 붙는다(측정 기준이 시각 크기여야 한다).
      */
+    /*
+     * ★ **`anchored` 는 배지를 앵커 정중앙에 얹는다**(2026-08-22 · 사용자 지시
+     * *"실제 위치와 번호버튼 위치를 일치시켜버리자. 영역이 아니라 점이니까"*).
+     *
+     * 위 문단의 *"앵커 위에 얹지 마라"* 는 **면(밴드·외곽선)을 가진 항목의 규칙**이고
+     * **점에는 적용되지 않는다.** 그 금지의 근거 셋 중 둘은 이미 사라졌다:
+     *   `대오 2 밴드 외곽선 6.7%` · `부지 외곽선 12%` → **두 도형 다 제거됐다**(§20.4.0 · 요구 130)
+     * 남은 하나 *"자기 도트까지 가렸다"* 는 **점에서는 결함이 아니라 목적**이다 —
+     * 배지가 도트를 **대체**하므로 가릴 도트가 없다.
+     *
+     * ⚠ **확신도(실선/점선)를 배지가 이어받는다**(§30.7.2 를 지키는 방식이 바뀐 것이지
+     * 규칙이 사라진 게 아니다). 점선 도트를 없애면서 신호를 같이 없애면
+     * **① 확인 지점과 ⑤⑥⑦⑧ 근사 지점이 지도 위에서 완전히 똑같아진다.**
+     *   `solid`  → 흰 테두리 **실선**(① 5번 출구 — 확인된 위치)
+     *   `dashed` → 흰 테두리 **점선**(⑤⑥⑦⑧ 화장실 — 지도 데이터 기준 근사)
+     * 크기는 28px 그대로다 — 링을 밖에 덧대면 시각 크기가 커져 히트 간섭이 늘어난다.
+     */
+    const badgeBorder = outline === "dashed" ? "2px dashed #ffffff" : "2px solid #ffffff";
+    const anchorPlace = anchored ? "left:0;top:0;transform:translate(-50%,-50%);" : place;
     return [
       `<div data-rally-label="${id}" data-rally-folded="1" style="position:relative;width:0;height:0;">`,
-      `<span data-rally-hit="${id}" ${a11y} style="position:absolute;${place}width:28px;height:28px;cursor:pointer;">`,
+      `<span data-rally-hit="${id}" ${a11y} style="position:absolute;${anchorPlace}width:28px;height:28px;cursor:pointer;">`,
       `<span style="position:absolute;left:-8px;top:-8px;width:44px;height:44px;"></span>`,
       `<span data-rally-badge="${id}" data-rally-number="${id}" style="position:absolute;inset:0;box-sizing:border-box;`,
-      `border-radius:9999px;background:${badgeColor};border:2px solid #ffffff;color:#ffffff;`,
+      `border-radius:9999px;background:${badgeColor};border:${badgeBorder};color:#ffffff;`,
       `font-size:15px;font-weight:700;line-height:24px;text-align:center;${ring}`,
       `box-shadow:0 1px 3px rgb(0 0 0 / .35)${selected ? `,0 0 0 3px ${INK}` : ""};">${badge}</span>`,
       `</span></div>`,
@@ -430,59 +455,21 @@ function pinHtml(): string {
   ].join("");
 }
 
-/**
- * 도트 마커 — 도트는 앵커 좌표에 중심을 맞춘다.
+/*
+ * ⚠ **`dotHtml`·`dashedDotHtml` 은 제거됐다**(2026-08-22). **되살리지 마라 — 먼저 판정을 뒤집어라.**
  *
- * ★ **도트에 확신도 축이 있다**(§30.7.2 · 요구 152). `outline` 값으로 갈린다:
- *   `solid`  → 꽉 찬 18px 도트 (**확인** 등급 — ① 5번 출구)
- *   `dashed` → 속 빈 20px 도트 + 점선 링 (**근사** 등급 — ⑤ 공원 화장실)
+ * 점(`dot`)은 이제 **번호 배지 자체가 그 지점**이다(사용자 지시 — *"실제 위치와 번호버튼 위치를
+ * 일치시켜버리자. 영역이 아니라 점이니까"*). 도트를 따로 찍으면 **한 지점에 표식이 둘**이 되고,
+ * 그것이 화장실 4개를 8개처럼 보이게 만들던 원인이다.
  *
- * **왜 필요한가**: `outline: "dashed"` 는 종전에 **라벨 pill 테두리에만** 적용됐다.
- * 그런데 ⑤ 는 `textMode: "popup"` 이라 **pill 이 영영 뜨지 않는다** →
- * 이 분기가 없으면 **① 확인 도트와 ⑤ 근사 도트가 지도 위에서 완전히 똑같이 보이고**,
- * 요구 152 가 지정한 "점선 도트(근사)"가 화면에 존재하지 않게 된다.
+ * **없어진 것은 그림이지 규칙이 아니다.** 두 함수가 지던 **확신도 축(§30.7.2 · 요구 152)** 은
+ * `labelHtml` 의 `badgeBorder` 가 그대로 이어받았다 — `solid` → 흰 실선 테두리(확인),
+ * `dashed` → 흰 **점선** 테두리(근사). 이 분기를 지우면 **① 확인 지점과 ⑤⑥⑦⑧ 근사 지점이
+ * 지도 위에서 완전히 똑같아진다.**
  *
- * ⚠ **`kind` 를 새로 만들지 마라.** `dot` 그대로 두고 `outline` 으로만 분기한다.
- * ⚠ **`id === "park-toilet"` 로 분기하는 것은 금지**(§20.20.2) — 데이터 축으로만 분기한다.
+ * 도트 그림이 다시 필요해지면 git 이력에 있다(둘레 62.83px 에 `3 + 3.28` 주기로 점 10개를
+ * 균등 배치하던 계산도 함께 있다 — 그 숫자는 임의로 고르면 이음매에서 점선이 깨진다).
  */
-function dotHtml(color: string, size: number, outline: MapFeature["outline"]): string {
-  if (outline === "dashed") return dashedDotHtml(color);
-  const half = size / 2;
-  return [
-    '<div aria-hidden="true" style="position:relative;width:0;height:0;">',
-    `<span style="position:absolute;left:-${half}px;top:-${half}px;width:${size}px;height:${size}px;`,
-    `box-sizing:border-box;border-radius:9999px;background:${color};border:3px solid ${CASING};`,
-    'box-shadow:0 1px 3px rgb(0 0 0 / .35);"></span></div>',
-  ].join("");
-}
-
-/**
- * 속 빈 **점선 도트** — 근사 등급(§30.7.2). SVG 로 그린다(`stroke-dasharray` 가 필요하다).
- *
- * 지름 20px · 흰 채움 · 본선 3px 점선 · 흰 casing 2px(= 5px 스트로크의 바깥 절반) · 그림자.
- * 앵커는 원 중심이라 `left/top` 을 반폭만큼 당긴다.
- *
- * **`r = 10` → 둘레 62.83px. 주기 `3 + 3.28 = 6.28` 로 점이 정확히 10개 균등 배치된다.**
- * 주기를 둘레의 약수로 맞추지 않으면 **이음매에서 점이 붙거나 벌어져 점선으로 안 읽힌다** —
- * 이 두 숫자를 임의로 바꾸지 마라.
- *
- * **점 10개가 육안으로 점선으로 읽히는 하한**이고, 18px 도트에 그대로 넣으면 8개 이하로 떨어져
- * 실선과 구분되지 않는다 — **그래서 20px 로 키웠다.** 속이 빈 형태는 같은 지름의 꽉 찬 형태보다
- * 작게 읽히므로 20 vs 18 은 시각 크기로 사실상 같다.
- *
- * 대비: 본선 `#093389` ↔ 흰 채움 **11.37 : 1**. 어두운 타일은 흰 casing 이 담당한다(§20.4.2 두 겹 구조).
- */
-function dashedDotHtml(color: string): string {
-  return [
-    '<div aria-hidden="true" style="position:relative;width:0;height:0;">',
-    '<svg width="26" height="26" viewBox="0 0 26 26" style="position:absolute;left:-13px;top:-13px;',
-    'filter:drop-shadow(0 1px 3px rgb(0 0 0 / .35));" aria-hidden="true">',
-    `<circle cx="13" cy="13" r="10" fill="none" stroke="${CASING}" stroke-width="5"/>`,
-    `<circle cx="13" cy="13" r="10" fill="${CASING}" stroke="${color}" stroke-width="3"`,
-    ' stroke-dasharray="3 3.28" stroke-linecap="butt"/>',
-    "</svg></div>",
-  ].join("");
-}
 
 /**
  * 도형 1개를 **흰 casing(아래층) + 본체(위층)** 2겹으로 만든다(§20.4.2).
@@ -692,12 +679,19 @@ function labelIconContent(
 ): string {
   const color = toneColor(feature.tone);
   const suffix = feature.kind === "band" ? BAND_STYLE[feature.confidence].labelSuffix : "";
-  const shape =
-    feature.kind === "dot"
-      ? dotHtml(color, 18, feature.outline)
-      : feature.kind === "pin"
-        ? pinHtml()
-        : "";
+  /*
+   * ★ **점(`dot`)은 도형을 따로 그리지 않는다 — 번호 배지가 곧 그 지점이다**(2026-08-22).
+   *
+   * 종전에는 도트를 앵커에 찍고 배지를 **26px 떨어뜨려** 놓았다. 면(밴드·원)에서는 그것이 옳다 —
+   * 배지가 도형을 덮으면 안 되니까. 그런데 **점에는 덮을 면이 없고**, 떨어뜨린 배지는
+   * *"이 번호가 정확히 어디를 가리키나"* 를 모호하게 만든다(사용자 지적).
+   * 게다가 도트와 배지가 **한 지점에 두 표식**이라 화장실 4개가 8개처럼 보였다.
+   *
+   * ⚠ **`pin`(내 위치)은 그대로 둔다.** 앵커가 **핀 끝(하단 꼭짓점)** 이라 성질이 다르고,
+   * 번호가 없는 동적 표식이라 배지로 대체할 것도 없다(§20.21.1).
+   * ⚠ **`dotHtml`·`dashedDotHtml` 을 지우지 마라** — 확신도 도트를 되살릴 때 근거가 사라진다.
+   */
+  const shape = feature.kind === "pin" ? pinHtml() : "";
   // 방향·간격 해석은 `labelPlacementAt` 하나가 담당한다(§23.2.3) — 여기서 분기하지 마라
   const { placement, gap } = labelPlacementAt(feature, zoom);
   return (
@@ -714,6 +708,7 @@ function labelIconContent(
       id: feature.id,
       selected,
       focused,
+      anchored: feature.kind === "dot",
     })
   );
 }
