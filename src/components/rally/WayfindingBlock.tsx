@@ -65,7 +65,7 @@ export function WayfindingBlock({ className = "" }: { className?: string }) {
           <ExternalLinkIcon className="ml-1 inline size-4 align-[-2px]" />
         </span>
         <span className="mt-1 block break-keep text-caption text-ink">
-          도착지는 국회의사당역 5번 출구입니다. 출발지를 입력하면 경로가 나옵니다.
+          도착지는 KDB산업은행입니다. 출발지를 입력하면 경로가 나옵니다.
         </span>
         {/* URL 전체를 노출하지 않는다 — 네이버 내부 인코딩이라 판독 가치가 0이다(§24.6) */}
         <span className="mt-1.5 block text-caption text-ink-muted">

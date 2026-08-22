@@ -89,7 +89,7 @@ export function RallyBanner({
       <p
         className={`mt-2 break-keep text-body ${hero ? "text-primary-soft" : "text-ink"}`}
       >
-        집결 18:30 · 국회의사당역 5번 출구
+        집결 18:30 · 국회의사당역 3번 출구
       </p>
 
       {/* 패널 전체를 링크로 만들지 마라(§17.1·§19.2.2). 인터랙티브 요소는 이 CTA 1개다 */}

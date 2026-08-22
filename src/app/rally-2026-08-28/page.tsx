@@ -51,7 +51,7 @@ export const metadata: Metadata = {
   title:
     "8/28(금) 저녁 결의대회 참석 안내 — 전국금융산업노동조합 코스콤(한국증권전산)지부",
   description:
-    "2026년 8월 28일(금) 18:30 국회의사당역 5번 출구 집결. 코스콤지부 집결 위치와 결의대회 순서를 안내합니다.",
+    "2026년 8월 28일(금) 18:30 집결. 코스콤지부는 국회의사당역 3번 출구 KDB산업은행 앞입니다. 집결 위치와 결의대회 순서를 안내합니다.",
 };
 
 /*
@@ -178,7 +178,7 @@ export default function RallyPage() {
                 <dt className="text-caption font-semibold text-ink-muted">본대회</dt>
                 <dd className="text-body text-ink">19:00 개회</dd>
                 <dt className="text-caption font-semibold text-ink-muted">장소</dt>
-                <dd className="break-keep text-body text-ink">국회의사당역 5번 출구 메인무대 앞</dd>
+                <dd className="break-keep text-body text-ink">국회의사당역 3번 출구 → 여의도공원 방향 KDB산업은행 앞</dd>
               </dl>
 
               {/*
@@ -338,7 +338,7 @@ export default function RallyPage() {
                   `약 30~100 m` 오류가 살아남은 원인이 **근거가 없어 대조할 대상이 없었던 것**이다.
               */}
               <p className="mt-3 max-w-[var(--container-prose)] break-keep text-body text-ink">
-                국회의사당역 5번 출구에서 여의도 의사당대로를 따라 남동쪽으로 약 250~400 m
+                국회의사당역 3번 출구에서 여의도공원 쪽으로 약 230 m — KDB산업은행 앞입니다
               </p>
               {/*
                 방위 단서(§30.17.5) — **자리와 굵기가 판정 사항이다.**

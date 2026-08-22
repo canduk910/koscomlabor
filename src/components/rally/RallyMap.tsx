@@ -3406,7 +3406,7 @@ function RallyMapFallback({ status }: { status: Exclude<MapStatus, "ready"> }) {
       <p className="text-body font-semibold text-ink">
         {status === "failed" ? "지도를 불러오지 못했습니다." : "지도를 불러오는 중입니다."}
       </p>
-      <p className="mt-3 break-keep text-body text-ink">집결 장소 — 국회의사당역 5번 출구</p>
+      <p className="mt-3 break-keep text-body text-ink">집결 장소 — 국회의사당역 3번 출구 KDB산업은행 앞</p>
       {/* 검증 19회차 §19-5 확정본(요구 159). `(위치 확인 중)` 은 **상태가 끝나 삭제**했고
           `(배정 예정)` 은 **남긴다**(요구 160 B 유형 — 배치도 원문).
           ⚠ 옛 문구(`코스콤지부 — 더샵아일랜드파크 앞 의사당대로` + `약 220~340 m`)를 되살리지 마라 —
@@ -3421,7 +3421,7 @@ function RallyMapFallback({ status }: { status: Exclude<MapStatus, "ready"> }) {
             `약 30~100 m` 오류가 살아남은 원인이 **근거가 없어 대조할 대상이 없었던 것**이다.
       */}
       <p className="mt-1 break-keep text-body text-ink">
-        국회의사당역 5번 출구에서 남동쪽으로 약 250~400 m
+        국회의사당역 3번 출구에서 여의도공원 쪽으로 약 230 m
       </p>
     </div>
   );
