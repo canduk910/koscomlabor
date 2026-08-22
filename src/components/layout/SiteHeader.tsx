@@ -1,4 +1,6 @@
 import Image from "next/image";
+
+import { FontScaleControl } from "@/components/layout/FontScaleControl";
 import Link from "next/link";
 import { ROUTES } from "@/lib/routes";
 
@@ -23,7 +25,10 @@ export function SiteHeader({ asHeading = true }: { asHeading?: boolean }) {
   const LogoTag = asHeading ? "h1" : "p";
   return (
     <header className="border-t-2 border-primary bg-bg py-3.5 md:py-5">
-      <div className="mx-auto w-full max-w-page px-4 md:px-8">
+      {/* 로고 ↔ 글자 크기 슬라이더 한 행.
+          ⚠ **`flex-wrap` 을 빼지 마라** — 로고 록업이 `whitespace-nowrap` 이라 줄일 수 없고,
+          텍스트 확대에서 두 덩어리가 한 줄에 못 들어가면 **가로 스크롤이 난다**(푸터 로고 선례). */}
+      <div className="mx-auto flex w-full max-w-page flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 md:px-8">
         <LogoTag>
           <Link
             href={ROUTES.home}
@@ -48,6 +53,7 @@ export function SiteHeader({ asHeading = true }: { asHeading?: boolean }) {
             </span>
           </Link>
         </LogoTag>
+        <FontScaleControl />
       </div>
     </header>
   );

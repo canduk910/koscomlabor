@@ -20,6 +20,20 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         href="/fonts/pretendard/pretendardvariable-dynamic-subset.css"
         precedence="default"
       />
+      {/*
+        글자 크기 **선반영**(§ `FontScaleControl`). 저장값을 **페인트 전에** `<html>` 에 얹는다 —
+        `useEffect` 로 미루면 기본 크기로 한 번 그려졌다가 바뀌어 **화면이 튄다**(FOUC).
+        ⚠ 키 문자열은 `FontScaleControl.STORAGE_KEY` 와 **반드시 같아야 한다.** 한쪽만 고치면
+        설정이 조용히 무시된다(에러가 나지 않아 더 위험하다).
+      */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html:
+            "try{var v=localStorage.getItem('koscomlabor:font-scale');" +
+            "if(v){v=Math.min(130,Math.max(90,parseInt(v,10)||100));" +
+            "document.documentElement.style.fontSize=v+'%'}}catch(e){}",
+        }}
+      />
       <body className="flex min-h-full flex-col font-sans">{children}</body>
     </html>
   );
