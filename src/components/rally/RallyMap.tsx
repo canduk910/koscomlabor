@@ -2145,7 +2145,25 @@ export function RallyMap({ clientId }: { clientId: string }) {
      * **드래그한 뒤 라벨이 엉뚱하게 밀려 있거나 다시 잘린다.**
      * `idle` 이 팬·줌·리사이즈를 모두 덮는다. 마커가 없으면 함수가 즉시 반환한다.
      */
-    const onIdle = () => clampMyLocationLabel(mountRef.current, boxRef.current);
+    const onIdle = () => {
+      clampMyLocationLabel(mountRef.current, boxRef.current);
+      /*
+       * ★ **라벨 접힘을 여기서 다시 계산한다**(2026-08-22 · 사용자 지적
+       * *"특정 맵 줌 상태에서 ④ 라벨이 ③ 을 가려버릴 때가 있어"*).
+       *
+       * **원인**: 종전에는 접힘 판정이 `zoom_changed` 에서만 돌았다. 그런데 그 이벤트는
+       * **줌 애니메이션이 시작될 때** 오고, `paintLabels` 는 그 직후 `requestAnimationFrame`
+       * 한 번에서 사각형을 잰다 — **라벨이 아직 목적지에 도착하기 전**이다.
+       * 그래서 *"안 겹친다"* 로 판정하고 **다시 재지 않아** 애니메이션이 끝난 뒤 겹친 채로 남았다.
+       * 매번 재현되지 않은 것도 이것으로 설명된다(애니메이션 타이밍에 좌우된다).
+       *
+       * `idle` 은 **팬·줌·리사이즈가 모두 끝난 뒤** 온다 — 바로 위 클램프가 `idle` 을 쓰는 것과
+       * 같은 이유다. 팬만 했을 때는 라벨들이 **함께** 움직여 상대 기하가 그대로이므로
+       * 접힘 상태가 바뀌지 않고(`changed === false`), 아이콘 한 번 다시 그리는 비용만 든다.
+       * ⚠ **`zoom_changed` 쪽을 지우지 마라** — 줌 중에도 등급별 표시/숨김은 즉시 따라와야 한다.
+       */
+      applyLabelVisibility(map.getZoom());
+    };
     const listeners: NaverMapEventListener[] = [
       map.addListener("zoom_changed", onZoom),
       map.addListener("dragend", onDrag),
@@ -3047,6 +3065,9 @@ function RallyFullscreenMap({
         paint(z);
       }),
       map.addListener("dragend", () => setMoved(true)),
+      /* 페이지 지도와 **같은 처방**(§27.14.4-3) — 줌 애니메이션이 끝난 뒤 접힘을 다시 잰다.
+         `zoom_changed` 만으로는 이동 중 좌표를 재서 겹침을 놓친다. */
+      map.addListener("idle", () => paint(map.getZoom())),
       map.addListener("click", () => selectFeature(null)),
       ...labels.map((e) => e.marker.addListener("click", () => selectFeature(e.feature.id))),
     ];
