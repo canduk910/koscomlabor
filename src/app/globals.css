@@ -157,3 +157,14 @@ html {
       0 0 0 3px var(--color-ink);
   }
 }
+
+/*
+ * 컬러 이모지 글꼴 — `🚻` 같은 기호를 **흑백 활자로 떨어지지 않게** 한다(2026-08-23).
+ * 지도 배지는 네이버가 주입하는 raw HTML 이라 컴포넌트 클래스를 못 쓰고, 범례는 React 다 —
+ * **양쪽이 같은 글꼴을 쓰도록** 전역 유틸로 둔다. 한쪽만 바꾸면 지도와 범례의 기호가 달라 보인다.
+ */
+.emoji-mark {
+  font-family:
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif;
+  font-weight: 400;
+}

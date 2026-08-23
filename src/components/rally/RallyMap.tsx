@@ -287,6 +287,45 @@ const MY_LOCATION_Z = 50;
  * - 마커 DOM 전체에 `aria-hidden="true"` — 범례가 같은 내용을 문자로 제공하므로
  *   여기서 또 낭독되면 소음이다(§20.9).
  */
+/**
+ * ★ **종류 기호 픽토그램**(2026-08-23 · 사용자가 첨부한 참고 그림 그대로 — 파랑 남 + 주황 여).
+ *
+ * **이모지를 쓰지 않는 이유**: `🚻` 는 플랫폼마다 완전히 다른 그림이다(iOS = 회청색 사각형에 흰 형상).
+ * 사용자가 지정한 모양을 **모든 기기에서 같게** 내려면 SVG 여야 하고, 이모지 글꼴이 없는 환경에서
+ * **흑백 활자·두부(□)로 떨어지는 위험**도 함께 사라진다.
+ *
+ * ⚠ **문자열 하나에서 나온다.** 지도 배지(네이버가 주입하는 raw HTML)와 범례(React)가 **같은 그림**이어야
+ * 대응이 성립한다. 두 벌로 복제하면 언젠가 한쪽만 고쳐진다(요구 88 · 한 출처).
+ *
+ * `aria-hidden` — 뜻은 배지의 번호와 `aria-label`·범례 문자가 진다(§2 · 형태 단독 전달 금지).
+ */
+/*
+ * ⚠ **채도를 낮추지 마라**(사용자 지시 2026-08-23 — *"컬러감있는 이미지를 골라줘"*).
+ * 처음 값(`#4FA3DB` / `#E1705A`)은 참고 그림을 그대로 뜬 것이었는데 **17px 로 줄면 색이 죽었다.**
+ * 작은 픽토그램은 큰 그림보다 **더 진한 색이 있어야 같은 인상**이 난다.
+ * 이 둘은 **의미색이 아니다**(§20.20.3 의 파랑/회색과 무관하다) — 화장실 픽토그램의 관용색이다.
+ */
+const SYMBOL_MALE = "#1785DE";
+const SYMBOL_FEMALE = "#F2492A";
+
+function symbolSvg(kind: "toilet", size: number): string {
+  if (kind !== "toilet") return "";
+  return [
+    `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true" focusable="false" style="display:block;">`,
+    /* 남 — 원 머리 + 몸통 + 다리 둘 */
+    `<circle cx="7" cy="3.9" r="2.9" fill="${SYMBOL_MALE}"/>`,
+    `<rect x="4.0" y="7.8" width="6.0" height="8.6" rx="0.9" fill="${SYMBOL_MALE}"/>`,
+    `<rect x="4.5" y="16.2" width="2.2" height="4.9" rx="0.5" fill="${SYMBOL_MALE}"/>`,
+    `<rect x="7.3" y="16.2" width="2.2" height="4.9" rx="0.5" fill="${SYMBOL_MALE}"/>`,
+    /* 여 — 원 머리 + 치마(삼각) + 다리 둘 */
+    `<circle cx="17" cy="3.9" r="2.9" fill="${SYMBOL_FEMALE}"/>`,
+    `<path d="M17 7.2 22.3 17.4 H11.7 Z" fill="${SYMBOL_FEMALE}"/>`,
+    `<rect x="14.6" y="17.2" width="2.1" height="3.9" rx="0.5" fill="${SYMBOL_FEMALE}"/>`,
+    `<rect x="17.3" y="17.2" width="2.1" height="3.9" rx="0.5" fill="${SYMBOL_FEMALE}"/>`,
+    "</svg>",
+  ].join("");
+}
+
 function labelHtml(options: {
   /** `null` 이면 번호 배지를 그리지 않는다 — 내 위치는 안내도의 지점이 아니다(§20.21.1) */
   badge: string | null;
@@ -321,6 +360,13 @@ function labelHtml(options: {
    * 근거는 `labelIconContent` 의 dot 분기 주석에 있다.
    */
   anchored?: boolean;
+  /**
+   * ★ **번호 앞에 붙는 종류 기호**(화장실 픽토그램). 근거는 `MapFeature.symbol` 주석에 있다.
+   * 값이 있으면 배지가 **원 → 알약**, 배경이 **남색 → 흰색**으로 바뀐다.
+   */
+  symbol?: "toilet" | null;
+  /** `symbol` 이 있을 때 번호 칩에 넣을 **민글자 숫자**(`④` 가 아니라 `4`) — 17px 칩에서 겹동그라미는 안 읽힌다 */
+  symbolNumber?: string;
 }): string {
   /*
    * 앵커에서 라벨까지의 간격. 좌우 28px 은 실측으로 정해진 값이다 — 16px 이면 360px 에서
@@ -339,6 +385,8 @@ function labelHtml(options: {
     selected,
     focused,
     anchored = false,
+    symbol = null,
+    symbolNumber = "",
   } = options;
   /*
    * 마커는 이제 **포커스 가능한 버튼**이다(§27.8.2). 2단계의 `aria-hidden` 은 **해제됐다** —
@@ -402,8 +450,42 @@ function labelHtml(options: {
      *   `dashed` → 흰 테두리 **점선**(⑤⑥⑦⑧ 화장실 — 지도 데이터 기준 근사)
      * 크기는 28px 그대로다 — 링을 밖에 덧대면 시각 크기가 커져 히트 간섭이 늘어난다.
      */
-    const badgeBorder = outline === "dashed" ? "2px dashed #ffffff" : "2px solid #ffffff";
     const anchorPlace = anchored ? "left:0;top:0;transform:translate(-50%,-50%);" : place;
+    /*
+     * ★ **종류 기호가 있으면 배지 본체가 픽토그램이 된다**(2026-08-23 · 사용자 지시
+     * *"화장실 위치표시"* · *"컬러감있는 이미지"*). 번호는 **왼쪽 아래 칩**으로 내려간다.
+     *
+     * ⚠ **번호를 없앤 것이 아니다.** 없애면 범례 네 행이 전부 같은 그림으로 시작해
+     * *"이 화장실이 민들레인가 은방울인가"* 를 답할 수 없고 `※ 지도의 번호를 누르면…` 도 거짓이 된다.
+     *
+     * ⚠ **칩은 왼쪽·아래로만 자란다.** 오른쪽·위 경계가 28px 원 그대로여야 한다 —
+     * 배지를 47px 알약으로 넓혔더니 **⑤(민들레)가 지도 오른쪽 끝에서 12px 잘렸다**(390px 실측).
+     * ⑤ 는 bbox 동단이라 오른쪽 여유가 9.5px 뿐이다. **오른쪽으로 키우지 마라.**
+     *
+     * ⚠ **바탕이 흰색인 이유**: 컬러 픽토그램은 짙은 남색 위에서 제 색이 죽는다.
+     * 확신도 신호(§30.7.2)는 **테두리의 실선/점선**에 그대로 남는다 — 색만 반전됐다.
+     */
+    if (symbol !== null) {
+      const symbolBorder = outline === "dashed" ? `2px dashed ${badgeColor}` : `2px solid ${badgeColor}`;
+      return [
+        `<div data-rally-label="${id}" data-rally-folded="1" style="position:relative;width:0;height:0;">`,
+        `<span data-rally-hit="${id}" ${a11y} style="position:absolute;${anchorPlace}width:28px;height:28px;cursor:pointer;">`,
+        `<span style="position:absolute;left:-8px;top:-8px;width:44px;height:44px;"></span>`,
+        `<span data-rally-badge="${id}" style="position:absolute;inset:0;box-sizing:border-box;`,
+        `display:flex;align-items:center;justify-content:center;border-radius:9999px;background:#ffffff;`,
+        `border:${symbolBorder};${ring}`,
+        `box-shadow:0 1px 3px rgb(0 0 0 / .35)${selected ? `,0 0 0 3px ${INK}` : ""};">`,
+        symbolSvg(symbol, 20),
+        "</span>",
+        /* 번호 칩 — `data-rally-number` 는 **화면에 번호가 있는 것 전부**를 세는 표식이다(요구 86) */
+        `<span data-rally-number="${id}" aria-hidden="true" style="position:absolute;left:-7px;bottom:-7px;width:17px;height:17px;box-sizing:border-box;`,
+        `display:flex;align-items:center;justify-content:center;border-radius:9999px;background:${badgeColor};`,
+        `border:1.5px solid #ffffff;color:#ffffff;font-size:11px;font-weight:700;line-height:1;`,
+        `box-shadow:0 1px 2px rgb(0 0 0 / .3);">${symbolNumber}</span>`,
+        `</span></div>`,
+      ].join("");
+    }
+    const badgeBorder = outline === "dashed" ? "2px dashed #ffffff" : "2px solid #ffffff";
     return [
       `<div data-rally-label="${id}" data-rally-folded="1" style="position:relative;width:0;height:0;">`,
       `<span data-rally-hit="${id}" ${a11y} style="position:absolute;${anchorPlace}width:28px;height:28px;cursor:pointer;">`,
@@ -412,6 +494,18 @@ function labelHtml(options: {
       `border-radius:9999px;background:${badgeColor};border:${badgeBorder};color:#ffffff;`,
       `font-size:15px;font-weight:700;line-height:24px;text-align:center;${ring}`,
       `box-shadow:0 1px 3px rgb(0 0 0 / .35)${selected ? `,0 0 0 3px ${INK}` : ""};">${badge}</span>`,
+      /*
+       * ★ **종류 칩**(화장실) — 배지 **왼쪽 위 모서리에 겹쳐** 붙인다(2026-08-23).
+       *
+       * ⚠ **배지를 알약으로 넓히는 안을 실측으로 버렸다.** 28px 원을 47px 알약으로 바꾸자
+       * **⑤(민들레)가 지도 오른쪽 끝에서 12px 잘렸다**(390px 실측) — ⑤ 는 bbox 동단이라
+       * 여유가 9.5px 밖에 없다. 칩은 **왼쪽 위로만 자란다** — 오른쪽·아래 경계가 종전과 같아
+       * 그 잘림이 생기지 않고, §22·§23 이 `data-rally-badge` 로 잡아 둔 실측 기준값도 그대로다.
+       *
+       * ⚠ **번호를 덮지 마라.** 칩은 원 바깥으로 나가 있고(-9px) 겹치는 것은 테두리뿐이다.
+       * 뜻은 번호·`aria-label`·범례 문자가 지고, 칩은 **한눈에 종류를 알리는 채널을 하나 더** 얹는다(§2).
+       */
+      "",
       `</span></div>`,
     ].join("");
   }
@@ -707,6 +801,8 @@ function labelIconContent(
       selected,
       focused,
       anchored: feature.kind === "dot",
+      symbol: feature.symbol ?? null,
+      symbolNumber: String(index + 1),
     })
   );
 }
@@ -2994,7 +3090,20 @@ export function RallyMap({ clientId }: { clientId: string }) {
                   groupFocused && focusedId === feature.id ? "bg-primary-tint outline-2 outline-ink" : ""
                 }`}
               >
-                <span aria-hidden="true">{feature.glyph}</span>
+                {/* ★ **지도 배지와 같은 그림이어야 한다.** `symbol` 이 있는 행은 글리프 문자가 아니라
+                    `symbolSvg` 를 그린다 — 범례의 기호와 지도의 기호가 다르면 대응이 끊긴다.
+                    `dangerouslySetInnerHTML` 대상은 **우리가 만든 상수 문자열뿐**이다(외부 입력 없음). */}
+                {feature.symbol !== undefined ? (
+                  <span
+                    aria-hidden="true"
+                    className="mt-0.5 inline-flex size-4 shrink-0"
+                    dangerouslySetInnerHTML={{ __html: symbolSvg(feature.symbol, 16) }}
+                  />
+                ) : (
+                  <span aria-hidden="true" className="emoji-mark">
+                    {feature.glyph}
+                  </span>
+                )}
                 <span>
                   {circledNumber(index)} {feature.legend}
                 </span>
