@@ -99,6 +99,23 @@ export interface NaverPanorama {
   getPov?(): { pan?: number; tilt?: number; fov?: number } | undefined;
   /** 촬영 메타 — `photodate` 가 **없을 수 있다.** 없으면 표시하지 않는다(지어내지 마라) */
   getLocation?(): { photodate?: string; photoDate?: string } | undefined;
+  /**
+   * ★ **컨테이너 크기가 바뀌면 반드시 이걸 부른다**(2026-08-23 · 시트 높이 드래그 조절).
+   *
+   * 공식 문서: *"이 옵션(`size`)을 설정하지 않으면 파노라마 초기화 시 파노라마 개체가 삽입된
+   * 요소의 크기로 설정합니다."* — 즉 **초기화 시점 크기로 고정**된다.
+   * CSS 로 높이만 바꾸면 파노라마 내부 렌더는 따라오지 않아 **잘리거나 빈 여백**이 남는다.
+   *
+   * ⚠ 이건 드래그 기능만의 문제가 아니다 — 화면 회전·모바일 주소창 접힘으로 `dvh` 가 변할 때도
+   * 같은 어긋남이 생긴다(드래그 이전부터 있던 잠복 결함). `ResizeObserver` 로 한 번에 막는다.
+   */
+  setSize?(size: NaverSize): void;
+}
+
+/** `new maps.Size(w, h)` — `setSize` 인자. 리터럴 `{width,height}` 도 받지만 생성자가 명확하다 */
+export interface NaverSize {
+  readonly width: number;
+  readonly height: number;
 }
 
 /** 사각형·원·폴리곤의 공통 부분 — 생성 후 제거만 한다 */
@@ -160,6 +177,7 @@ export type NaverPolygonOptions = NaverShapeStyle & {
 
 export interface NaverMapsNamespace {
   Point: new (x: number, y: number) => NaverPoint;
+  Size: new (width: number, height: number) => NaverSize;
   LatLng: new (lat: number, lng: number) => NaverLatLng;
   LatLngBounds: new (sw: NaverLatLng, ne: NaverLatLng) => NaverLatLngBounds;
   Map: new (element: HTMLElement, options: NaverMapOptions) => NaverMap;

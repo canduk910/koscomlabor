@@ -1424,6 +1424,41 @@ function useRoadview(mapRef: React.RefObject<NaverMap | null>, active: boolean) 
     });
     panoRef.current = pano;
 
+    /*
+     * ★ **컨테이너가 커지면 파노라마에게 직접 알린다**(2026-08-23).
+     *
+     * 네이버 파노라마는 `size` 옵션을 주지 않으면 **초기화 시점 요소 크기로 고정**된다(공식 문서).
+     * 그래서 시트 높이를 드래그로 바꿔도 **CSS 만으로는 화면이 따라오지 않는다** —
+     * 큐브 면이 잘리거나 아래에 빈 띠가 남는다. `setSize` 를 불러야 다시 그린다.
+     *
+     * ⚠ **드래그 때문에 생긴 문제가 아니다.** 화면 회전·모바일 주소창 접힘으로 `dvh` 가 변할 때도
+     * 같은 어긋남이 있었다(잠복 결함). 그래서 드래그 콜백이 아니라 **`ResizeObserver`** 다 —
+     * 크기가 변한 **모든 경로**를 한 지점에서 받는다.
+     *
+     * `requestAnimationFrame` 으로 합친다: 드래그 중에는 옵저버가 프레임마다 여러 번 울린다.
+     *
+     * ★★ **감시 대상은 `node` 가 아니라 `node.parentElement`(시트의 파노라마 박스)다.**
+     * 처음에 `node` 를 감시했다가 **한 번도 울리지 않는 것을 실측으로 잡았다**(2026-08-23):
+     * 네이버는 초기화할 때 마운트 요소에 **인라인 `width`/`height` 를 px 로 직접 박는다**
+     * (실측 `style="… width: 1663px; height: 294px;"`). 그 인라인이 `size-full` 을 이겨서
+     * **박스가 482px 로 커져도 마운트는 294px 에 머문다** — 크기가 안 변하니 옵저버도 조용하다.
+     * 즉 감시해야 할 것은 **네이버가 손대지 않는 바깥 박스**다.
+     */
+    const observed = node.parentElement;
+    let resizeFrame = 0;
+    const observer = new ResizeObserver(() => {
+      if (resizeFrame !== 0) return;
+      resizeFrame = window.requestAnimationFrame(() => {
+        resizeFrame = 0;
+        if (observed === null) return;
+        const rect = observed.getBoundingClientRect();
+        /* 0 은 시트가 닫히는 중이라는 뜻 — 그 크기로 그리면 파노라마가 깨진 채 남는다 */
+        if (rect.width <= 0 || rect.height <= 0) return;
+        pano.setSize?.(new maps.Size(rect.width, rect.height));
+      });
+    });
+    if (observed !== null) observer.observe(observed);
+
     /** 촬영 연월 — 메타에 있을 때만. **없으면 빈 문자열이다. 지어내지 마라** */
     const syncDate = () => {
       try {
@@ -1466,6 +1501,8 @@ function useRoadview(mapRef: React.RefObject<NaverMap | null>, active: boolean) 
 
     return () => {
       window.clearTimeout(timer);
+      if (resizeFrame !== 0) window.cancelAnimationFrame(resizeFrame);
+      observer.disconnect();
       for (const l of listeners) maps.Event.removeListener(l);
       pano.destroy();
       panoRef.current = null;
@@ -1573,15 +1610,57 @@ function useRoadview(mapRef: React.RefObject<NaverMap | null>, active: boolean) 
 }
 
 /**
+ * ## 로드뷰 시트 높이 — **조합원이 드래그로 정한다**(사용자 지시 2026-08-23)
+ *
+ * 값은 **뷰포트 높이 대비 %**(`dvh`)로 들고 있다. `px` 로 저장하면 회전·기기 교체에서
+ * 엉뚱한 비율이 되고, 이 시트의 제약이 애초에 *"화면의 몇 할을 먹느냐"* 이기 때문이다.
+ */
+const SHEET_HEIGHT_KEY = "koscomlabor:roadview-height";
+/** 종전 고정값 `32dvh` 를 그대로 기본값으로 둔다 — 한 번도 안 만진 조합원은 지금과 같은 화면을 본다 */
+const SHEET_DEFAULT_VH = 32;
+/** 이보다 낮으면 로드뷰가 로드뷰 구실을 못 한다 */
+const SHEET_MIN_PX = 120;
+/**
+ * ★ **시트 위에 지도가 이만큼은 남아야 한다 — 이 상수가 드래그의 상한이다.**
+ *
+ * 이 시트의 전제는 *"뒤의 지도에서 파란 길을 눌러 위치를 옮긴다"* 이다.
+ * 상한이 없으면 조합원이 시트를 끝까지 올려 지도를 다 덮고, 그 순간 **로드뷰 위치를 옮길
+ * 방법이 사라진다**(닫았다 다시 열어야 한다). 180px 은 파란 길 한 구간과 마커 하나를
+ * 함께 겨냥할 수 있는 최소치다. **줄이려면 실기기에서 파란 길을 눌러 보고 줄여라.**
+ */
+const SHEET_MAP_KEEP_PX = 180;
+/**
+ * 헤더+안내문 높이를 **아직 못 쟀을 때만** 쓰는 어림값(첫 렌더의 `aria-valuemax` 전용).
+ * ⚠ 실제 조절 한계는 이 상수가 아니라 **매번 실측한 값**으로 정한다 — 글자 크기 슬라이더로
+ * 헤더가 커지면 상한이 저절로 내려가야 하는데, 상수로 박으면 확대 상태에서 지도가 다 가려진다.
+ */
+const SHEET_CHROME_FALLBACK_PX = 120;
+/** 키보드 한 번(↑/↓)에 움직이는 양. `PageUp/PageDown` 은 3배 */
+const SHEET_KEY_STEP_VH = 4;
+
+function readStoredSheetVh(): number {
+  try {
+    const raw = window.localStorage.getItem(SHEET_HEIGHT_KEY);
+    const v = raw === null ? Number.NaN : Number(raw);
+    return Number.isFinite(v) && v > 0 ? v : SHEET_DEFAULT_VH;
+  } catch {
+    return SHEET_DEFAULT_VH;
+  }
+}
+
+/**
  * ★ **로드뷰 하단 시트**(사용자 지시 2026-08-21 — *"네이버지도의 로드뷰처럼 부분 팝업 형태"*).
  * 디지털온누리 가이드의 검증된 형태를 그대로 따른다.
  *
  * ★★ **`<dialog showModal()>` 을 쓰지 않는다.** 그것은 배경을 `inert` 로 만드는데,
  * **이 시트가 열려 있는 동안 조합원은 뒤의 지도를 눌러 로드뷰 위치를 옮겨야 한다.**
  *
- * **화면을 덮지 않는다**: 뷰포트 하단 고정 · 파노라마 높이 `32dvh` ·
- * 위에 지도가 보인 채로 **파란 길을 다시 누를 수 있어야** 이동이 성립한다.
- * 높이를 키우지 마라 — 지도가 가려지면 이 기능의 전제가 무너진다.
+ * **화면을 덮지 않는다**: 뷰포트 하단 고정 · 위에 지도가 보인 채로 **파란 길을 다시 누를 수
+ * 있어야** 이동이 성립한다.
+ *
+ * ★ **높이는 2026-08-23 부터 고정이 아니다** — 조합원이 손잡이를 끌어 정한다.
+ * 다만 **위 전제는 그대로다**: `SHEET_MAP_KEEP_PX` 가 상한을 걸어 지도가 다 가려지지 않는다.
+ * 그 상한을 없애지 마라.
  *
  * ★ **컴포넌트로 뽑았다**(2026-08-22). 전체 화면 지도는 이 시트를 **`<dialog>` 안에** 렌더해야 한다 —
  * `showModal()` 은 top layer 라 바깥의 `fixed z-40` 은 **모달 뒤로 숨는다.**
@@ -1600,8 +1679,119 @@ function RoadviewSheet({
   mountRef: React.RefObject<HTMLDivElement | null>;
   onClose: () => void;
 }) {
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+  const panoBoxRef = useRef<HTMLDivElement | null>(null);
+
+  /*
+   * ⚠ **여기서 `localStorage` 를 지연 초기화로 읽는 것은 안전하다.**
+   * 이 컴포넌트는 `roadviewAt !== null` 일 때만 렌더되고 그 초기값은 `null` 이라
+   * **서버·하이드레이션 시점에는 존재하지 않는다.** 하이드레이션 불일치가 생길 수 없다.
+   * (`FontScaleControl` 이 `useSyncExternalStore` 를 쓰는 이유는 그쪽이 **항상 SSR 된다**는 것이고,
+   * 여기에는 그 사정이 없다. 같은 이유가 없는데 같은 장치를 쓰지 않는다.)
+   */
+  const [heightVh, setHeightVh] = useState(readStoredSheetVh);
+  /* 드래그 중에는 렌더보다 잦게 읽고 써야 해서 최신값을 ref 로도 들고 있다 */
+  const heightRef = useRef(heightVh);
+
+  /**
+   * 조절 가능한 범위로 자른다. **한계를 상수가 아니라 실측으로 정한다:**
+   * `헤더+안내문` 높이를 매번 재서 빼므로 글자 크기 슬라이더로 헤더가 커지면 상한이 함께 내려간다.
+   */
+  const clampVh = (next: number): number => {
+    const viewport = window.innerHeight;
+    const sheet = sheetRef.current;
+    const box = panoBoxRef.current;
+    const chrome =
+      sheet !== null && box !== null
+        ? sheet.offsetHeight - box.offsetHeight
+        : SHEET_CHROME_FALLBACK_PX;
+    const maxPx = Math.max(SHEET_MIN_PX, viewport - chrome - SHEET_MAP_KEEP_PX);
+    const px = Math.min(maxPx, Math.max(SHEET_MIN_PX, (next / 100) * viewport));
+    /* 소수 한 자리 — `dvh` 를 그대로 넘기므로 반올림을 여기서 끝낸다 */
+    return Math.round((px / viewport) * 1000) / 10;
+  };
+
+  const applyVh = (next: number): void => {
+    const v = clampVh(next);
+    heightRef.current = v;
+    setHeightVh(v);
+  };
+
+  const persistVh = (): void => {
+    try {
+      window.localStorage.setItem(SHEET_HEIGHT_KEY, String(heightRef.current));
+    } catch {
+      /* 저장 실패해도 이번 방문에는 적용된다 */
+    }
+  };
+
+  /*
+   * 포인터 드래그 — **마우스·손가락·펜을 한 벌로** 받는다(Pointer Events).
+   *
+   * ★ **`setPointerCapture` 가 핵심이다.** 없으면 빠르게 끌었을 때 포인터가 손잡이를 벗어나
+   * `pointermove` 가 끊긴다(시트가 손가락을 못 따라오고 중간에 멈춘다).
+   *
+   * ★ **파노라마 위에서는 드래그를 걸지 않는다.** 파노라마 안 한 손가락 끌기는
+   * **시야 회전**이고(§23.1.3) 이 프로젝트는 거기 `touch-action` 을 건드리지 않기로 돼 있다.
+   * 그래서 드래그를 받는 곳은 **손잡이 + 제목 줄까지**, 파노라마 박스 위쪽뿐이다.
+   */
+  const dragRef = useRef<{ id: number; startY: number; startVh: number } | null>(null);
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>): void => {
+    /* `×` 버튼에서 시작한 눌림은 드래그가 아니다 — 닫기를 빼앗으면 안 된다 */
+    if ((e.target as HTMLElement).closest("button") !== null) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    /*
+     * ★ 시작값을 `heightRef` 가 아니라 **지금 화면에 보이는 박스 높이**에서 딴다.
+     * `max-height` 안전망이 박스를 잘라 놨을 수 있고, 그때 상태값에서 출발하면
+     * **손잡이를 잡자마자 시트가 튄다.**
+     */
+    const box = panoBoxRef.current;
+    const startVh =
+      box !== null ? (box.offsetHeight / window.innerHeight) * 100 : heightRef.current;
+    dragRef.current = { id: e.pointerId, startY: e.clientY, startVh };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>): void => {
+    const drag = dragRef.current;
+    if (drag === null || drag.id !== e.pointerId) return;
+    /* 위로 끌면 커진다 — 시트가 아래에 붙어 있으니 위끝이 올라간 만큼 높아진다 */
+    applyVh(drag.startVh + ((drag.startY - e.clientY) / window.innerHeight) * 100);
+  };
+
+  const onPointerEnd = (e: React.PointerEvent<HTMLDivElement>): void => {
+    const drag = dragRef.current;
+    if (drag === null || drag.id !== e.pointerId) return;
+    dragRef.current = null;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+    persistVh();
+  };
+
+  /*
+   * 키보드 — **드래그만 있으면 이 기능은 마우스·손가락 전용이 된다.**
+   * WAI-ARIA `separator`(window splitter) 규약: ↑/↓ 로 옮기고 `Home`/`End` 로 양 끝.
+   */
+  const onHandleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {
+    let next: number | null = null;
+    if (e.key === "ArrowUp") next = heightRef.current + SHEET_KEY_STEP_VH;
+    else if (e.key === "ArrowDown") next = heightRef.current - SHEET_KEY_STEP_VH;
+    else if (e.key === "PageUp") next = heightRef.current + SHEET_KEY_STEP_VH * 3;
+    else if (e.key === "PageDown") next = heightRef.current - SHEET_KEY_STEP_VH * 3;
+    /* 0·100 은 `clampVh` 가 각각 최소·최대로 잘라 준다 — 한계를 두 곳에 적지 않는다 */
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = 100;
+    if (next === null) return;
+    e.preventDefault();
+    applyVh(next);
+    persistVh();
+  };
+
   return (
     <div
+      ref={sheetRef}
       role="dialog"
       aria-label={at.label !== null ? `${at.label} 로드뷰` : "로드뷰"}
       /*
@@ -1616,50 +1806,101 @@ function RoadviewSheet({
        * 값은 네이버 컨트롤(100)보다 확실히 위인 300. **40 으로 되돌리지 마라.**
        * 저작권 표기는 사라지지 않는다 — 시트 안 파노라마가 자기 로고·저작권을 직접 그린다.
        */
-      className="rounded-t-panel fixed inset-x-0 bottom-0 z-[300] border-t-2 border-border-strong bg-bg shadow-hero"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      className="rounded-t-panel fixed inset-x-0 bottom-0 z-[300] flex flex-col border-t-2 border-border-strong bg-bg shadow-hero"
+      /*
+       * ★★ **`maxHeight` 가 상한의 최종 보증이다 — 이걸 빼면 지도가 다 가려질 수 있다.**
+       *
+       * 드래그·키보드는 `clampVh` 가 실측으로 막지만, **저장된 값으로 열 때는 아무도 안 막는다.**
+       * 실측으로 잡은 구멍(2026-08-23): 글자 크기를 75%→130% 로 올리면 헤더가 127→209px 로 커져
+       * **같은 저장값(65.8dvh)에서 지도가 80px 만 남았다**(설계 하한 180px).
+       *
+       * 그 재계산을 JS 로 하려면 `effect` 안에서 재고 `setState` 해야 하는데, 이 프로젝트는
+       * 그 패턴을 린트로 막는다(`set-state-in-effect`). **레이아웃이 할 수 있는 일을 JS 로 옮기지 않는다** —
+       * 시트에 `max-height` 를 걸고 파노라마 박스가 `flex` 로 줄어들게 하면 **브라우저가 매 렌더 정확히** 자른다.
+       * 글자 크기·회전·주소창 접힘까지 전부 공짜로 따라온다.
+       */
+      style={{
+        paddingBottom: "env(safe-area-inset-bottom)",
+        maxHeight: `calc(100dvh - ${SHEET_MAP_KEEP_PX}px)`,
+      }}
     >
       {/*
-        헤더 **2단 구성**(2026-08-22 · 사용자 지적 *"모바일에서 텍스트 배치가 보기 좋지 않다"*).
+        드래그를 받는 영역 — **손잡이 + 제목 줄 전체**다.
 
-        ★ **종전에는 제목·촬영일·`닫기` 가 한 행에서 서로를 밀었다.** 390px 실측:
-        셋 다 `flex-shrink:1` · `word-break:normal` 이라 **전부 2줄로 깨졌다** —
-        `로드뷰 — 2호 개나리 화장`/`실` · `촬영`/`2025.04` · `닫`/`기`.
-        헤더가 89px 로 부풀어 시트가 뷰포트 **54%**(설계 48%)를 먹었다.
-
-        **고친 방식**: 세로로 쌓을 것(제목 + 촬영일)과 옆에 고정할 것(`닫기`)을 나눈다.
-        - 제목: `min-w-0` + **`break-keep`**(어절 유지 — 이것이 없어서 낱말 중간이 잘렸다)
-        - 촬영일: 제목 **아래 줄**로 내린다. 같은 행에 두면 셋이 폭을 다툰다
-        - `닫기`: **`×` 아이콘 44px**. 글자 `닫기` 는 `text-body`(18px 하한) + `px-5` 라
-          좁은 헤더에서 가장 큰 폭 소비자였다. 사용자가 제시한 온누리 화면도 `×` 다.
-          **`aria-label` 이 뜻을 진다**(§2 — 형태만으로 전달하지 않는다).
+        손잡이 막대만 잡게 하면 터치 목표가 6px 짜리가 된다(이 프로젝트 기준 44px).
+        제목 줄까지 함께 받으면 **실제 목표가 70px 안팎**이 되고, 시트가 세로로 더 길어지지도 않는다.
+        `touch-none`: 이게 없으면 세로 드래그를 브라우저가 **페이지 스크롤로 가져간다.**
       */}
-      <div className="flex items-start gap-3 px-4 py-3">
-        <div className="min-w-0 flex-1">
-          <p className="break-keep text-body font-bold leading-snug text-ink">
-            {at.label !== null ? `로드뷰 — ${at.label}` : "로드뷰"}
-          </p>
-          {/* 촬영 연월 — **메타에 있을 때만.** 없으면 이 줄이 아예 없다(지어내지 않는다) */}
-          {panoDate !== "" ? (
-            <p className="mt-1 text-caption tabular-nums text-ink-muted">{panoDate}</p>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="로드뷰 닫기"
-          className="ease-out-soft flex size-[44px] shrink-0 items-center justify-center rounded-full border-2 border-primary bg-bg text-primary transition-colors duration-150 hover:bg-primary-tint focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
+      <div
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerEnd}
+        onPointerCancel={onPointerEnd}
+        className="shrink-0 cursor-ns-resize touch-none select-none"
+      >
+        <div
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="로드뷰 높이 조절"
+          /*
+           * ⚠ **`aria-valuemin`/`aria-valuemax` 를 쓰지 않는다.** 참 한계는 `clampVh` 가
+           * **DOM 을 실측해서** 정하는데, 그 실측을 렌더 중에 하면 `react-hooks/refs` 위반이고
+           * (실제로 린트가 잡았다) 첫 렌더에는 잴 대상 자체가 없어 **틀린 최댓값을 알린다.**
+           * 값의 단위가 `%` 라 **생략 시 규약 기본값 0~100 이 그대로 맞는 눈금**이다.
+           * 굳이 넣겠다면 **매 렌더에 옳은 값**을 낼 방법을 먼저 찾아라 — 틀린 한계는 없는 것만 못하다.
+           */
+          aria-valuenow={Math.round(heightVh)}
+          aria-valuetext={`화면 높이의 ${Math.round(heightVh)} 퍼센트`}
+          tabIndex={0}
+          onKeyDown={onHandleKeyDown}
+          className="flex h-6 w-full items-center justify-center focus-visible:outline-3 focus-visible:outline-primary focus-visible:-outline-offset-2"
         >
-          <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
-            <path
-              d="M6 6l12 12M18 6L6 18"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-            />
-          </svg>
-        </button>
+          {/* 막대는 **손잡이가 있다는 표시일 뿐**이다 — 뜻은 `role`·`aria-label` 이 진다(§2) */}
+          <span aria-hidden="true" className="h-1.5 w-10 rounded-full bg-border-strong" />
+        </div>
+
+        {/*
+          헤더 **2단 구성**(2026-08-22 · 사용자 지적 *"모바일에서 텍스트 배치가 보기 좋지 않다"*).
+
+          ★ **종전에는 제목·촬영일·`닫기` 가 한 행에서 서로를 밀었다.** 390px 실측:
+          셋 다 `flex-shrink:1` · `word-break:normal` 이라 **전부 2줄로 깨졌다** —
+          `로드뷰 — 2호 개나리 화장`/`실` · `촬영`/`2025.04` · `닫`/`기`.
+          헤더가 89px 로 부풀어 시트가 뷰포트 **54%**(설계 48%)를 먹었다.
+
+          **고친 방식**: 세로로 쌓을 것(제목 + 촬영일)과 옆에 고정할 것(`닫기`)을 나눈다.
+          - 제목: `min-w-0` + **`break-keep`**(어절 유지 — 이것이 없어서 낱말 중간이 잘렸다)
+          - 촬영일: 제목 **아래 줄**로 내린다. 같은 행에 두면 셋이 폭을 다툰다
+          - `닫기`: **`×` 아이콘 44px**. 글자 `닫기` 는 `text-body`(18px 하한) + `px-5` 라
+            좁은 헤더에서 가장 큰 폭 소비자였다. 사용자가 제시한 온누리 화면도 `×` 다.
+            **`aria-label` 이 뜻을 진다**(§2 — 형태만으로 전달하지 않는다).
+        */}
+        <div className="flex items-start gap-3 px-4 pb-3">
+          <div className="min-w-0 flex-1">
+            <p className="break-keep text-body font-bold leading-snug text-ink">
+              {at.label !== null ? `로드뷰 — ${at.label}` : "로드뷰"}
+            </p>
+            {/* 촬영 연월 — **메타에 있을 때만.** 없으면 이 줄이 아예 없다(지어내지 않는다) */}
+            {panoDate !== "" ? (
+              <p className="mt-1 text-caption tabular-nums text-ink-muted">{panoDate}</p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="로드뷰 닫기"
+            className="ease-out-soft flex size-[44px] shrink-0 items-center justify-center rounded-full border-2 border-primary bg-bg text-primary transition-colors duration-150 hover:bg-primary-tint focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
+          >
+            <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
+              <path
+                d="M6 6l12 12M18 6L6 18"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* 로드뷰는 스크린리더에 무의미하다 — 텍스트 등가를 만들 수 없다(§21.3.2).
@@ -1670,8 +1911,18 @@ function RoadviewSheet({
 
       {/* ★ **`overflow-hidden` 을 빼지 마라**(2026-08-22 실측). 없으면 네이버 파노라마가
           내부에 그리는 큐브 면·로고·저작권·축척이 박스 밖으로 **1150px 넘게 삐져나와**
-          아래 안내문 위에 겹쳐 찍힌다(첨부 화면에서 `©NAVER Corp`·`100m` 가 문장 위에 있었다). */}
-      <div className="relative h-[32dvh] overflow-hidden bg-surface">
+          아래 안내문 위에 겹쳐 찍힌다(첨부 화면에서 `©NAVER Corp`·`100m` 가 문장 위에 있었다).
+
+          ★ 높이가 **인라인 스타일**인 이유: 드래그로 정하는 값이라 Tailwind 클래스로 못 적는다.
+          이 박스가 바뀌면 `useRoadview` 의 `ResizeObserver` 가 파노라마에 `setSize` 를 걸어 준다 —
+          **CSS 만 바꾸면 파노라마는 초기 크기 그대로 그린다.** */}
+      <div
+        ref={panoBoxRef}
+        style={{ height: `${heightVh}dvh` }}
+        /* `min-h-[120px]` + 기본 `flex-shrink:1` — 시트가 `max-height` 에 닿으면 **여기가 줄어든다.**
+           `SHEET_MIN_PX` 와 같은 값이다(둘 다 120). 한쪽만 바꾸지 마라 */
+        className="relative min-h-[120px] overflow-hidden bg-surface"
+      >
         {/* `touch-action` 을 건드리지 않는다 — 여기서는 한 손가락 회전이 설계된 동작이다(§23.1.3) */}
         <div ref={mountRef} className="size-full" />
         {panoStatus === "loading" ? (
@@ -1696,8 +1947,11 @@ function RoadviewSheet({
 
         ⚠ **첫 문장은 지우지 마라.** 지도를 눌러 위치를 옮기는 것은 **화면에 단서가 없어
         발견 자체가 불가능**하다. 파란 길이 무엇인지도 여기서만 말한다.
+
+        ⚠ **손잡이 설명을 여기에 덧붙이지 마라**(§5.3). 막대 손잡이는 보편 관용이고,
+        보이지 않는 조합원에게는 `role="separator"` + `aria-label` 이 이미 말한다.
       */}
-      <p className="break-keep px-4 py-3 text-caption leading-[1.6] text-ink">
+      <p className="shrink-0 break-keep px-4 py-3 text-caption leading-[1.6] text-ink">
         지도의 <b>파란 길</b>을 누르면 그 지점 로드뷰로 이동합니다(주황 원 = 지금 보는 위치).
       </p>
     </div>
