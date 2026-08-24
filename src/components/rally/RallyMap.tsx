@@ -294,32 +294,42 @@ const MY_LOCATION_Z = 50;
  * 종전: CSS border 삼각형, 박스 44px · 높이 22px · 반폭 15px.
  * 지금: SVG 부채꼴, **박스 88px · 반지름 44px**(높이 기준 정확히 2배).
  *
- * ⚠ **반각 34° 는 종전 삼각형에서 그대로 가져온 값**이다(`atan(15/22) ≈ 34.3°`).
- * 각도는 *"얼마나 넓게 보이는가"* 라는 **사실 주장**이라 크기 변경에 딸려 바꾸지 않았다.
- * (실제 파노라마 `fov` 는 100° = 반각 50° 라 이 부채꼴은 실제보다 좁다. 맞추려면 여기만 고치면 된다.)
+ * ★★ **각도는 «지금 실제로 보이는 시야각»을 그대로 쓴다**(사용자 지시 2026-08-24 —
+ * *"실제 시야각으로 맞춰줘"*). 값은 `pano.getPov().fov` 이고 **로드뷰를 확대·축소하면 함께 좁아지고
+ * 넓어진다** — 고정값이 아니다.
+ *
+ * ⚠ **고정 상수로 되돌리지 마라.** 이 도형은 *"이만큼이 보인다"* 는 **사실 주장**이고,
+ * 로드뷰의 `fov` 는 줌에 따라 변하므로 상수는 곧 거짓이 된다.
+ * 종전 값의 이력: 삼각형 시절 반각 34°(`atan(15/22)`) → 2026-08-24 실제 `fov` 추종.
  */
 const SPOT_BOX = 88;
 const SPOT_CONE_RADIUS = 44;
-const SPOT_CONE_HALF_DEG = 34;
+/** `getPov().fov` 를 못 읽었을 때만 쓰는 값 — 파노라마 생성 옵션의 `fov` 와 같다 */
+const SPOT_CONE_FALLBACK_FOV = 100;
 
 /**
  * 위(진북 = `rotate(0)` 방향)로 열린 부채꼴 경로. **꼭짓점은 박스 정중앙**이고 그 자리에 주황 점이 얹힌다.
+ *
  * SVG 는 y 가 아래로 커지므로 «위»는 `-cos` 다. 호는 왼→오른쪽으로 도는 쪽(`sweep-flag = 1`)이어야
  * 바깥으로 볼록해진다 — 0 으로 바꾸면 안으로 파인다.
+ *
+ * ⚠ **반각이 180°를 넘으면 큰 호(`large-arc-flag`)여야 한다.** 지금 `fov` 범위에서는 오지 않지만
+ * 계산으로 넣어 둔다 — 넘는 순간 부채꼴이 **반대로 접힌 이상한 도형**이 된다.
  */
-const SPOT_CONE_PATH = (() => {
+function spotConePath(halfDeg: number): string {
   const c = SPOT_BOX / 2;
-  const rad = (SPOT_CONE_HALF_DEG * Math.PI) / 180;
+  const rad = (halfDeg * Math.PI) / 180;
   const dx = SPOT_CONE_RADIUS * Math.sin(rad);
   const dy = SPOT_CONE_RADIUS * Math.cos(rad);
   const round = (n: number): string => n.toFixed(2);
+  const largeArc = halfDeg > 90 ? 1 : 0;
   return [
     `M${round(c)} ${round(c)}`,
     `L${round(c - dx)} ${round(c - dy)}`,
-    `A${SPOT_CONE_RADIUS} ${SPOT_CONE_RADIUS} 0 0 1 ${round(c + dx)} ${round(c - dy)}`,
+    `A${SPOT_CONE_RADIUS} ${SPOT_CONE_RADIUS} 0 ${largeArc} 1 ${round(c + dx)} ${round(c - dy)}`,
     "Z",
   ].join(" ");
-})();
+}
 
 /**
  * ★ **맨 휠로 지도를 확대할 기기인가**(2026-08-24 · 사용자 지시).
@@ -1516,6 +1526,8 @@ function useRoadview(mapRef: React.RefObject<NaverMap | null>, active: boolean) 
   /** 지도 위 **현재 보는 위치** 마커의 좌표·시선 방향(파노라마와 양방향 동기) */
   const [spotAt, setSpotAt] = useState<{ lat: number; lng: number } | null>(null);
   const [spotPan, setSpotPan] = useState(0);
+  /** 지금 실제 시야각(도). 로드뷰를 확대하면 좁아진다 — 지도 부채꼴이 이걸 그대로 그린다 */
+  const [spotFov, setSpotFov] = useState(SPOT_CONE_FALLBACK_FOV);
   const [panoStatus, setPanoStatus] = useState<"idle" | "loading" | "failed">("idle");
 
   const panoMountRef = useRef<HTMLDivElement | null>(null);
@@ -1906,7 +1918,12 @@ function useRoadview(mapRef: React.RefObject<NaverMap | null>, active: boolean) 
         /* 시선이 돌면 라벨 자리가 통째로 바뀐다 — 접힘을 다시 판정한다 */
         foldMarks();
         const pov = pano.getPov?.();
-        if (pov) setSpotPan(pov.pan ?? 0);
+        if (pov) {
+          setSpotPan(pov.pan ?? 0);
+          /* `fov` 가 0·음수·비정상이면 부채꼴이 사라지거나 뒤집힌다 — 그때는 기본값을 쓴다 */
+          const fov = pov.fov;
+          setSpotFov(typeof fov === "number" && fov > 0 ? fov : SPOT_CONE_FALLBACK_FOV);
+        }
       }),
     ];
     /* 파노라마가 없는 지점은 이벤트를 하나도 주지 않는 경우가 있어 시한을 함께 건다 */
@@ -2014,7 +2031,7 @@ function useRoadview(mapRef: React.RefObject<NaverMap | null>, active: boolean) 
           `<div style="width:${SPOT_BOX}px;height:${SPOT_BOX}px;position:relative;transform:rotate(${spotPan}deg)">` +
           `<svg viewBox="0 0 ${SPOT_BOX} ${SPOT_BOX}" width="${SPOT_BOX}" height="${SPOT_BOX}" ` +
           `style="position:absolute;inset:0;" aria-hidden="true" focusable="false">` +
-          `<path d="${SPOT_CONE_PATH}" fill="rgba(242,107,29,.38)"/></svg>` +
+          `<path d="${spotConePath(spotFov / 2)}" fill="rgba(242,107,29,.38)"/></svg>` +
           `<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);` +
           `width:18px;height:18px;border-radius:9999px;background:#f26b1d;border:3px solid #fff;` +
           `box-shadow:0 0 0 2px #f26b1d,0 2px 8px rgba(20,22,26,.45)"></div></div>`,
@@ -2025,7 +2042,7 @@ function useRoadview(mapRef: React.RefObject<NaverMap | null>, active: boolean) 
     return () => {
       marker.setMap(null);
     };
-  }, [mapRef, spotAt, spotPan, streetMode, active]);
+  }, [mapRef, spotAt, spotPan, spotFov, streetMode, active]);
 
   /* ★ 마커 좌표는 **상태를 만드는 쪽에서 함께 세운다**(`openRoadview`·지도 클릭·`closeRoadview`).
      이펙트로 파생시키면 한 프레임 늦게 따라와 시트가 먼저 열리고 마커가 뒤늦게 튄다. */
