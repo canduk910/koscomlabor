@@ -1625,6 +1625,117 @@ function useRoadview(mapRef: React.RefObject<NaverMap | null>, active: boolean) 
      * 즉 감시해야 할 것은 **네이버가 손대지 않는 바깥 박스**다.
      */
     /*
+     * ★ **로드뷰 안 지점 라벨**(사용자 지시 2026-08-24 — 첨부한 네이버 화면처럼).
+     *
+     * `map: pano` 로 만든 `Marker` 다. 좌표 → 화면 위치 계산과 **시야 밖 숨김**을 네이버가 해 준다
+     * (`fromCoordToOffset` 로 우리가 직접 그리는 길도 되지만, 회전·줌·이동마다 전부 다시 계산해야 해
+     *  훨씬 잘 깨진다). 대상은 `MAP_FEATURES` 의 `inRoadview` 가 정한다.
+     *
+     * ⚠⚠ **`init` 직후에 만들면 `left:-9999px` 에 박혀 영영 안 보인다**(실측 2026-08-24).
+     * 그 상태는 `setPov` 로도 안 풀린다 — 아주 작은 값이든 큰 값이든 마찬가지였다.
+     * **위치가 바뀌어야**(`pano_changed`) 비로소 자리를 잡는다. 그래서 **첫 `pano_changed` 뒤 한 틱**에
+     * 만든다. 그 뒤의 이동에서는 네이버가 알아서 다시 놓는다.
+     * ⚠ `setPanoId(같은 id)` 로 흔들지 마라 — **오히려 다시 -9999 로 돌아간다**(실측).
+     *
+     * ⚠ **`pointer-events:none` 을 빼지 마라.** 라벨이 탭을 가로채면 바닥 탭 이동이 그 자리에서 죽는다.
+     * ⚠ 라벨은 전부 **지평선 한 줄**에 놓인다(거리와 무관). 방향이 비슷하면 겹치므로
+     *   **꼬리 길이를 3단으로 엇갈려** 세운다. 대상을 늘리면 겹침이 그만큼 늘어난다.
+     */
+    const marks: NaverMarker[] = [];
+    /** 겹치면 **뒤엣것을 접는다**. 배열 순서가 곧 우선순위다(집결위치가 맨 앞) */
+    const markOrder: NaverMarker[] = [];
+    let marksBuilt = false;
+    const buildMarks = () => {
+      if (marksBuilt) return;
+      marksBuilt = true;
+      let order = 0;
+      MAP_FEATURES.forEach((feature, index) => {
+        if (feature.inRoadview !== true) return;
+        const at = featureLabelAnchor(feature);
+        const color = toneColor(feature.tone);
+        /*
+         * 꼬리 3단(8·38·68px) — 같은 방향에 몰린 라벨이 서로를 덮지 않게 높이를 엇갈린다.
+         *
+         * ⚠ **단 수를 늘리지 마라.** 기본 시트 높이에서 파노라마는 270px 이고 지평선은 그 절반
+         * (약 135px)이다. 라벨 높이 26px 을 더하면 **68 + 26 = 94px** 로 이미 여유의 대부분을 쓴다 —
+         * 4단(98px)이면 위 라벨이 파노라마 바깥으로 잘린다(390px 실측).
+         * 겹침을 더 줄이려면 단이 아니라 **대상 개수**를 줄여라.
+         */
+        const stem = 8 + (order % 3) * 30;
+        order += 1;
+        const mark = feature.symbol === undefined ? "" : symbolSvg(feature.symbol, 13);
+        const marker = new maps.Marker({
+            position: new maps.LatLng(at.lat, at.lng),
+            map: pano,
+            /* 눌러도 아무 일도 없어야 한다 — 이 라벨은 «어디인지»만 말한다 */
+            clickable: false,
+            /*
+             * ★ **③ 집결위치가 맨 위**다. 같은 방향에 몰리면 결국 하나는 가려지는데,
+             * 그때 살아남아야 하는 것은 **조합원이 실제로 가야 하는 곳**이다.
+             * (`inRoadview` 대상 중 화장실이 아닌 것 = 집결위치.)
+             */
+            zIndex: feature.symbol === undefined ? 300 : 200 + index,
+            icon: {
+              content: [
+                `<div aria-hidden="true" style="pointer-events:none;transform:translate(-50%,-100%);white-space:nowrap;">`,
+                /* 12px·padding 3/8 → 라벨 높이 약 26px. **키우지 마라** — 꼬리 단 간격 30px 과 맞물려
+                   위아래 줄이 서로 닿지 않는 지점이다(위 `stem` 주석) */
+                `<div data-rv-pill="1" style="display:inline-flex;align-items:center;gap:4px;background:#ffffff;`,
+                `border:2px solid ${color};border-radius:9999px;padding:3px 8px;`,
+                `font-size:12px;font-weight:700;line-height:1.2;color:${color};`,
+                `box-shadow:0 2px 6px rgb(0 0 0 / .35);">`,
+                mark,
+                `<span>${circledNumber(index)} ${feature.label}</span>`,
+                `</div>`,
+                `<div style="width:2px;height:${stem}px;background:${color};margin:0 auto;"></div>`,
+                `</div>`,
+              ].join(""),
+              anchor: new maps.Point(0, 0),
+            },
+        });
+        marks.push(marker);
+        /* 집결위치를 맨 앞에 — 겹치면 **조합원이 가야 하는 곳**이 살아남아야 한다 */
+        if (feature.symbol === undefined) markOrder.unshift(marker);
+        else markOrder.push(marker);
+      });
+      foldMarks();
+    };
+
+    /*
+     * ★ **겹치는 라벨을 접는다**(지도 §21.2 와 같은 규칙을 로드뷰에 적용).
+     *
+     * 라벨은 거리와 무관하게 **전부 지평선 한 줄**에 붙는다. 꼬리를 3단으로 엇갈려도
+     * 방향이 가까우면 가로로 겹친다 — 390px 실측에서 다섯 개가 한 화면에 들어오면
+     * **9쌍이 겹쳤고 ③ 이름이 잘려 읽혔다.** 그래서 **앞선 것과 겹치는 뒤엣것을 감춘다.**
+     *
+     * ⚠ **`display:none` 이 아니라 `visibility`** 다 — 자리를 유지해야 다음 판정에서 다시 잴 수 있다.
+     * ⚠ 네이버가 시야 밖 마커를 `left:-9999px` 로 치워 두므로 그건 판정 대상에서 뺀다.
+     */
+    let foldFrame = 0;
+    const foldMarks = () => {
+      if (foldFrame !== 0) return;
+      foldFrame = window.requestAnimationFrame(() => {
+        foldFrame = 0;
+        const taken: DOMRect[] = [];
+        for (const marker of markOrder) {
+          const host = marker.getElement?.();
+          const pill = host?.querySelector<HTMLElement>("[data-rv-pill]");
+          if (host === null || host === undefined || pill === null || pill === undefined) continue;
+          host.style.visibility = "";
+          const rect = pill.getBoundingClientRect();
+          /* 시야 밖(네이버가 치워 둔 것)은 접을 것도 없다 */
+          if (rect.width <= 0 || rect.left < -1000) continue;
+          const hit = taken.some(
+            (t) =>
+              !(rect.right <= t.left || rect.left >= t.right || rect.bottom <= t.top || rect.top >= t.bottom),
+          );
+          if (hit) host.style.visibility = "hidden";
+          else taken.push(rect);
+        }
+      });
+    };
+
+    /*
      * ★ **바닥 탭 → 그 방향으로 한 칸 이동**. 설계 근거는 `bearingDeg` 위 주석에 있다.
      *
      * ⚠ **캡처 단계로 듣는다.** 네이버가 자기 드래그 처리에서 전파를 끊어도 우리는 받아야 한다.
@@ -1716,11 +1827,18 @@ function useRoadview(mapRef: React.RefObject<NaverMap | null>, active: boolean) 
       pano.addListener("pano_changed", () => {
         setPanoStatus("idle");
         syncDate();
+        /* 한 틱 미룬다 — 이 시점에는 아직 배치 준비가 안 돼 `-9999` 로 박힌다(위 주석) */
+        window.setTimeout(() => {
+          buildMarks();
+          foldMarks();
+        }, 0);
         const p = pano.getPosition?.();
         if (p) setSpotAt({ lat: p.lat(), lng: p.lng() });
       }),
       /* 시선을 돌리면 지도 마커의 시야 콘도 같이 돈다 */
       pano.addListener("pov_changed", () => {
+        /* 시선이 돌면 라벨 자리가 통째로 바뀐다 — 접힘을 다시 판정한다 */
+        foldMarks();
         const pov = pano.getPov?.();
         if (pov) setSpotPan(pov.pan ?? 0);
       }),
@@ -1735,6 +1853,10 @@ function useRoadview(mapRef: React.RefObject<NaverMap | null>, active: boolean) 
       if (resizeFrame !== 0) window.cancelAnimationFrame(resizeFrame);
       node.removeEventListener("pointerdown", onTapDown, true);
       node.removeEventListener("pointerup", onTapUp, true);
+      if (foldFrame !== 0) window.cancelAnimationFrame(foldFrame);
+      for (const mark of marks) mark.setMap(null);
+      marks.length = 0;
+      markOrder.length = 0;
       observer.disconnect();
       for (const l of listeners) maps.Event.removeListener(l);
       pano.destroy();

@@ -258,6 +258,16 @@ interface MapFeatureBase {
    * 거리를 잰 것은 ④(`park-toilet`) 하나뿐이다 — ⑤⑥⑦ 에 같은 문장을 복사하면
    * **재본 적 없는 거리를 사실로 진술**하게 된다.
    */
+  /**
+   * ★ **로드뷰 안에도 라벨을 띄운다**(사용자 지시 2026-08-24 · 첨부한 네이버 화면처럼).
+   *
+   * 켤 대상은 **눈으로 봐서는 알 수 없는 지점**이다(사용자 선택): ③ 집결위치 · ④~⑦ 화장실.
+   * ①② 무대는 **2026-03 촬영 화면에 아직 없어** 빈 도로를 가리키게 되고,
+   * 라벨은 전부 지평선 한 줄에 몰려 서로 겹치므로 **개수를 늘리는 데 대가가 있다.**
+   *
+   * ⚠ 이걸 켜면 지도와 **같은 번호·같은 이름**이 로드뷰에도 나간다. 한쪽만 고치지 마라.
+   */
+  inRoadview?: true;
   popupNote?: {
     /**
      * 첫 줄 — **무엇을 잰 것인지 확정한다. 줄이거나 흐리게 하지 마라**(검증 25회차 요구 186·187).
@@ -598,6 +608,8 @@ export const MAP_FEATURES: readonly MapFeature[] = [
     labelAt: { lat: 37.526738, lng: 126.920200 },
     placement: "top",
     labelGap: 14,
+    /** 로드뷰 안에도 뜬다 — 근거는 `inRoadview` 주석 */
+    inRoadview: true,
     tone: "go",
     outline: "dashed",
     confidence: "estimated",
@@ -671,6 +683,8 @@ export const MAP_FEATURES: readonly MapFeature[] = [
     placement: "top",
     labelGap: 26,
     // 조합원이 **가는 곳** 계열이라 파랑을 유지한다(회색은 참고 지물의 색이다, §20.20.3)
+    /** 로드뷰 안에도 뜬다 — 근거는 `inRoadview` 주석 */
+    inRoadview: true,
     tone: "go",
     /*
      * ⚠ **`dashed` 가 렌더를 가른다**(§30.7.2). 도트에 **확신도 축**을 새로 만든 것이다:
@@ -708,6 +722,8 @@ export const MAP_FEATURES: readonly MapFeature[] = [
     textMode: "popup",
     placement: "top",
     labelGap: 26,
+    /** 로드뷰 안에도 뜬다 — 근거는 `inRoadview` 주석 */
+    inRoadview: true,
     tone: "go",
     outline: "dashed",
     /*
@@ -744,6 +760,8 @@ export const MAP_FEATURES: readonly MapFeature[] = [
     textMode: "popup",
     placement: "top",
     labelGap: 26,
+    /** 로드뷰 안에도 뜬다 — 근거는 `inRoadview` 주석 */
+    inRoadview: true,
     tone: "go",
     outline: "dashed",
     /*
@@ -780,6 +798,8 @@ export const MAP_FEATURES: readonly MapFeature[] = [
     textMode: "popup",
     placement: "top",
     labelGap: 26,
+    /** 로드뷰 안에도 뜬다 — 근거는 `inRoadview` 주석 */
+    inRoadview: true,
     tone: "go",
     outline: "dashed",
     /*

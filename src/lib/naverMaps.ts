@@ -147,6 +147,8 @@ export interface NaverOverlay {
 /** 마커는 줌에 따라 아이콘(라벨)을 갈아끼운다(§21.2) */
 export interface NaverMarker extends NaverOverlay {
   setIcon(icon: NaverMarkerIcon): void;
+  /** 마커가 실제로 그려진 DOM. 로드뷰 라벨 겹침 판정이 **픽셀 실측**이라 필요하다(§21.2 와 같은 이유) */
+  getElement?(): HTMLElement | null | undefined;
   /** `minZoomOverride` 로 라벨 방향이 바뀌면 앵커 좌표도 함께 옮긴다(§23.2.3) */
   setPosition(position: NaverLatLng): void;
   /** 배지·pill 클릭 → 팝업(§25.4). `clickable: true` 인 마커에서만 발생한다 */
@@ -160,7 +162,12 @@ export interface NaverMarkerIcon {
 
 export interface NaverMarkerOptions {
   position: NaverLatLng;
-  map: NaverMap;
+  /**
+   * ⚠ **파노라마도 받는다**(2026-08-24 실측). 공식 문서에는 `Map` 만 적혀 있지만
+   * `map: panorama` 로 만들면 라벨이 **로드뷰 안 실제 방향에** 뜨고 시야 밖에서는 스스로 숨는다.
+   * 좌표→화면 계산과 가림 처리를 네이버가 해 주므로 직접 그리는 것보다 훨씬 덜 깨진다.
+   */
+  map: NaverMap | NaverPanorama;
   icon: NaverMarkerIcon;
   clickable: boolean;
   zIndex: number;
