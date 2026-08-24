@@ -63,6 +63,11 @@ export interface NaverMap {
    * 타입부터 다시 만들지 않게 하기 위해서다. **쓰기 전에 실기기 실측이 선행돼야 한다.**
    */
   panBy(x: number, y: number): void;
+  /**
+   * 생성 이후 옵션 변경. **휠 확대를 켰다 껐다 하는 데 쓴다**(2026-08-24 · `wheelZoomEnabled`).
+   * 부분 객체를 받는다 — 넘기지 않은 옵션은 유지된다.
+   */
+  setOptions(options: Partial<NaverMapOptions>): void;
   addListener(eventName: string, listener: (payload?: unknown) => void): NaverMapEventListener;
   destroy(): void;
 }

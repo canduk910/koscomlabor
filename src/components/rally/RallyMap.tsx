@@ -289,6 +289,52 @@ const MY_LOCATION_Z = 50;
  *   여기서 또 낭독되면 소음이다(§20.9).
  */
 /**
+ * ★ **로드뷰 «지금 보는 위치» 표식의 시야 부채꼴**(사용자 지시 2026-08-24 — *"2배 키우면서 부채꼴로"*).
+ *
+ * 종전: CSS border 삼각형, 박스 44px · 높이 22px · 반폭 15px.
+ * 지금: SVG 부채꼴, **박스 88px · 반지름 44px**(높이 기준 정확히 2배).
+ *
+ * ⚠ **반각 34° 는 종전 삼각형에서 그대로 가져온 값**이다(`atan(15/22) ≈ 34.3°`).
+ * 각도는 *"얼마나 넓게 보이는가"* 라는 **사실 주장**이라 크기 변경에 딸려 바꾸지 않았다.
+ * (실제 파노라마 `fov` 는 100° = 반각 50° 라 이 부채꼴은 실제보다 좁다. 맞추려면 여기만 고치면 된다.)
+ */
+const SPOT_BOX = 88;
+const SPOT_CONE_RADIUS = 44;
+const SPOT_CONE_HALF_DEG = 34;
+
+/**
+ * 위(진북 = `rotate(0)` 방향)로 열린 부채꼴 경로. **꼭짓점은 박스 정중앙**이고 그 자리에 주황 점이 얹힌다.
+ * SVG 는 y 가 아래로 커지므로 «위»는 `-cos` 다. 호는 왼→오른쪽으로 도는 쪽(`sweep-flag = 1`)이어야
+ * 바깥으로 볼록해진다 — 0 으로 바꾸면 안으로 파인다.
+ */
+const SPOT_CONE_PATH = (() => {
+  const c = SPOT_BOX / 2;
+  const rad = (SPOT_CONE_HALF_DEG * Math.PI) / 180;
+  const dx = SPOT_CONE_RADIUS * Math.sin(rad);
+  const dy = SPOT_CONE_RADIUS * Math.cos(rad);
+  const round = (n: number): string => n.toFixed(2);
+  return [
+    `M${round(c)} ${round(c)}`,
+    `L${round(c - dx)} ${round(c - dy)}`,
+    `A${SPOT_CONE_RADIUS} ${SPOT_CONE_RADIUS} 0 0 1 ${round(c + dx)} ${round(c - dy)}`,
+    "Z",
+  ].join(" ");
+})();
+
+/**
+ * ★ **맨 휠로 지도를 확대할 기기인가**(2026-08-24 · 사용자 지시).
+ *
+ * `(hover: hover) and (pointer: fine)` = **마우스가 달린 기기**. 터치·펜만 있는 기기는 걸러진다.
+ * 이 조건이 §27.13 의 위험(*"지도가 화면을 덮은 모바일에서 페이지가 안 내려간다"*)을 막는
+ * **유일한 장치**다 — 조건을 지우면 그 위험이 그대로 돌아온다.
+ *
+ * ⚠ 호출 시점에 매번 잰다. 노트북에 마우스를 붙였다 뗐다 하는 경우까지 따라간다.
+ */
+function wheelZoomEnabled(): boolean {
+  return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+}
+
+/**
  * ★ **로드뷰 «바닥을 누르면 그 방향으로 이동»**(사용자 지시 2026-08-24 — *"최신 로드뷰"*).
  *
  * 네이버 파노라마 API 에는 이 동작을 켜는 옵션이 **없다**(공식 옵션 전수: `size`·`panoId`·`position`·
@@ -1717,6 +1763,8 @@ function useRoadview(mapRef: React.RefObject<NaverMap | null>, active: boolean) 
       foldFrame = window.requestAnimationFrame(() => {
         foldFrame = 0;
         const taken: DOMRect[] = [];
+        /* 파노라마 박스 — **가장자리에 걸친 라벨을 접는 기준**이다(사용자 지시 2026-08-24) */
+        const view = node.getBoundingClientRect();
         for (const marker of markOrder) {
           const host = marker.getElement?.();
           const pill = host?.querySelector<HTMLElement>("[data-rv-pill]");
@@ -1725,6 +1773,24 @@ function useRoadview(mapRef: React.RefObject<NaverMap | null>, active: boolean) 
           const rect = pill.getBoundingClientRect();
           /* 시야 밖(네이버가 치워 둔 것)은 접을 것도 없다 */
           if (rect.width <= 0 || rect.left < -1000) continue;
+          /*
+           * ★ **한 변이라도 박스를 넘으면 접는다**(사용자 지시 2026-08-24 —
+           * *"가장자리에 걸치면 접어줘"*). 프로덕션 실측에서 `④ 공원 화장실` 이 화면 오른쪽 끝에
+           * 걸려 **이름이 절반만 읽혔다.** 반쯤 잘린 이름은 없는 것보다 나쁘다 — 어느 지점인지
+           * 잘못 읽힐 수 있다. 조금만 돌리면 안으로 들어와 다시 나타난다.
+           *
+           * ⚠ 여유(margin)를 두지 않는다. 1px 이라도 넘으면 자른 것이고, 임계를 두면
+           * *"얼마나 걸려야 접히나"* 가 새 판정 대상이 된다.
+           */
+          if (
+            rect.left < view.left ||
+            rect.right > view.right ||
+            rect.top < view.top ||
+            rect.bottom > view.bottom
+          ) {
+            host.style.visibility = "hidden";
+            continue;
+          }
           const hit = taken.some(
             (t) =>
               !(rect.right <= t.left || rect.left >= t.right || rect.bottom <= t.top || rect.top >= t.bottom),
@@ -1930,16 +1996,29 @@ function useRoadview(mapRef: React.RefObject<NaverMap | null>, active: boolean) 
       /* ★ **`false` 를 바꾸지 마라** — 이 마커가 클릭을 먹으면 그 자리를 다시 누를 수 없어
          "현재 보는 위치 주변으로 조금 옮기기"가 막힌다. 2-C(히트 가로채기 0)의 직접 적용이다 */
       clickable: false,
+      /*
+       * ★ **삼각형 → 부채꼴, 크기 2배**(사용자 지시 2026-08-24).
+       *
+       * 종전은 CSS `border` 삼각형(가로 30 · 세로 22, 박스 44)이었다. 지금은 **인라인 SVG 부채꼴**이다 —
+       * 바깥 변이 호(arc)라야 *"이 방향으로 트인 시야"* 로 읽히고, 삼각형은 *"저 한 점을 가리킨다"* 로 읽힌다.
+       *
+       * **각도는 종전 그대로 유지했다**(반각 34°). 크기와 모양만 바꾸라는 지시였고,
+       * ⚠ **각도는 «얼마나 넓게 보이는가»라는 사실 주장**이라 임의로 바꾸지 않는다.
+       *   참고: 파노라마의 실제 `fov` 는 100°(반각 50°)라 이 부채꼴은 **실제보다 좁게** 그린다.
+       *   맞추려면 `SPOT_CONE_HALF_DEG` 를 50 으로 올려라 — 다만 그 판단은 사실 표시의 변경이다.
+       *
+       * 좌표는 `SPOT_CONE_*` 상수에서 계산한다(모듈 상단). 숫자를 여기 직접 적지 마라.
+       */
       icon: {
         content:
-          `<div style="width:44px;height:44px;position:relative;transform:rotate(${spotPan}deg)">` +
-          `<div style="position:absolute;left:50%;bottom:50%;transform:translateX(-50%);width:0;height:0;` +
-          `border-left:15px solid transparent;border-right:15px solid transparent;` +
-          `border-top:22px solid rgba(242,107,29,.38)"></div>` +
+          `<div style="width:${SPOT_BOX}px;height:${SPOT_BOX}px;position:relative;transform:rotate(${spotPan}deg)">` +
+          `<svg viewBox="0 0 ${SPOT_BOX} ${SPOT_BOX}" width="${SPOT_BOX}" height="${SPOT_BOX}" ` +
+          `style="position:absolute;inset:0;" aria-hidden="true" focusable="false">` +
+          `<path d="${SPOT_CONE_PATH}" fill="rgba(242,107,29,.38)"/></svg>` +
           `<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);` +
           `width:18px;height:18px;border-radius:9999px;background:#f26b1d;border:3px solid #fff;` +
           `box-shadow:0 0 0 2px #f26b1d,0 2px 8px rgba(20,22,26,.45)"></div></div>`,
-        anchor: new maps.Point(22, 22),
+        anchor: new maps.Point(SPOT_BOX / 2, SPOT_BOX / 2),
       },
     });
 
@@ -2378,6 +2457,8 @@ export function RallyMap({ clientId }: { clientId: string }) {
   /** `지도 크게 보기` — 모달을 닫을 때 포커스를 여기로 되돌린다 */
   const fullscreenButtonRef = useRef<HTMLButtonElement | null>(null);
   const mapRef = useRef<NaverMap | null>(null);
+  /** 휠 확대가 지금 켜져 있는가(→ 아래 «휠 확대 게이트»). 렌더에 쓰지 않으므로 상태가 아니라 ref 다 */
+  const wheelGateRef = useRef(false);
 
   /*
    * 로드뷰·거리뷰 한 벌(`useRoadview`). **`active` 는 `!fullscreenOpen`** —
@@ -2474,13 +2555,27 @@ export function RallyMap({ clientId }: { clientId: string }) {
      * **3단계-B 가 빠진 지금 그 근거는 성립하지 않는다** — 되돌리면 모바일 조작 수단은 지도 안 `+`/`−` 만 남는다.
      * **발동 조건은 §27.13.8** — *"페이지가 안 내려간다"* 가 1건이라도 접수되면 리더에게 즉시 보고한다.
      *
-     * 유지되는 것: `scrollWheel: false` + **Ctrl/⌘ + 휠만** 확대(맨 휠은 페이지 스크롤 — **이것까지 뺏지 마라**),
-     * `disableDoubleTapZoom`(오탭 확대 금지), `keyboardShortcuts: false`(키보드는 §27.8 그룹이 담당).
+     * ★ **휠 확대는 2026-08-24 에 바뀌었다**(사용자 지시 — *"PC버전일 때 메인 지도 안에서 휠을 돌리면
+     * 확대/축소 되게"*). 종전 주석은 *"맨 휠은 페이지 스크롤 — 이것까지 뺏지 마라"* 였다.
+     * **그 판단은 유효했고, 사용자가 그것을 알고 뒤집었다.** 대신 **뒤집는 범위를 좁혔다:**
+     *   `(hover: hover) and (pointer: fine)` — 즉 **마우스가 달린 기기에서만** 맨 휠이 지도를 움직인다.
+     *   터치 기기·태블릿에서는 종전 그대로 `scrollWheel: false` 이고 **Ctrl/⌘ + 휠만** 확대한다.
+     * 근거: 원래 위험은 *"지도가 화면을 덮은 모바일에서 페이지가 안 내려간다"* 였고, 그 조건은
+     * 마우스 기기에 없다(데스크톱에서 지도는 `16/9` 박스라 옆·위아래로 스크롤할 공간이 남는다).
+     * ⚠ **`pointer: fine` 조건을 지우지 마라** — 지우는 순간 되살아나는 것이 §27.13 의 그 위험이다.
+     *
+     * 유지되는 것: `disableDoubleTapZoom`(오탭 확대 금지), `keyboardShortcuts: false`(키보드는 §27.8 그룹).
      */
     const map = new maps.Map(node, {
       mapTypeId: maps.MapTypeId.NORMAL,
       draggable: true,
       pinchZoom: true,
+      /*
+       * ★ **기본은 꺼 둔다.** 마우스 기기에서도 *"커서를 지도로 옮긴 뒤"* 에만 켜진다 —
+       * 켜고 끄는 규칙은 아래 «휠 확대 게이트» 이펙트에 있다.
+       * ⚠ 여기서 `true` 로 바꾸지 마라. 그러면 **페이지를 스크롤하다 지도가 커서 밑을 지나가는 순간
+       * 지도가 확대된다**(실측: 본문 위에서 휠 한 번에 축척 100m → 300m).
+       */
       scrollWheel: false,
       keyboardShortcuts: false,
       disableDoubleClickZoom: true,
@@ -2829,7 +2924,9 @@ export function RallyMap({ clientId }: { clientId: string }) {
     const onWheel = (e: WheelEvent) => {
       const map = mapRef.current;
       if (map === null) return;
-      // **맨 휠은 페이지 스크롤이다.** Ctrl/⌘ 를 누른 경우에만 지도가 반응한다
+      /* 게이트가 켠 상태면 **네이버가 직접 처리**한다. 여기서 또 다루면 두 배로 확대된다 */
+      if (wheelGateRef.current) return;
+      // 터치 기기에서 **맨 휠은 페이지 스크롤이다.** Ctrl/⌘ 를 누른 경우에만 지도가 반응한다
       if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       const next = map.getZoom() + (e.deltaY < 0 ? 1 : -1);
@@ -2841,6 +2938,50 @@ export function RallyMap({ clientId }: { clientId: string }) {
     node.addEventListener("wheel", onWheel, { passive: false });
     return () => {
       node.removeEventListener("wheel", onWheel);
+    };
+  }, [status]);
+
+  /*
+   * ★ **휠 확대 게이트**(사용자 지시 2026-08-24 — *"PC버전일 때 지도 안에서 휠을 돌리면 확대/축소"*).
+   *
+   * 규칙 두 줄:
+   *   **커서를 지도 위로 «움직이면» 켠다.**  **페이지가 스크롤되면 끈다.**
+   *
+   * ⚠ **`pointerenter` 로 켜면 안 된다.** 커서가 가만히 있어도 **페이지가 스크롤되면 지도가 커서 밑으로
+   * 들어오면서** 그 이벤트가 발생한다 — 실측에서 본문 위에 커서를 두고 휠 한 번에 축척이
+   * **100m → 300m** 로 바뀌었다. *"읽으려고 내렸는데 지도가 확대된다"* 가 §27.13 이 막으려던 그 사고다.
+   * **손가락이 실제로 움직였다는 신호(`pointermove`)만 켜기 근거로 쓴다.**
+   *
+   * ⚠ 끄는 쪽도 필요하다. 켜 둔 채 페이지를 스크롤하면 같은 사고가 난다 —
+   * **스크롤이 한 번이라도 일어나면 즉시 끈다.** 다시 켜려면 커서를 지도 위에서 움직이면 된다.
+   *
+   * 터치 기기(`wheelZoomEnabled() === false`)에서는 게이트가 **영영 열리지 않고**, 위 `onWheel` 의
+   * Ctrl/⌘ 분기가 종전 그대로 동작한다.
+   */
+  useEffect(() => {
+    const node = mountRef.current;
+    if (node === null || status !== "ready") return;
+
+    const setGate = (on: boolean) => {
+      const map = mapRef.current;
+      if (map === null || wheelGateRef.current === on) return;
+      wheelGateRef.current = on;
+      map.setOptions({ scrollWheel: on });
+    };
+    const onPointerMove = () => {
+      if (wheelZoomEnabled()) setGate(true);
+    };
+    const onLeave = () => setGate(false);
+    const onScroll = () => setGate(false);
+
+    node.addEventListener("pointermove", onPointerMove);
+    node.addEventListener("pointerleave", onLeave);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      node.removeEventListener("pointermove", onPointerMove);
+      node.removeEventListener("pointerleave", onLeave);
+      window.removeEventListener("scroll", onScroll);
+      wheelGateRef.current = false;
     };
   }, [status]);
 
@@ -3671,7 +3812,12 @@ function RallyFullscreenMap({
       mapTypeId: maps.MapTypeId.NORMAL,
       draggable: true,
       pinchZoom: true,
-      scrollWheel: false,
+      /*
+       * ★ **여기는 조건 없이 켠다**(2026-08-24). 페이지 지도와 달리 **뺏을 페이지 스크롤이 아예 없다** —
+       * `showModal()` 이 뒤 문서를 잠그기 때문이다. 페이지 지도만 켜고 여기를 끄면
+       * *"작은 지도에서는 되는데 크게 보면 안 된다"* 가 되어 결함으로 읽힌다.
+       */
+      scrollWheel: true,
       keyboardShortcuts: false,
       disableDoubleClickZoom: true,
       disableDoubleTapZoom: true,
