@@ -1151,6 +1151,27 @@ function MapPopupPanel({
         {feature.legend}
       </p>
       {/*
+        ★ **거리 등 팝업 전용 보탬**(2026-08-23). 정의·근거는 `MapFeature.popupNote` 와 ④ 의 주석에 있다.
+
+        ★ **조판을 바꾸지 마라**(§30.18 · 검증 25회차):
+        - **줄을 쪼갠다.** 한 줄로 이으면 두 값이 `30~170` 이라는 **단일 범위로 되읽힌다.**
+          두 거리는 범위가 아니라 **선택지**다.
+        - **`<br>` 금지** — 안쪽 `block` span 이라야 `break-keep` 이 정상 동작한다.
+        - **줄 사이에 `mt` 를 넣지 마라.** 행간이 이미 간격을 준다. 그래야 세 줄이 **한 덩어리**로 묶인다.
+        - **`<strong>` 이 아니라 `font-semibold`** — 여기 강조는 *중요도 주장*이 아니라 **훑기 보조**다.
+          굵게 하는 것은 **수치 두 개뿐**이다.
+      */}
+      {feature.popupNote !== undefined ? (
+        <p className="mt-2 break-keep break-words text-caption leading-[1.55] text-ink">
+          <span className="block">{feature.popupNote.lead}</span>
+          {feature.popupNote.rows.map((row) => (
+            <span key={row.label} className="block">
+              {row.label} <span className="font-semibold">{row.value}</span>
+            </span>
+          ))}
+        </p>
+      ) : null}
+      {/*
         ★ **로드뷰 진입점이 여기다**(사용자 지시 2026-08-21).
         종전에는 컨트롤 행에 `로드뷰 보기` 버튼 하나가 있었고 **위치가 5번 출구로 고정**이었다 —
         어느 지점의 로드뷰인지 고를 수 없었다. 이제 **각 지점 팝업이 자기 로드뷰를 연다.**
