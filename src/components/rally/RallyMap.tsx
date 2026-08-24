@@ -27,6 +27,7 @@ import type {
 } from "@/lib/rallyMap";
 import { bearingLabel8, formatDistanceKo, haversineMeters } from "@/lib/geo";
 import type {
+  NaverLatLng,
   NaverLatLngBounds,
   NaverMap,
   NaverMapEventListener,
@@ -287,6 +288,64 @@ const MY_LOCATION_Z = 50;
  * - 마커 DOM 전체에 `aria-hidden="true"` — 범례가 같은 내용을 문자로 제공하므로
  *   여기서 또 낭독되면 소음이다(§20.9).
  */
+/**
+ * ★ **로드뷰 «바닥을 누르면 그 방향으로 이동»**(사용자 지시 2026-08-24 — *"최신 로드뷰"*).
+ *
+ * 네이버 파노라마 API 에는 이 동작을 켜는 옵션이 **없다**(공식 옵션 전수: `size`·`panoId`·`position`·
+ * `pov`·`visible`·`minScale`·`maxScale`·`minZoom`·`maxZoom`·`flightSpot`·`logoControl`·`zoomControl`·
+ * `aroundControl`. `flightSpot` 은 *주변 항공뷰 아이콘*이지 이동이 아니다). 이벤트도 `init`·
+ * `pano_changed`·`pano_status`·`pov_changed` 넷뿐이라 **클릭 좌표를 주는 이벤트가 없다.**
+ * 그래서 **우리가 만든다**: 탭 지점 → 방향 → 그 방향으로 한 보폭 → `setPosition` 이 가장 가까운
+ * 실제 촬영점으로 붙여 준다.
+ */
+
+/** 두 좌표 사이 방위각(도, 진북 0 · 시계 방향) */
+function bearingDeg(from: NaverLatLng, to: NaverLatLng): number {
+  const rad = Math.PI / 180;
+  const φ1 = from.lat() * rad;
+  const φ2 = to.lat() * rad;
+  const Δλ = (to.lng() - from.lng()) * rad;
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return (Math.atan2(y, x) / rad + 360) % 360;
+}
+
+/** 한 보폭 앞의 좌표. 이 거리에서 정확할 필요는 없다 — `setPosition` 이 실제 촬영점으로 붙인다 */
+function stepAhead(
+  maps: NaverMapsNamespace,
+  from: NaverLatLng,
+  bearing: number,
+  meters: number,
+): NaverLatLng {
+  const rad = Math.PI / 180;
+  const dLat = (meters * Math.cos(bearing * rad)) / 111320;
+  const dLng = (meters * Math.sin(bearing * rad)) / (111320 * Math.cos(from.lat() * rad));
+  return new maps.LatLng(from.lat() + dLat, from.lng() + dLng);
+}
+
+/**
+ * 한 걸음(m). **12 는 실측으로 고른 값이다**(2026-08-24 · 의사당대로).
+ * 10 → 5m 만 가 제자리처럼 보이고, 20·25 → 39·67m 를 건너뛰어 *"어디로 온 거지"* 가 된다.
+ * 12 면 촬영점 한 칸씩 간다. **정확할 필요는 없다** — `setPosition` 이 가장 가까운 점으로 붙인다.
+ */
+const ROADVIEW_STEP_M = 12;
+/** 이 이상 손가락이 움직였으면 **탭이 아니라 시선 회전**이다 */
+const ROADVIEW_TAP_SLOP_PX = 8;
+/** 이보다 오래 누르고 있었으면 탭이 아니다(길게 눌러 끄는 중일 수 있다) */
+const ROADVIEW_TAP_MS = 600;
+/**
+ * 지평선보다 이만큼 **아래**를 눌러야 이동한다. 하늘·건물 윗부분을 눌렀을 때 움직이면
+ * *"안 누른 곳으로 갔다"* 가 된다. `fromOffsetToCoord` 는 **세로를 무시**하므로(→ 타입 주석)
+ * 이 판정은 **우리가 해야 한다.**
+ */
+const ROADVIEW_HORIZON_MARGIN_PX = 10;
+/**
+ * 탭을 무시할 요소 — 네이버가 그리는 **화살표·항공뷰 아이콘·컨트롤·로고·저작권**이다.
+ * 이것들은 자기 동작이 있어서, 우리가 같이 처리하면 **두 번 움직인다.**
+ */
+const ROADVIEW_IGNORE_TAP =
+  '[class*="arrow"],[class*="flight"],[class*="control"],[class*="logo"],[class*="copyright"]';
+
 /**
  * ★ **종류 기호 픽토그램**(2026-08-23 · 사용자가 첨부한 참고 그림 그대로 — 파랑 남 + 주황 여).
  *
@@ -1534,7 +1593,11 @@ function useRoadview(mapRef: React.RefObject<NaverMap | null>, active: boolean) 
       logoControl: true,
       zoomControl: true,
       aroundControl: false,
-      /* `flightSpot` 은 하늘로 날아가는 이동 지점 — 좁은 시트에서 오탭이 잦아 끈다 */
+      /*
+       * `flightSpot` = **주변 항공뷰 아이콘**(공식 문서 표현). 좁은 시트에서 오탭이 잦아 끈다.
+       * ⚠ 종전 주석은 *"하늘로 날아가는 이동 지점"* 이라고 적혀 있었다 — **틀린 설명**이었고
+       *   *"이걸 켜면 클릭 이동이 되나"* 를 검토할 때 헛다리를 짚게 만든다. 이동과 무관하다.
+       */
       flightSpot: false,
       minScale: 0,
       maxScale: 4,
@@ -1561,6 +1624,57 @@ function useRoadview(mapRef: React.RefObject<NaverMap | null>, active: boolean) 
      * **박스가 482px 로 커져도 마운트는 294px 에 머문다** — 크기가 안 변하니 옵저버도 조용하다.
      * 즉 감시해야 할 것은 **네이버가 손대지 않는 바깥 박스**다.
      */
+    /*
+     * ★ **바닥 탭 → 그 방향으로 한 칸 이동**. 설계 근거는 `bearingDeg` 위 주석에 있다.
+     *
+     * ⚠ **캡처 단계로 듣는다.** 네이버가 자기 드래그 처리에서 전파를 끊어도 우리는 받아야 한다.
+     * ⚠ **드래그와 구분한다** — 파노라마에서 한 손가락 끌기는 **시선 회전**이고(§23.1.3)
+     *   그것을 이동으로 오인하면 둘러보기가 통째로 망가진다.
+     * ⚠ **`getProjection().fromOffsetToCoord` 는 문서에 없는 API 다.** 없어지면 이 기능만
+     *   조용히 꺼지고 **네이버 화살표 이동은 그대로 남는다** — 죽은 버튼이 생기지 않는다.
+     */
+    let tapStart: { x: number; y: number; t: number } | null = null;
+    const onTapDown = (e: PointerEvent) => {
+      tapStart = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+    };
+    const onTapUp = (e: PointerEvent) => {
+      const start = tapStart;
+      tapStart = null;
+      if (start === null) return;
+      if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > ROADVIEW_TAP_SLOP_PX) return;
+      if (e.timeStamp - start.t > ROADVIEW_TAP_MS) return;
+      const target = e.target instanceof Element ? e.target : null;
+      if (target !== null && target.closest(ROADVIEW_IGNORE_TAP) !== null) return;
+
+      const projection = pano.getProjection?.();
+      const toCoord = projection?.fromOffsetToCoord;
+      if (projection === undefined || typeof toCoord !== "function") return;
+
+      const box = node.getBoundingClientRect();
+      if (box.width <= 0 || box.height <= 0) return;
+      const x = e.clientX - box.left;
+      const y = e.clientY - box.top;
+
+      /* 지평선 = 화면 한가운데에서 **올려다본 각도만큼 내려온 자리**(핀홀 근사) */
+      const pov = pano.getPov?.();
+      const fov = pov?.fov ?? 100;
+      const horizonY = box.height / 2 + ((pov?.tilt ?? 0) / fov) * box.height;
+      if (y < horizonY + ROADVIEW_HORIZON_MARGIN_PX) return;
+
+      const from = pano.getPosition?.();
+      if (from === undefined) return;
+      let aim: NaverLatLng | null | undefined;
+      try {
+        aim = toCoord.call(projection, new maps.Point(x, y));
+      } catch {
+        return;
+      }
+      if (aim === null || aim === undefined) return;
+      pano.setPosition(stepAhead(maps, from, bearingDeg(from, aim), ROADVIEW_STEP_M));
+    };
+    node.addEventListener("pointerdown", onTapDown, true);
+    node.addEventListener("pointerup", onTapUp, true);
+
     const observed = node.parentElement;
     let resizeFrame = 0;
     const observer = new ResizeObserver(() => {
@@ -1619,6 +1733,8 @@ function useRoadview(mapRef: React.RefObject<NaverMap | null>, active: boolean) 
     return () => {
       window.clearTimeout(timer);
       if (resizeFrame !== 0) window.cancelAnimationFrame(resizeFrame);
+      node.removeEventListener("pointerdown", onTapDown, true);
+      node.removeEventListener("pointerup", onTapUp, true);
       observer.disconnect();
       for (const l of listeners) maps.Event.removeListener(l);
       pano.destroy();

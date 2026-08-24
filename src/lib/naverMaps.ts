@@ -79,7 +79,7 @@ export interface NaverPanoramaOptions {
    * 생략하면 네이버가 촬영 진행 방향을 잡아 준다.
    */
   pov: { pan?: number; tilt: number; fov: number };
-  /** 하늘로 날아가는 이동 지점 — 좁은 시트에서 오탭이 잦아 끈다 */
+  /** **주변 항공뷰 아이콘**(공식 문서 표현) — 좁은 시트에서 오탭이 잦아 끈다. **이동 기능이 아니다** */
   flightSpot?: boolean;
   /** 지도와 같은 조작 규칙: 컨트롤 0, 한 손가락은 페이지 스크롤 */
   logoControl: boolean;
@@ -110,6 +110,27 @@ export interface NaverPanorama {
    * 같은 어긋남이 생긴다(드래그 이전부터 있던 잠복 결함). `ResizeObserver` 로 한 번에 막는다.
    */
   setSize?(size: NaverSize): void;
+  /**
+   * ★ **화면 좌표 ↔ 지리 좌표 변환기**(2026-08-24 · 클릭 이동).
+   *
+   * ⚠⚠ **공식 문서에 없다.** `naver.maps.PanoramaProjection` 문서 페이지는 존재하지 않고
+   * `Panorama` 문서의 메서드 표에도 반환 타입 설명이 없다. **런타임에서 확인한 것**이다.
+   * 그래서 전부 선택 필드다 — 없어지면 클릭 이동만 조용히 꺼지고 화살표 이동은 그대로 남는다.
+   * **필수로 바꾸지 마라.**
+   */
+  getProjection?(): NaverPanoramaProjection | undefined;
+}
+
+/**
+ * 파노라마 투영기 — **문서에 없는 API**(위 `getProjection` 주석 참조).
+ *
+ * `fromOffsetToCoord` 실측(2026-08-24):
+ *   - **가로 오프셋만 반영된다.** 세로(y)를 바꿔도 같은 좌표가 나온다 — 즉 *바라보는 방향*이지
+ *     *바닥에 닿는 지점*이 아니다. 반환 좌표까지의 거리는 늘 **약 226m 로 일정**했다.
+ *   - 그래서 이 값은 **방향(방위각)을 얻는 데만** 쓴다. 거리는 우리가 정한 보폭을 쓴다.
+ */
+export interface NaverPanoramaProjection {
+  fromOffsetToCoord?(offset: NaverPoint): NaverLatLng | null | undefined;
 }
 
 /** `new maps.Size(w, h)` — `setSize` 인자. 리터럴 `{width,height}` 도 받지만 생성자가 명확하다 */
