@@ -2,7 +2,12 @@ import { EXTERNAL_LINKS, ONNURI_GUIDE_DISPLAY_HOST } from "@/lib/routes";
 import { BookIcon, ExternalLinkIcon } from "@/components/ui/icons";
 
 /**
- * 디지털온누리 사용 가이드 외부 링크 카드 (스펙 §16.9.7 — §15.7 위치·색 체계 계승, 표면만 교체).
+ * 디지털온누리 외부 링크 카드 (스펙 §16.9.7 — §15.7 위치·색 체계 계승, 표면만 교체).
+ *
+ * ⚠ **카드 제목은 2026-08-25 에 사용자 지정 문면으로 교체됐다**
+ * (`디지털온누리 사용 가이드` → `디지털온누리 스마트 검색 - …`).
+ * 파일명·식별자(`OnnuriGuideCard`·`EXTERNAL_LINKS.onnuriGuide`)는 **그대로 뒀다** —
+ * 링크 대상이 같고, 이름만 바꾸면 참조가 흩어져 «한 출처» 가 깨진다.
  * - 카드 전체가 단일 <a> 블록, 새 창 열림 (target=_blank + noopener noreferrer)
  * - 외부 이동 표시 3중 병행: ↗ 아이콘 + "새 창에서 열립니다" 문구 + 접근성 이름
  *   (설명이 <a> 내부 텍스트이므로 접근성 이름에 자동 포함 — 스펙 §9.2)
@@ -29,7 +34,15 @@ export function OnnuriGuideCard() {
       <BookIcon className="size-6 shrink-0 text-accent-strong" />
       <span className="min-w-0 flex-1">
         <span className="block text-body font-bold text-accent-strong group-hover:underline md:text-lead">
-          디지털온누리 사용 가이드
+          {/*
+            ★ **문면은 사용자가 지정했다**(2026-08-25) — 한 글자도 바꾸지 마라.
+            종전: `디지털온누리 사용 가이드`.
+            가운뎃점·줄표로 «다듬지» 마라(`-` 는 지정 문자열 그대로다).
+
+            ⚠ **`break-keep` 을 넣지 마라.** `브랜드/상품유형별`·`오프라인/온라인` 은
+            어절이 길어 `/` 가 유일한 줄바꿈 기회다. 어절 유지를 걸면 카드 밖으로 나간다.
+          */}
+          디지털온누리 스마트 검색 - 브랜드/상품유형별 오프라인/온라인 검색서비스
         </span>
         <span className="mt-1 block text-caption font-normal text-ink">
           코스콤 조합원 대상 안내 · 외부 페이지가 새 창에서 열립니다
