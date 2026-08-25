@@ -49,7 +49,33 @@ export function DocumentIcon({ className }: IconProps) {
   );
 }
 
-/** 책(가이드) 아이콘 (디지털온누리 가이드 카드 24px) */
+/**
+ * 돋보기(검색) 아이콘 — 디지털온누리 **가맹점 스마트 검색** 카드 24px (2026-08-25).
+ * 종전 `BookIcon`(책) 을 대체한다. 카드가 «가이드 문서» 에서 «검색 서비스» 로 바뀌었다.
+ */
+export function SearchIcon({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="M15.4 15.4 21 21" />
+    </svg>
+  );
+}
+
+/**
+ * 책(가이드) 아이콘.
+ * ⚠ **호출처 0** — 디지털온누리 카드가 `SearchIcon` 으로 바뀌면서 비었다(2026-08-25).
+ * 지우지 않은 이유: 가이드 성격의 카드가 다시 생기면 그대로 쓴다.
+ */
 export function BookIcon({ className }: IconProps) {
   return (
     <svg
