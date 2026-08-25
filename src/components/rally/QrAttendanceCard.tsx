@@ -1,5 +1,8 @@
 import Image from "next/image";
 
+import { ExternalLinkIcon } from "@/components/ui/icons";
+import { EXTERNAL_LINKS, UNION_ATTENDANCE_DISPLAY_HOST } from "@/lib/routes";
+
 /**
  * QR 출석체크 안내 — **주최측 원본 이미지 + 이미지에 없는 것만 문자로**.
  *
@@ -65,6 +68,43 @@ export function QrAttendanceCard() {
         2차 출석 시간은 식순상 폐회(20:20~)보다 늦게까지 열려 있습니다. 폐회 후라도 2차 출석을 아직
         하지 않았다면 21:00 전에 완료해 주세요.
       </p>
+
+      {/*
+        ★ **출석체크 페이지 바로 가기**(사용자 지시 2026-08-25 · URL 도 사용자가 줬다).
+        QR 을 찍지 못하는 상황 — 손피켓을 못 받았거나, 카메라가 QR 을 못 읽거나 —
+        에서 **같은 곳으로 가는 두 번째 경로**다. 대상은 QR 이 가리키는 그 페이지가 맞다
+        (응답 실측: `<title>금융노조 집회참석</title>`).
+
+        ⚠ **«아웃라인 필 버튼» 모양으로 만들지 마라**(§24.5 · `WayfindingBlock` 과 같은 규칙).
+        사용자가 *"버튼을 달아도 좋다"* 고 했지만, 이 프로젝트에서 **필 버튼은 «우리 페이지 안에서
+        일어나는 조작»의 형태**이고 **외부로 나가는 것은 다르게 생겨야 한다.**
+        그래서 길찾기와 **같은 카드 형태**다 — 누르는 면은 오히려 더 넓고, 어디로 가는지도 함께 말한다.
+
+        외부 이동 **3중 병행**(§14.1): ↗ 아이콘 + 도메인 표기 + 접근성 이름
+        (카드 전체가 단일 `<a>` 라 내부 텍스트가 접근성 이름에 자동 포함된다).
+
+        ⚠ **둘째 줄을 지우지 마라.** 8/28 출석 시간 밖에서 누르면 대상 페이지에 **입력 폼이 없고**
+        *"지정된 시간에만 체크 가능합니다."* 한 줄만 나온다(실측). 이 문장이 없으면
+        조합원이 **«링크가 고장났다»** 로 읽고 다른 경로를 찾아 헤맨다 — 행동이 갈린다(§5.3).
+        시간표 자체는 위 이미지가 이미 말하므로 **여기에 다시 적지 않는다.**
+      */}
+      <a
+        href={EXTERNAL_LINKS.unionAttendance}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="rounded-card ease-out-soft group mt-4 block border border-border-strong bg-bg p-4 transition-colors duration-150 hover:outline-2 hover:outline-primary focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
+      >
+        <span className="block break-keep text-body font-bold text-primary group-hover:underline">
+          QR 인증 바로 하기
+          <ExternalLinkIcon className="ml-1 inline size-4 align-[-2px]" />
+        </span>
+        <span className="mt-1 block break-keep text-caption text-ink">
+          주최측 출석체크 페이지입니다. 지정된 출석 시간에만 체크됩니다.
+        </span>
+        <span className="mt-1.5 block text-caption text-ink-muted">
+          외부 링크(새 창) · {UNION_ATTENDANCE_DISPLAY_HOST}
+        </span>
+      </a>
     </figure>
   );
 }

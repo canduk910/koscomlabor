@@ -18,6 +18,19 @@ export const EXTERNAL_LINKS = {
   /** 디지털온누리 사용 가이드 (리더 유효성 확인 완료 2026-08-16) */
   onnuriGuide: "https://onnuri.koscomlabor.cloud/",
   /**
+   * ★ **주최측 출석체크 페이지**(사용자 제공 2026-08-25).
+   *
+   * **대상 확인**(응답 실측 2026-08-25): `HTTP 200` · `<title>금융노조 집회참석</title>` ·
+   * 본문 *"지정된 시간에만 체크 가능합니다."* — QR 이 가리키는 그 페이지가 맞다.
+   * 출석 시간 밖에서는 **입력 폼이 없고 안내 한 줄만** 나온다(그래서 카드 설명이 그 사실을 적는다).
+   *
+   * ⚠ **호스트가 `mycafe24.com` 이라 한눈에 «공식» 으로 보이지 않는다.** 그래도 도메인을 화면에
+   * 노출한다(§14.1 3중 병행) — 감추면 조합원이 **어디로 가는지 모른 채** 누르게 되고,
+   * 그것이 이 페이지가 막으려는 바로 그 상황이다.
+   * ⚠ 8/28 전에 **주최측에 URL 유효성을 한 번 더 확인**하라(요구 78 과 같은 규율).
+   */
+  unionAttendance: "https://prpage153.mycafe24.com/bank701/index.php",
+  /**
    * 네이버 길찾기 — **도착지 = 국회의사당역 3번 출구**(사용자 지시 2026-08-22).
    *
    * ## ★ KDB산업은행으로 잡았다가 되돌린 것이다 — 같은 실수를 반복하지 마라
@@ -61,6 +74,9 @@ export const EXTERNAL_LINKS = {
  * 호스트가 더 긴 도메인으로 바뀌면 §20.12.1 의 197px 예산을 **다시 실측**해야 한다.
  */
 export const ONNURI_GUIDE_DISPLAY_HOST = new URL(EXTERNAL_LINKS.onnuriGuide).host;
+
+/** 출석체크 카드에 **표시**하는 도메인 — `href` 에서 파생해 링크와 표시가 갈리지 않게 한다 */
+export const UNION_ATTENDANCE_DISPLAY_HOST = new URL(EXTERNAL_LINKS.unionAttendance).host;
 
 /**
  * 오시는 길 — **최근접역 정보. 노선·역·출구·URL 은 한 객체다. 하나만 고치지 마라**(§29.5 · 요구 137).
