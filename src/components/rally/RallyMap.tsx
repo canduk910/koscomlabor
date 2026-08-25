@@ -1326,17 +1326,52 @@ function MapPopupPanel({
 const POPUP_BUTTON_CLASS =
   "ease-out-soft inline-flex min-h-touch shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full border-2 border-primary bg-bg px-4 text-caption font-semibold text-primary transition-colors duration-150 hover:bg-primary-tint focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2";
 
-const MAP_BUTTON_BASE =
-  "flex items-center justify-center border-2 border-border-strong bg-bg text-primary disabled:text-ink-muted";
-/** 아이콘 1글자 버튼(`+`·`−`·`↺`) — 정사각 44px */
-/* `size-[44px]`: **`size-11`(2.75rem)이 아니다** — 글자 크기 75% 에서 33px 로 줄어든다 */
-const MAP_BUTTON_CLASS = `${MAP_BUTTON_BASE} size-[44px]`;
+/**
+ * ★ **지도 안 컨트롤 — 남색 면 + 흰 글자**(사용자 지시 2026-08-25 · *"세련되게"*).
+ *
+ * 종전은 **흰 면 + 남색 테두리**(`border-2 border-border-strong bg-bg text-primary`)였다.
+ * 지도는 매 프레임 배경이 바뀌는 면이라 **테두리로 경계를 만드는 방식은 배경에 따라 약해진다** —
+ * 채운 면이 어디서나 같은 세기로 읽힌다. 대비: 흰 글자 ↔ `#093389` = **12.6**(AAA).
+ *
+ * ⚠ **반투명으로 만들지 마라**(§27.4.2) — 지도 배경이 매 프레임 바뀌어 대비를 보장할 수 없다.
+ * ⚠ **44px 높이를 줄이지 마라** — 터치 목표 하한이고, 야외에서 장갑 낀 손으로 눌린다.
+ *   `h-[44px]`: **`h-11`(2.75rem)이 아니다** — 글자 크기 75% 에서 33px 로 줄어든다.
+ * ⚠ 포커스 링은 **버튼 바깥**(`outline-offset-2`)이다. 남색 면 위에 남색 링을 그리면 안 보인다.
+ */
+const MAP_CTRL_BASE =
+  "ease-out-soft flex h-[44px] min-w-[44px] items-center justify-center whitespace-nowrap px-3 text-[13px] font-bold transition-opacity duration-150 hover:opacity-85 focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2";
+/** 기본 상태. 비활성은 **면을 밝게 빼서** 남색 무리 안에서 «지금은 안 됨»이 한눈에 보이게 한다 */
+const MAP_CTRL_CLASS = `${MAP_CTRL_BASE} bg-primary text-white disabled:bg-surface disabled:text-ink-muted`;
+/** 눌린(켜진) 상태 — **색을 뒤집는다.** 뜻은 `aria-pressed` 와 라벨이 함께 진다(§2) */
+const MAP_CTRL_ON_CLASS = `${MAP_CTRL_BASE} bg-bg text-primary`;
+
+/**
+ * 컨트롤 묶음. **한 덩어리로 둥글게 자르고 사이를 가는 흰 선으로 나눈다** —
+ * 버튼마다 그림자를 따로 주면 지도 위가 어수선해진다(사용자 지시 2026-08-25 *"세련되게"*).
+ *
+ * ⚠ **오른쪽 아래에 두지 마라**(§22.10 2-B) — 축척 바·네이버 로고가 이미 쓰고 있다.
+ * 왼쪽 아래도 `© NAVER Corp.` 가 쓴다. **비어 있는 것은 위쪽 두 모서리뿐이다.**
+ */
+function MapControlStack({
+  side,
+  children,
+}: {
+  side: "left" | "right";
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`rounded-card shadow-card absolute top-3 z-10 flex w-fit flex-col divide-y divide-white/25 overflow-hidden ${
+        side === "left" ? "left-3" : "right-3"
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
 
 /**
  * 지도 안 **거리뷰 토글**(사용자 지시 2026-08-21 · 디지털온누리 가이드 선례).
- *
- * `+`/`−` **아래**에 둔다 — 확대·축소는 지도를 보는 조작이고 이것은 **모드를 바꾸는** 조작이라
- * 성격이 다르다. 같은 열에 두되 카드를 나눠 그 차이를 표면으로 드러낸다.
  *
  * **켜진 상태를 색으로만 말하지 않는다**(§2) — `aria-pressed` 와 라벨이 함께 진다.
  *
@@ -1344,10 +1379,11 @@ const MAP_BUTTON_CLASS = `${MAP_BUTTON_BASE} size-[44px]`;
  * `itemProps` 는 `tabIndex: focusedId === id ? 0 : -1` 을 주는데, `focusedId` 는
  * **`keyboardOrder()` 가 내놓는 값만** 되고 그 목록에는 `+`/`−` 와 **지점 id 뿐**이라
  * 이 버튼은 **영원히 `tabIndex={-1}`** 이었다. 지금은 평범한 탭 정지점이다.
- * 로빙에 넣으려면 `keyboardOrder()` 와 `focusItem()` 의 DOM 조회 분기(`rally-zoom` 접두사)를
- * **함께** 고쳐야 한다 — 한쪽만 고치면 같은 결함이 되돌아온다.
+ *
+ * ⚠ **글자 버튼이다.** 정사각 44px 로 못박으면 테두리·패딩을 뺀 가용 폭이 24px 이 되고
+ * 13px `거리뷰`(약 39px)가 **`거리`/`뷰` 두 줄로 깨진다**(2026-08-21 실측). 폭은 글자가 정한다.
  */
-function MapStreetToggle({
+function StreetToggleButton({
   on,
   onToggle,
   buttonRef,
@@ -1357,68 +1393,50 @@ function MapStreetToggle({
   buttonRef?: React.Ref<HTMLButtonElement>;
 }) {
   return (
-    <div className="rounded-card shadow-card absolute right-3 top-28 z-10 overflow-hidden">
-      <button
-        type="button"
-        ref={buttonRef}
-        aria-pressed={on}
-        aria-label={on ? "거리뷰 모드 끄기" : "거리뷰 모드 켜기"}
-        onClick={onToggle}
-        /*
-         * ⚠ **`MAP_BUTTON_CLASS`(정사각 `size-11`)를 쓰지 마라** — 2026-08-21 실측 결함.
-         * 폭이 44px 로 못박혀 테두리·패딩을 뺀 **가용 폭이 24px** 이 되고,
-         * 13px `거리뷰`(약 39px)가 **`거리`/`뷰` 두 줄로 깨진다.**
-         * 높이 44px(터치 타깃)는 `h-11` 이 지키고, 폭은 글자가 정한다(`min-w-11` 이 하한).
-         * `whitespace-nowrap` 은 폰트가 바뀌어도 줄바꿈이 재발하지 않게 하는 보험이다.
-         */
-        className={`${MAP_BUTTON_BASE} ${
-          on ? "bg-primary text-white" : ""
-        } h-[44px] min-w-[44px] whitespace-nowrap px-3 text-[13px] font-bold`}
-      >
-        거리뷰
-      </button>
-    </div>
+    <button
+      type="button"
+      ref={buttonRef}
+      aria-pressed={on}
+      aria-label={on ? "거리뷰 모드 끄기" : "거리뷰 모드 켜기"}
+      title={on ? "거리뷰 모드 끄기" : "거리뷰 모드 켜기"}
+      onClick={onToggle}
+      className={on ? MAP_CTRL_ON_CLASS : MAP_CTRL_CLASS}
+    >
+      거리뷰
+    </button>
   );
 }
 
 /**
  * 지도 안 확대·축소(§27.4).
  *
- * §21.1.3 은 *"컨트롤은 전부 지도 밖"* 이었고 그 유일한 근거는 **"지도 안 포커스 정지점이 생긴다"** 였다.
- * §26.3.1 이 §20.9 를 개정해 **정지점을 개수가 아니라 구조로** 규율하면서 그 근거가 사라졌다 —
- * `+/−` 는 마커와 함께 **`role="group"` 하나 뒤**에 들어가므로 정지점이 늘지 않는다(§27.8).
+ * ★ **없애자는 제안이 있었으나 남겼다**(사용자 질문 2026-08-25 — *"줌인/줌아웃도 버튼으로 달아놓을
+ * 필요가 없어 보인다"*). 손가락은 핀치, 마우스는 휠이 있으니 맞는 지적이지만
+ * **키보드로 확대할 길이 이 버튼뿐**이다: 지도 옵션이 `keyboardShortcuts: false` 라
+ * 지도 자체 키보드 확대가 꺼져 있고, 켜면 화살표 키가 **마커 로빙 그룹(§27.8)과 충돌**한다.
+ * 게다가 `keyboardOrder()` 의 **첫 두 정지점이 이 버튼들**이라 지우면 키보드 순서 구조까지 다시 짜야 한다.
+ * **지우려면 그 두 가지를 먼저 해결하라.**
  *
  * **`+`·`−` 를 텍스트 문자로 쓰지 마라**(§16.12.3 선례) — 서체마다 위치·크기가 튄다. SVG 다.
- * 자리는 **우측 상단**이다: 우측 하단은 축척 바·네이버 로고·⑥ 배지가 이미 쓰고 있어
- * §22.10 **2-B(지도 크롬 가림 0%)** 가 즉시 깨진다.
  */
-function MapZoomButtons({
+function ZoomButtons({
   zoom,
   onZoom,
   itemProps,
-  topOffset = "top-3",
 }: {
   zoom: number | null;
   onZoom: (delta: number) => void;
   itemProps?: (id: string) => { id: string; tabIndex: number };
-  /**
-   * 지도 영역 안 세로 위치. **현재 두 호출부 모두 기본값(`top-3`)을 쓴다.**
-   *
-   * ⚠ 종전 주석은 *"전체 화면에서는 `닫기` 버튼 아래로 내린다"* 였고 모달이 `top-20` 을 넘겼는데,
-   * §31.4 로 **`닫기` 가 지도 밖 상단 바로 나가면서** 피할 대상이 사라졌다.
-   * **인자가 지금은 쓰이지 않는다** — 지우지 않은 이유는 지도 영역 안에 다른 오버레이가 생기면
-   * 다시 필요해지기 때문이고, 지운다면 그것은 별도 정리 작업이다.
-   */
-  topOffset?: string;
 }) {
   return (
-    <div className={`rounded-card shadow-card absolute right-3 z-10 overflow-hidden ${topOffset}`}>
+    <>
       <button
         type="button"
         aria-label="확대"
+        title="확대"
         onClick={() => onZoom(1)}
         disabled={zoom !== null && zoom >= MAP_MAX_ZOOM}
-        className={MAP_BUTTON_CLASS}
+        className={MAP_CTRL_CLASS}
         {...itemProps?.("rally-zoom-in")}
       >
         <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
@@ -1434,16 +1452,72 @@ function MapZoomButtons({
       <button
         type="button"
         aria-label="축소"
+        title="축소"
         onClick={() => onZoom(-1)}
         disabled={zoom !== null && zoom <= MAP_MIN_ZOOM}
-        className={`${MAP_BUTTON_CLASS} -mt-0.5`}
+        className={MAP_CTRL_CLASS}
         {...itemProps?.("rally-zoom-out")}
       >
         <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
           <path d="M5 12h14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
         </svg>
       </button>
-    </div>
+    </>
+  );
+}
+
+/** 내 위치 — 조준선. `아이콘 1개 = 뜻 1개` 를 지키려 글자를 넣지 않는다(뜻은 `aria-label`·`title`) */
+function MyLocationIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
+      <circle cx="12" cy="12" r="6.4" fill="none" stroke="currentColor" strokeWidth="2" />
+      <circle cx="12" cy="12" r="2.1" fill="currentColor" />
+      <path
+        d="M12 1.6v3.2M12 19.2v3.2M1.6 12h3.2M19.2 12h3.2"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** 크게 보기 — 네 모서리로 벌어지는 표시 */
+function ExpandIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
+      <path
+        d="M9 3.5H3.5V9M15 3.5h5.5V9M9 20.5H3.5V15M15 20.5h5.5V15"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** 처음 위치로 — 되돌리는 화살표 */
+function ResetIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
+      <path
+        d="M3.6 12a8.4 8.4 0 1 0 2.7-6.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M3.2 3.8v5.4h5.4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -3332,19 +3406,78 @@ export function RallyMap({ clientId }: { clientId: string }) {
               <span id="rally-kbd-help" className="sr-only">
                 방향키로 이동하고 엔터로 실행합니다
               </span>
-              <MapZoomButtons
-                zoom={zoom}
-                onZoom={zoomBy}
-                itemProps={(id) => ({ id, tabIndex: focusedId === id ? 0 : -1 })}
-              />
-              {/* ★ 거리뷰 토글 — 파노라마 모듈이 있을 때만. 없으면 눌러도 열 것이 없다 */}
-              {panoSupported ? (
-                <MapStreetToggle
-                  on={streetMode}
-                  onToggle={toggleStreetMode}
-                  buttonRef={roadviewButtonRef}
+              {/*
+                ★ **컨트롤을 전부 지도 안으로 들였다**(사용자 지시 2026-08-25).
+                종전에는 지도 **아래**에 `지도 크게 보기`·`처음 위치로`·`내 위치 표시` 가 글자 버튼으로 있었다.
+                사용자 판단: *"지도 안에 내 위치·거리뷰 정도면 기능 사용에 문제가 없다"*.
+                지도를 보는 조작은 지도 위에서 끝나는 것이 맞고, 아래 행이 사라지면서
+                **범례가 지도에 그만큼 가까워진다**(지점↔설명 대응이 §25.4 의 원래 취지다).
+
+                자리: **왼쪽 = 지도를 보는 조작**(확대·축소·복귀) · **오른쪽 = 무엇을 볼지 고르는 조작**
+                (내 위치·거리뷰·크게 보기). 아래 두 모서리는 축척 바·네이버 로고가 쓴다(§22.10 2-B).
+              */}
+              <MapControlStack side="left">
+                <ZoomButtons
+                  zoom={zoom}
+                  onZoom={zoomBy}
+                  itemProps={(id) => ({ id, tabIndex: focusedId === id ? 0 : -1 })}
                 />
-              ) : null}
+                {/*
+                  드래그로 길을 잃었을 때의 **유일한 복귀 경로**다(§27.4.3). **지우지 마라.**
+                  ⚠ 이 버튼이 고치는 것은 "길을 잃었다"이지 **"페이지를 못 내린다"가 아니다.**
+                  ★ **움직였을 때만 나타난다** — 종전에는 늘 있으면서 `disabled` 였다.
+                  지도 위 자리는 비싸고, 누를 수 없는 버튼이 그 자리를 상시 차지할 이유가 없다.
+                */}
+                {moved ? (
+                  <button
+                    type="button"
+                    onClick={resetView}
+                    aria-label="처음 위치로"
+                    title="처음 위치로"
+                    className={MAP_CTRL_CLASS}
+                  >
+                    <ResetIcon />
+                  </button>
+                ) : null}
+              </MapControlStack>
+
+              <MapControlStack side="right">
+                {/* ★ **맨 위가 `내 위치`** 다(사용자 지시 2026-08-25). 8/28 당일 자기 자리에서
+                    가장 먼저 누를 버튼이라 엄지가 닿는 순서의 첫 자리를 준다. */}
+                {geoSupported ? (
+                  <button
+                    type="button"
+                    onClick={requestLocation}
+                    disabled={locStatus === "requesting"}
+                    aria-label={locStatus === "shown" ? "내 위치 다시 확인" : "내 위치 표시"}
+                    title={locStatus === "shown" ? "내 위치 다시 확인" : "내 위치 표시"}
+                    className={MAP_CTRL_CLASS}
+                  >
+                    <MyLocationIcon />
+                  </button>
+                ) : null}
+                {/* ★ 거리뷰 토글 — 파노라마 모듈이 있을 때만. 없으면 눌러도 열 것이 없다 */}
+                {panoSupported ? (
+                  <StreetToggleButton
+                    on={streetMode}
+                    onToggle={toggleStreetMode}
+                    buttonRef={roadviewButtonRef}
+                  />
+                ) : null}
+                {/* 3단계-B — `STAGE3B_FULLSCREEN_MAP` 한 곳으로 켜고 끈다(§27.18) */}
+                {STAGE3B_FULLSCREEN_MAP ? (
+                  <button
+                    type="button"
+                    ref={fullscreenButtonRef}
+                    onClick={openFullscreen}
+                    aria-label="지도 크게 보기"
+                    title="지도 크게 보기"
+                    className={MAP_CTRL_CLASS}
+                  >
+                    <ExpandIcon />
+                  </button>
+                ) : null}
+              </MapControlStack>
             </>
           ) : null}
 
@@ -3400,66 +3533,29 @@ export function RallyMap({ clientId }: { clientId: string }) {
           ※ 지도의 번호를 누르면 각 지점 설명이 나옵니다.
         </p>
       {/*
-        컨트롤 행 — **범례 위로 올렸다**(§27.14.0). 드래그를 열자 새 문제가 생겼기 때문이다:
-        길을 잃은 조합원이 `처음 위치로` 를 찾으려면 아래로 스크롤해야 하는데 **지도 위에서는 스크롤이 안 된다.**
-        범례 6행 뒤(약 290px)에 있던 버튼을 지도 바로 아래(약 80px)로 당겨 두 문제가 겹치는 것을 푼다.
-        지도가 실패한 상태에서는 조작할 지도가 없으므로 행 전체를 렌더하지 않는다(죽은 버튼 금지).
+        ★ **버튼 행이 있던 자리**(2026-08-25 삭제 — 버튼은 지도 안으로 갔다, 아래 주석 참조).
+        지금 여기 남은 것은 **위치 요청의 답**(`role="status"`)뿐이다.
+        ⚠ `min-h-touch`(44px)는 **버튼 높이를 잡아 두던 값**이라 함께 뺐다 — 버튼이 없는데
+        빈 44px 을 남기면 지도와 범례 사이가 이유 없이 벌어진다.
+        지도가 실패한 상태에서는 조작할 지도가 없으므로 이 영역을 렌더하지 않는다(죽은 버튼 금지).
       */}
-      <div className="mt-3 min-h-touch">
+      <div className="mt-3">
         {status === "ready" ? (
           <>
-            {/* 컨트롤 행은 **상태와 무관하게 버튼 구성이 바뀌지 않는다**(§23.0-4).
-                로드뷰가 모달로 나가면서 `지도로 돌아가기` 가 모달 안 `닫기` 로 이동했다. */}
-            {/* `축소`·`확대` 는 **지도 안 `+/−` 로 옮겼다**(§27.4.3) — 같은 기능이 두 곳에 있으면
-                조합원이 어느 것이 진짜인지 묻게 된다.
+            {/*
+              ★ **버튼 행은 삭제됐다**(사용자 지시 2026-08-25 — *"지도 안에 내 위치·거리뷰 정도만
+              있어도 기능 사용에 문제가 없다"*). 세 버튼은 **사라진 것이 아니라 지도 안으로 옮겨졌다:**
+                `지도 크게 보기`·`내 위치 표시` → 지도 **우상단** 묶음
+                `처음 위치로` → 지도 **좌상단** 묶음(움직였을 때만 나타난다)
+              **다시 만들지 마라** — 같은 기능이 두 곳에 있으면 조합원이 어느 것이 진짜인지 묻게 된다.
 
-                ⚠ **3단계-A 만 배포하는 지금 이 행은 3개다**(`처음 위치로`·`내 위치 표시`·`로드뷰 보기`) —
-                `지도 크게 보기` 가 3단계-B 로 미뤄졌기 때문이다(§27.18.3).
-                **§27.4.3 의 4개 기준 폭 검산(1행 280.0 / 2행 264.4)은 무효다.**
-                3단계-B 가 되살아나면 4개로 돌아가고 그 검산이 다시 기준이 된다 —
-                그때 `지도 크게 보기` 와 `로드뷰 보기` 를 **같은 행에 나란히 두지 마라**(§27.14.2):
-                둘 다 화면을 덮어 혼동되므로 행을 갈라야 한다. */}
-            <div className="flex flex-wrap gap-2">
-              {/* 3단계-B — **QA-260(모달 안 범례 부재) 판정 대기**(§27.18).
-                  코드를 지우지 마라. `STAGE3B_FULLSCREEN_MAP` 한 곳만 `true` 로 되돌리면 복구된다. */}
-              {STAGE3B_FULLSCREEN_MAP ? (
-                <button
-                  type="button"
-                  ref={fullscreenButtonRef}
-                  onClick={openFullscreen}
-                  className={CONTROL_CLASS}
-                >
-                  지도 크게 보기
-                </button>
-              ) : null}
-              {/* 드래그로 길을 잃었을 때의 **유일한 복귀 경로**다. 3단계로 팬이 더 열려
-                  중요도가 올라갔다(§27.4.3). **지우지 마라.**
-                  ⚠ 이 버튼이 고치는 것은 "길을 잃었다"이지 **"페이지를 못 내린다"가 아니다** — 혼동하지 마라. */}
-              <button type="button" onClick={resetView} disabled={!moved} className={CONTROL_CLASS}>
-                처음 위치로
-              </button>
-              {geoSupported ? (
-                <button
-                  type="button"
-                  onClick={requestLocation}
-                  disabled={locStatus === "requesting"}
-                  className={CONTROL_CLASS}
-                >
-                  {locStatus === "shown" ? "다시 확인" : "내 위치 표시"}
-                </button>
-              ) : null}
-              {/*
-                ★ **`로드뷰 보기` 버튼은 여기서 삭제됐다**(사용자 지시 2026-08-21). 되살리지 마라.
-                그 버튼은 **위치가 5번 출구로 고정**이라 어느 지점의 로드뷰인지 고를 수 없었고,
-                안내 문구도 `국회의사당역 5번 출구 주변을 볼 수 있습니다` 로 그 한계를 적고 있었다.
+              ⚠ 종전 주석이 근거로 들던 *"길을 잃은 조합원이 `처음 위치로` 를 찾으려면 아래로
+              스크롤해야 하는데 지도 위에서는 스크롤이 안 된다"*(§27.14.0)는 **지금 더 잘 지켜진다** —
+              그 버튼이 지도 **안**에 있으니 스크롤할 일이 아예 없다.
 
-                **로드뷰 진입점은 이제 둘이다:**
-                  ① **지점 팝업의 `로드뷰 보기`** — 그 지점의 로드뷰가 열린다
-                  ② **지도 안 `거리뷰` 토글** — 파란 길을 눌러 아무 지점이나 연다
-                둘 다 지도 **안**이나 지도에서 파생한 UI 라, 컨트롤 행에 다시 만들 이유가 없다.
-              */}
-            </div>
-
+              ⚠ **아래 `role="status"` 영역은 남긴다.** 그것은 버튼이 아니라 **위치 요청의 답**이고,
+              지도 안 아이콘 버튼은 답을 스스로 말하지 못한다.
+            */}
             {/* idle 에도 DOM 에 존재해야 한다 — 나중에 생긴 노드의 내용을 못 읽는 SR 이 있다.
                 `assertive` 를 쓰지 마라(읽던 것을 끊는다). 거부를 role="alert"·적색으로
                 표시하지 마라 — 정당한 선택을 오류처럼 보이게 하는 것은 압박이다(§20.14.3).
@@ -4121,16 +4217,29 @@ function RallyFullscreenMap({
               <span id="rally-kbd-help-fs" className="sr-only">
                 방향키로 이동하고 엔터로 실행합니다
               </span>
-              {/* 상단 바가 지도 밖으로 나갔으므로 `+`/`−` 는 **지도 영역 우상단**이다 —
-                  페이지 안 지도와 같은 `top-3`. 종전 `top-20` 은 `닫기` 오버레이를 피하던 값이라 무효다. */}
-              <MapZoomButtons
-                zoom={zoom}
-                onZoom={zoomBy}
-                itemProps={(id) => ({ id: `${id}-fs`, tabIndex: focusedId === id ? 0 : -1 })}
-              />
+              {/*
+                **자리는 페이지 안 지도와 같다** — 왼쪽이 확대·축소, 오른쪽이 거리뷰(2026-08-25).
+                두 지도가 다르게 생기면 *"큰 지도에서는 버튼이 어디 갔나"* 가 된다.
+                ⚠ 여기 `처음 위치로` 는 **상단 바에 이미 있다**(§31.4) — 지도 안에 또 만들지 마라.
+                ⚠ `내 위치` 도 두지 않는다: 전체 화면은 **자리를 훑어보는 화면**이고,
+                  현재 위치 표시는 페이지 지도에서 켜면 이 지도에도 그대로 따라온다.
+              */}
+              <MapControlStack side="left">
+                <ZoomButtons
+                  zoom={zoom}
+                  onZoom={zoomBy}
+                  itemProps={(id) => ({ id: `${id}-fs`, tabIndex: focusedId === id ? 0 : -1 })}
+                />
+              </MapControlStack>
               {/* ★ 거리뷰 토글 — 파노라마 모듈이 있을 때만. 없으면 눌러도 열 것이 없다 */}
               {panoSupported ? (
-                <MapStreetToggle on={streetMode} onToggle={toggleStreetMode} buttonRef={roadviewButtonRef} />
+                <MapControlStack side="right">
+                  <StreetToggleButton
+                    on={streetMode}
+                    onToggle={toggleStreetMode}
+                    buttonRef={roadviewButtonRef}
+                  />
+                </MapControlStack>
               ) : null}
             </>
           ) : null}
