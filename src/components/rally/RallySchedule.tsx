@@ -1,18 +1,36 @@
 /**
- * 결의대회 순서(식순) 16행 (디자인 스펙 §20.3.6).
+ * 결의대회 순서(식순) 16행 + **코스콤 조합원 일정 열**(디자인 스펙 §20.3.6).
  *
  * 원문: 주최측 안내자료 이미지 2 "6. 결의대회 순서" 전사
  * (`_workspace/00_input/content-rally-20260828.md` §4). **시각·항목명을 고치지 마라.**
  *
- * 게시 조건 (검증 리포트 4회차 §7):
- * - `※ 상황에 따라 식순 변경 가능` 을 표와 **같은 화면**에 둔다(§7-2). 16행 표는 360px 에서
- *   약 980px 이라 한 화면을 넘기므로 **표 위(`<caption>`)와 표 아래 2곳**에 둔다.
- *   `<caption>` 은 스크린리더가 표 진입 시 가장 먼저 읽는 자리이기도 하다.
- * - 인명은 **소속 병기 필수**(§7-1). 소속 없는 `윤석구 위원장`·`김동명 위원장` 은 게시 불가다 —
- *   조합원이 누구인지 식별할 수 없다.
+ * ★ **예외 하나 — 첫 행 시작 시각을 `18:00` → `17:40` 으로 바꿨다**(사용자 지시 2026-08-25).
+ * 코스콤 일정이 **17:40 에 시작**하는데 표가 18:00 부터라 그 항목을 놓을 행이 없었다.
+ * **나머지 15행의 시각은 하나도 건드리지 않았다.**
  *
- * 비고 열을 만들지 않는다: 360px 에서 3열은 성립하지 않는다(내용 열이 100px 이하로 눌린다).
- * 인명은 내용 셀의 둘째 줄로 내려가며 **정보는 그대로 남는다** — 은폐가 아니다(§0.4).
+ * ★★ **코스콤 조합원 일정 열 추가**(사용자 지시 2026-08-25 · 원문은 사용자가 첨부한
+ * `4. 조합원 상세일정` 표). 우리 일정이 공식 식순의 **여러 행에 걸치면 그 열만 병합**한다
+ * (`rowSpan`). 예: `결의대회 행사(19:00~20:30)` 는 공식 3~15행을 한 칸으로 덮는다.
+ *
+ * ⚠ **우리 열의 각 항목에 «자기 시각»을 함께 적는다.** 우리 일정의 경계가 공식 식순의 행
+ * 경계와 **일치하지 않기 때문**이다(예: `종료 출석체크 20:20~20:30` 은 공식 마지막 행
+ * `20:20~` 안에 있다). 시각을 빼면 행 경계가 우리 시각인 것처럼 읽혀 **거짓이 된다.**
+ *
+ * ⚠ **`※ 3구역 내 예정, 추후 상세 안내` 는 원문 그대로다.** 우리가 붙인 말이 아니다 —
+ * 물품 수령 장소가 3구역 **안 어디인지**가 추후 안내라는 뜻이고, "3구역이 미정"이라는 뜻이 아니다.
+ * (페이지 본문·지도는 3구역을 확정 사실로 말한다. 두 진술은 층위가 다르다.)
+ *
+ * ## 3열 레이아웃 — 종전 «3열은 성립하지 않는다» 는 판단을 바꾼 근거
+ *
+ * 종전 주석: *"비고 열을 만들지 않는다: 360px 에서 3열은 성립하지 않는다(내용 열이 100px
+ * 이하로 눌린다)"*. 그 계산의 전제는 **시간 열 112px** 이었다.
+ * 시간 열을 **모바일에서 72px 로** 줄여 그 전제를 없앴다 — `<wbr>` 이 이미 `17:40~` / `18:30`
+ * 두 줄을 허용하고 있어 112px 이 필요하지 않다. 남는 폭은 내용/코스콤 열이 나눠 갖는다.
+ * ⚠ **폭을 다시 만지면 390px 에서 실측하라.**
+ *
+ * 게시 조건 (검증 리포트 4회차 §7):
+ * - `※ 상황에 따라 식순 변경 가능` 을 표와 **같은 화면**에 둔다(§7-2) — 표 위·아래 2곳.
+ * - 인명은 **소속 병기 필수**(§7-1).
  */
 
 interface ScheduleRow {
@@ -20,12 +38,80 @@ interface ScheduleRow {
   content: string;
   /** 원문 "비고" 열의 인명. 소속을 반드시 포함한다(검증 §7-1) */
   person: string | null;
+  /**
+   * 이 행에서 시작하는 **코스콤 조합원 일정 칸**. 없으면 위 칸의 `rowSpan` 에 덮여 있다는 뜻이다.
+   * ⚠ `rowSpan` 합이 **정확히 16** 이어야 표가 깨지지 않는다 — 항목을 고치면 다시 세라.
+   */
+  koscom?: {
+    rowSpan: number;
+    items: readonly KoscomItem[];
+  };
+}
+
+/** 코스콤 일정 한 항목 — 원문(사용자 첨부 `4. 조합원 상세일정`)의 한 행에 대응한다 */
+interface KoscomItem {
+  /** **반드시 적는다** — 공식 행 경계와 우리 시각이 다르기 때문이다(위 주석) */
+  time: string;
+  title: string;
+  /** 원문 `상세내용` 의 하위 항목 */
+  details?: readonly string[];
+  /** 원문 `비고` 열 */
+  note?: string;
 }
 
 const RALLY_PROGRAM: readonly ScheduleRow[] = [
-  { time: "18:00~18:30", content: "장내 정리 및 조합원 안내", person: null },
-  { time: "18:30~19:00", content: "사전집회", person: null },
-  { time: "19:00~19:05", content: "개회선언, 지도부/내외빈 입장", person: null },
+  {
+    /* ★ `18:00` 에서 바꾼 유일한 시각(사용자 지시) — 근거는 파일 상단 주석 */
+    time: "17:40~18:30",
+    content: "장내 정리 및 조합원 안내",
+    person: null,
+    koscom: {
+      rowSpan: 1,
+      items: [
+        {
+          time: "17:40~18:30",
+          title: "퇴근 후 집결장소 이동",
+          note: "여의도 의사당대로(국회의사당역 인근) · 대중교통 이용 또는 한화손해보험 커피앳웍스 앞 국회지하도보 이용",
+        },
+      ],
+    },
+  },
+  {
+    time: "18:30~19:00",
+    content: "사전집회",
+    person: null,
+    /* 우리 항목 **둘**이 이 한 행 안에 들어간다 — 병합이 아니라 한 칸에 두 항목이다 */
+    koscom: {
+      rowSpan: 1,
+      items: [
+        {
+          time: "18:30~18:50",
+          title: "참석명단 작성 및 물품 수령",
+          details: [
+            "참석명단 작성 (금융노조 QR코드 인증도 진행)",
+            "투쟁용품 수령 (투쟁조끼, 손피켓, 우천 시 우의 등)",
+            "저녁간식 수령",
+          ],
+          note: "집회장소 내 코스콤지역 (3구역 내 예정, 추후 상세 안내)",
+        },
+        {
+          time: "18:50~19:00",
+          title: "시작 출석체크",
+          note: "담당 운영위원 및 금융노조 출석QR코드",
+        },
+      ],
+    },
+  },
+  {
+    time: "19:00~19:05",
+    content: "개회선언, 지도부/내외빈 입장",
+    person: null,
+    /* 공식 3~15행(19:00~20:20)을 한 칸으로 덮는다. **13 을 고치면 아래 행 수와 다시 맞춰라** */
+    koscom: {
+      rowSpan: 13,
+      items: [{ time: "19:00~20:30", title: "결의대회 행사", note: "금융노조 진행" }],
+    },
+  },
   { time: "19:05~19:10", content: "깃발 입장", person: null },
   { time: "19:10~19:15", content: "노동의례", person: null },
   { time: "19:15~19:25", content: "참가 조직 소개", person: null },
@@ -38,7 +124,23 @@ const RALLY_PROGRAM: readonly ScheduleRow[] = [
   { time: "20:05~20:10", content: "상징의식", person: null },
   { time: "20:10~20:15", content: "결의문 낭독", person: null },
   { time: "20:15~20:20", content: "구호제창 및 파업가 제창", person: null },
-  { time: "20:20~", content: "폐회선언", person: null },
+  {
+    time: "20:20~",
+    content: "폐회선언",
+    person: null,
+    koscom: {
+      rowSpan: 1,
+      items: [
+        { time: "20:20~20:30", title: "종료 출석체크", note: "담당 운영위원 및 금융노조 출석QR코드" },
+        {
+          time: "20:30~",
+          title: "투쟁용품 반납 및 해산",
+          details: ["투쟁용품 반납 (투쟁조끼)"],
+          note: "집회장소에서 반납",
+        },
+      ],
+    },
+  },
 ];
 
 /** 표 위·아래 2곳에 같은 문장을 둔다 — 원문 표 하단 단서이며 검증 §7-2 의 게시 조건이다 */
@@ -51,32 +153,55 @@ export function RallySchedule() {
         <caption className="mb-3 break-keep text-left text-caption text-ink">{CHANGE_NOTE}</caption>
         <thead>
           <tr>
-            {/* w-[112px] 을 줄이지 마라 — 104px 이면 `18:00~18:30` 의 여유가 8.7px 이 되어
-                §18 검산 규칙상 실측 없이는 쓸 수 없는 값이 된다(§20.3.6) */}
+            {/*
+              ⚠ 종전 주석은 *"`w-[112px]` 을 줄이지 마라"* 였다. **그 값의 근거는 «한 줄로 담기»** 였는데,
+              시각 셀은 이미 `<wbr>` 로 두 줄을 허용하고 있어(아래 참조) 한 줄이 조건이 아니다.
+              3열이 되면서 폭이 더 비싸졌으므로 **모바일 78 / md+ 128** 로 줄였다.
+
+              ★ **78 은 실측으로 정한 값이다.** 처음 72 로 잡았더니 `20:00~20:05` 가 두 줄로 깨졌다 —
+              가장 긴 시각 문자열이 **66.2px** 인데 `pr-1.5`(6px)를 빼면 가용이 **66.0px** 이라
+              **0.2px 모자랐다.** 78 이면 가용 72px 로 5.8px 여유가 있다.
+              ⚠ **다시 줄이려면 이 66.2 를 먼저 재라** — 서체·글자 크기가 바뀌면 값도 바뀐다.
+              (텍스트 확대 200% 에서는 `<wbr>` 이 두 줄로 갈라 겹침을 막는다 — 그때는 두 줄이 정상이다.)
+            */}
             <th
               scope="col"
-              className="w-[112px] pb-2 text-left text-caption font-semibold text-ink-muted md:w-[140px]"
+              className="w-[78px] pb-2 text-left text-caption font-semibold text-ink-muted md:w-[128px]"
             >
               시간
             </th>
-            <th scope="col" className="pb-2 text-left text-caption font-semibold text-ink-muted">
-              내용
+            {/* 이름을 `내용` 에서 바꿨다 — 옆에 우리 일정 열이 생긴 이상 **누구의 순서인지**가 없으면
+                두 열을 섞어 읽는다. 원문 표의 항목명은 그대로다. */}
+            <th
+              scope="col"
+              className="w-[38%] pb-2 pr-3 text-left text-caption font-semibold text-ink-muted"
+            >
+              금융노조 공식 순서
+            </th>
+            {/* 우리 열은 **면으로 구분**한다(§2 — 색만으로 뜻을 싣지 않는다: 제목이 이름을 진다) */}
+            <th
+              scope="col"
+              className="rounded-t-card bg-primary-tint px-3 pb-2 pt-2 text-left text-caption font-semibold text-primary"
+            >
+              코스콤 조합원 일정
             </th>
           </tr>
         </thead>
         <tbody>
           {RALLY_PROGRAM.map((row) => (
-            <tr key={row.time} className="border-t border-border-soft">
+            /*
+              ⚠ **테두리를 `<tr>` 이 아니라 `<td>` 에 준다.** `border-collapse: collapse` 에서
+              `<tr>` 테두리는 **행 전체를 가로지르므로 병합된 칸을 잘라 버린다** — 13행을 덮은
+              `결의대회 행사` 칸에 가로줄이 12개 그어진다. 셀에 주면 병합 칸에는 한 번만 그어진다.
+            */
+            <tr key={row.time}>
               {/*
                 시각은 **끊어 읽으면 안 되는 값**이라 스펙(§20.3.6)은 `whitespace-nowrap` 을 썼다.
-                그대로 두면 텍스트 확대 200%(폰트만 2배, 열 폭은 112px 고정)에서 시간 문자열이
-                169px 이 되어 **내용 열 위로 겹쳐 찍힌다**(실측). 그래서 nowrap 대신
-                `~` 뒤에 **명시적 줄바꿈 기회(`<wbr>`)** 만 준다:
-                - 기본 크기에서는 100px 가용에 83px 이라 기회를 쓰지 않는다 → **1줄 유지**(실측).
-                - 200% 에서만 `18:00~` / `18:30` 로 갈라져 겹침이 사라진다.
+                그대로 두면 텍스트 확대 200%에서 시간 문자열이 열 폭을 넘어 **내용 열 위로 겹쳐
+                찍힌다**(실측). 그래서 nowrap 대신 `~` 뒤에 **명시적 줄바꿈 기회(`<wbr>`)** 만 준다.
                 숫자·콜론에는 줄바꿈 기회가 없으므로 이 `<wbr>` 외의 지점에서는 끊기지 않는다.
               */}
-              <td className="py-3 pr-3 align-top text-caption text-ink">
+              <td className="border-t border-border-soft py-3 pr-1.5 align-top text-caption text-ink">
                 {row.time.includes("~") ? (
                   <>
                     {row.time.slice(0, row.time.indexOf("~") + 1)}
@@ -87,12 +212,44 @@ export function RallySchedule() {
                   row.time
                 )}
               </td>
-              <td className="py-3 align-top break-keep text-caption text-ink">
+              <td className="border-t border-border-soft py-3 pr-3 align-top break-keep text-caption text-ink">
                 {row.content}
                 {row.person !== null ? (
                   <span className="mt-1 block text-caption text-ink-muted">{row.person}</span>
                 ) : null}
               </td>
+              {/*
+                ★ **`koscom` 이 없는 행은 셀을 아예 그리지 않는다** — 위 칸의 `rowSpan` 이 덮고 있다.
+                빈 `<td>` 를 넣으면 병합이 깨져 표가 어긋난다.
+              */}
+              {row.koscom !== undefined ? (
+                <td
+                  rowSpan={row.koscom.rowSpan}
+                  className="border-t border-border-soft bg-primary-tint px-3 py-3 align-top break-keep text-caption text-ink"
+                >
+                  {row.koscom.items.map((item, index) => (
+                    <div key={item.time} className={index === 0 ? "" : "mt-3"}>
+                      {/* 시각을 **항목마다** 적는 이유는 파일 상단 주석에 있다 — 빼면 거짓이 된다 */}
+                      <p className="font-semibold text-primary">
+                        {item.time}
+                        <span className="ml-1.5 font-bold text-ink">{item.title}</span>
+                      </p>
+                      {item.details !== undefined ? (
+                        <ul className="mt-1 space-y-0.5">
+                          {item.details.map((detail) => (
+                            <li key={detail} className="text-ink">
+                              · {detail}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {item.note !== undefined ? (
+                        <p className="mt-1 text-ink-muted">{item.note}</p>
+                      ) : null}
+                    </div>
+                  ))}
+                </td>
+              ) : null}
             </tr>
           ))}
         </tbody>
