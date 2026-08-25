@@ -1,6 +1,6 @@
 # 구현 요약: 메인페이지 (탭 게시판)
 
-- 작성: web-developer | 작성일: 2026-08-16 | 최종 수정: 2026-08-16 (QA 1회차 반영)
+- 작성: web-developer | 작성일: 2026-08-16 | 최종 수정: **2026-08-25** (§40 추가)
 - 근거: `_workspace/00_input/requirements.md`, `_workspace/02_designer_spec.md`, `union-webapp-dev` 스킬, `_workspace/04_qa_report.md`
 
 ## 1. 구현 범위
@@ -4597,3 +4597,32 @@ zIndex: feature.numbered === false ? LABEL_Z_BASE - 1 : LABEL_Z_BASE + index
 | `eslint.config.mjs` | `1b3927528de6fb0a` **변경 없음** |
 
 포트 3000 **비어 있음** · 커밋 **없음**.
+
+---
+
+## §40. 2026-08-22~25 직접 작업 구간 — 판정이 어디 있는지 (doc-commit)
+
+이 구간은 **오케스트레이터 파이프라인을 돌리지 않고** 사용자 지시에 따라 직접 구현했다.
+그래서 판정이 이 문서가 아니라 **소스 주석과 커밋 본문**에 있다. 여기서는 **어디를 보면 되는지만** 가리킨다.
+(§2 «하나의 사실은 한 곳에만» — 옮겨 적으면 두 벌이 되고 코드 고치는 사람은 주석만 고친다.)
+
+| 작업 | 판정·실측이 있는 곳 | 커밋 |
+|---|---|---|
+| 헤더 고정 + 지도 쌓임 맥락 격리 | `SiteHeader.tsx` · 지도 박스 `isolate` 주석 | `6574801` |
+| 로드뷰 시트 높이 드래그 | `RallyMap.tsx` `RoadviewSheet` (상한 2겹·`setSize`) | `66e4dc2` |
+| 화장실 마커 컬러 픽토그램 | `RallyMap.tsx` `symbolSvg` · `rallyMap.ts` `symbol` | `f88642d` |
+| ④ 팝업 거리 정보 복원 | `rallyMap.ts` `popupNote`(파생 근거 포함) | `ed33c84` |
+| 로드뷰 바닥 탭 이동 | `RallyMap.tsx` `bearingDeg` 위 주석 (보폭 12m 근거) | `a5ef7a2` |
+| 로드뷰 안 지점 라벨 + 접힘 | `RallyMap.tsx` `buildMarks` / `foldMarks` | `5c22171` `b2fff06` |
+| PC 휠 확대 게이트 | `RallyMap.tsx` «휠 확대 게이트» 이펙트 | `b2fff06` |
+| 시야 부채꼴(실제 `fov` 추종) | `RallyMap.tsx` `spotConePath` | `7ca1037` |
+| 지도 컨트롤 남색 면 + 전부 지도 안으로 | `RallyMap.tsx` `MAP_CTRL_*` · `MapControlStack` | `776b3b2` |
+| QR 인증 카드 + 이미지 교체 | `QrAttendanceCard.tsx` `QR_IMAGE` 주석 | `8226ab5` `909e7ba` |
+| 결의대회 순서 3열 표 | `RallySchedule.tsx` 파일 상단 주석 | `64fb991` |
+
+**이 구간에서 «되돌리면 안 되는 것»** — 소스 주석이 이유까지 갖고 있다:
+로드뷰 시트 상한(지도 180px) · 라벨 접힘 우선순위(집결위치 최우선) ·
+휠 게이트의 `pointermove` 조건 · 부채꼴 각도가 상수가 아니라 `fov` 라는 것 ·
+QR 카드 문안이 이미지의 QR 도착지에 매달려 있다는 것.
+
+**미해결로 남긴 것은 `FOLLOWUPS.md` #11~#15** 로 올렸다.
