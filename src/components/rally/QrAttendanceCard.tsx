@@ -76,9 +76,18 @@ export function QrAttendanceCard() {
         (응답 실측: `<title>금융노조 집회참석</title>`).
 
         ⚠ **«아웃라인 필 버튼» 모양으로 만들지 마라**(§24.5 · `WayfindingBlock` 과 같은 규칙).
-        사용자가 *"버튼을 달아도 좋다"* 고 했지만, 이 프로젝트에서 **필 버튼은 «우리 페이지 안에서
-        일어나는 조작»의 형태**이고 **외부로 나가는 것은 다르게 생겨야 한다.**
-        그래서 길찾기와 **같은 카드 형태**다 — 누르는 면은 오히려 더 넓고, 어디로 가는지도 함께 말한다.
+        이 프로젝트에서 **필 버튼은 «우리 페이지 안에서 일어나는 조작»의 형태**이고
+        **외부로 나가는 것은 다르게 생겨야 한다.** 그래서 **카드**다 — 누르는 면은 오히려 더 넓고,
+        어디로 가는지도 함께 말한다.
+
+        ★ **면을 남색으로 채웠다**(사용자 지시 2026-08-25 — *"조금 더 강조해줘. 남색바탕에 흰색글씨"*).
+        **형태는 그대로 카드**이므로 위 규칙과 충돌하지 않는다 — 바뀐 것은 **무게**뿐이다.
+        길찾기 카드(흰 면 + 테두리)와 **일부러 다르게** 둔다: 길찾기는 *가는 길*이고
+        이것은 **당일 반드시 해야 하는 행동**이라 페이지 안에서 가장 무거운 항목이다.
+        대비: 흰 글자 ↔ `#093389` = **12.6**(AAA).
+
+        ⚠ **hover 테두리를 남색으로 두지 마라** — 남색 면 위에서는 보이지 않는다. 안쪽 흰 선이다.
+        ⚠ 포커스 링은 **바깥**(`outline-offset-2`)이라 흰 배경 위에 그려진다 — 남색 그대로 둔다.
 
         외부 이동 **3중 병행**(§14.1): ↗ 아이콘 + 도메인 표기 + 접근성 이름
         (카드 전체가 단일 `<a>` 라 내부 텍스트가 접근성 이름에 자동 포함된다).
@@ -92,16 +101,18 @@ export function QrAttendanceCard() {
         href={EXTERNAL_LINKS.unionAttendance}
         target="_blank"
         rel="noopener noreferrer"
-        className="rounded-card ease-out-soft group mt-4 block border border-border-strong bg-bg p-4 transition-colors duration-150 hover:outline-2 hover:outline-primary focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
+        className="rounded-card shadow-card ease-out-soft group mt-4 block bg-primary p-4 transition-opacity duration-150 hover:opacity-95 hover:outline-2 hover:-outline-offset-4 hover:outline-white focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
       >
-        <span className="block break-keep text-body font-bold text-primary group-hover:underline">
+        <span className="block break-keep text-lead font-bold text-white group-hover:underline">
           QR 인증 바로 하기
-          <ExternalLinkIcon className="ml-1 inline size-4 align-[-2px]" />
+          <ExternalLinkIcon className="ml-1 inline size-5 align-[-3px]" />
         </span>
-        <span className="mt-1 block break-keep text-caption text-ink">
+        <span className="mt-1 block break-keep text-caption text-white">
           주최측 출석체크 페이지입니다. 지정된 출석 시간에만 체크됩니다.
         </span>
-        <span className="mt-1.5 block text-caption text-ink-muted">
+        {/* 도메인 줄만 한 단계 낮춘다 — **흐리게가 아니라 «덜 굵게»** 다.
+            `white/80` 대비는 남색 위에서 여전히 8 이상이라 읽는 데 지장이 없다 */}
+        <span className="mt-1.5 block text-caption text-white/80">
           외부 링크(새 창) · {UNION_ATTENDANCE_DISPLAY_HOST}
         </span>
       </a>
