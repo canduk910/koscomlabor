@@ -140,8 +140,13 @@ export function QrAttendanceCard() {
           QR을 찍으면 나오는 출석체크 페이지와 같습니다. 지정된 출석 시간에만 체크됩니다.
         </span>
         {/* 도메인 줄만 한 단계 낮춘다 — **흐리게가 아니라 «덜 굵게»** 다.
-            `white/80` 대비는 남색 위에서 여전히 8 이상이라 읽는 데 지장이 없다 */}
-        <span className="mt-1.5 block text-caption text-white/80">
+            `white/80` 대비는 남색 위에서 여전히 8 이상이라 읽는 데 지장이 없다.
+
+            ★ **`break-all` 은 텍스트 확대에서 카드 밖으로 나가지 않게 하는 보험이다**(2026-08-25 추가).
+            도메인은 공백이 없어 **통째로 끊기지 않는 덩어리**다 — 200% 실측에서 이 줄 하나가
+            **118px** 넘쳤다(온누리 카드가 같은 이유로 이미 쓰고 있던 처방이다).
+            ⚠ **`truncate`·말줄임으로 바꾸지 마라** — 주소가 잘리면 표시하는 의미가 사라진다. */}
+        <span className="mt-1.5 block break-all text-caption text-white/80">
           외부 링크(새 창) · {UNION_ATTENDANCE_DISPLAY_HOST}
         </span>
       </a>

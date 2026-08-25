@@ -67,8 +67,11 @@ export function WayfindingBlock({ className = "" }: { className?: string }) {
         <span className="mt-1 block break-keep text-caption text-ink">
           도착지는 국회의사당역 3번 출구입니다. 출발지를 입력하면 경로가 나옵니다.
         </span>
-        {/* URL 전체를 노출하지 않는다 — 네이버 내부 인코딩이라 판독 가치가 0이다(§24.6) */}
-        <span className="mt-1.5 block text-caption text-ink-muted">
+        {/* URL 전체를 노출하지 않는다 — 네이버 내부 인코딩이라 판독 가치가 0이다(§24.6).
+            `break-all`: 도메인은 공백이 없어 통째로 끊기지 않는 덩어리라, 텍스트 확대에서
+            카드 밖으로 나간다(2026-08-25 실측 — 200%에서 이 줄이 자기 상자를 54px 넘겼다).
+            온누리·QR 카드가 같은 이유로 쓰고 있는 보험이다. **`truncate` 로 바꾸지 마라.** */}
+        <span className="mt-1.5 block break-all text-caption text-ink-muted">
           외부 링크(새 창) · {NAVER_DIRECTIONS_DISPLAY_HOST}
         </span>
       </a>

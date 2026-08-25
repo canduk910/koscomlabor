@@ -151,12 +151,54 @@ const RALLY_PROGRAM: readonly ScheduleRow[] = [
   },
 ];
 
+/**
+ * 시각 문자열에 **`~` 뒤 줄바꿈 기회(`<wbr>`)** 를 준다.
+ *
+ * 시각은 끊어 읽으면 안 되는 값이라 스펙(§20.3.6)은 `whitespace-nowrap` 을 썼는데,
+ * 그대로 두면 **텍스트 확대에서 열 폭을 넘어 옆 열 위로 겹쳐 찍힌다**(실측).
+ * `~` 한 지점만 열어 두면 기본 크기에서는 1줄을 유지하고 확대에서만 갈라진다.
+ * 숫자·콜론에는 줄바꿈 기회가 없으므로 **여기 말고는 끊기지 않는다.**
+ *
+ * ⚠ **코스콤 열의 시각에도 반드시 쓴다**(2026-08-25). 안 쓰면 `19:00~20:30` 같은
+ * 11글자가 **통째로 끊기지 않는 덩어리**가 되어, 확대 시 그 열에서 가장 크게 넘치는 요소가 된다.
+ */
+function TimeText({ value }: { value: string }) {
+  const i = value.indexOf("~");
+  if (i < 0) return <>{value}</>;
+  return (
+    <>
+      {value.slice(0, i + 1)}
+      <wbr />
+      {value.slice(i + 1)}
+    </>
+  );
+}
+
 /** 표 위·아래 2곳에 같은 문장을 둔다 — 원문 표 하단 단서이며 검증 §7-2 의 게시 조건이다 */
 const CHANGE_NOTE = "※ 상황에 따라 식순 변경 가능";
 
 export function RallySchedule() {
   return (
     <div className="rounded-panel shadow-card mt-6 bg-bg p-5 md:p-8">
+      {/*
+        ★ **가로 스크롤 컨테이너**(2026-08-25 · 사용자 지시 *"확대하더라도 안 넘치게"*).
+
+        **왜 «표만 미는 것» 이 최선인가 — 3열을 유지하는 한 확대에서 완전히 담을 수 없다.**
+        360px + 텍스트 확대 200% 실측: 페이지 여백 `px-4`(16→32) 와 카드 패딩 `p-5`(20→40) 가
+        **rem 이라 함께 2배**가 되어 표에 남는 폭이 **216px** 뿐이다. 그 안에서
+        시간 78(px 고정) + 공식 38% = 82 → **코스콤 열에 56px** 만 남는다.
+        한국어 22.5px 글자 기준 **두 글자**도 못 담는 폭이다.
+        필요한 최소치는 시간 92 + 공식 111 + 코스콤 130 ≈ **333px** 로, 216px 로는 성립하지 않는다.
+
+        그래서 **문서가 밀리지 않게** 하는 쪽을 택했다 — 넘침은 이 상자 안에서 끝난다.
+        기본 크기에서는 표가 이미 들어가므로 **스크롤바가 뜨지 않고 화면은 종전과 픽셀 동일**이다.
+
+        ⚠ **`#9` 의 함정(스크롤 컨테이너 안 `position:absolute` 요소가 밖으로 새 나간다)은
+        이 표에 해당하지 않는다** — `absolute` 자손 **0개**를 실측으로 확인했다.
+        나중에 `sr-only`(=`absolute`)를 표 안에 넣으려면 **그 셀에 `relative` 를 함께** 줘라.
+        ⚠ 스크롤바를 숨기지 마라(§ 탭 줄 선례) — 더 있다는 단서가 사라진다.
+      */}
+      <div className="overflow-x-auto">
       <table className="w-full table-fixed">
         <caption className="mb-3 break-keep text-left text-caption text-ink">{CHANGE_NOTE}</caption>
         <thead>
@@ -210,15 +252,7 @@ export function RallySchedule() {
                 숫자·콜론에는 줄바꿈 기회가 없으므로 이 `<wbr>` 외의 지점에서는 끊기지 않는다.
               */}
               <td className="border-t border-border-soft py-3 pr-1.5 align-top text-caption text-ink">
-                {row.time.includes("~") ? (
-                  <>
-                    {row.time.slice(0, row.time.indexOf("~") + 1)}
-                    <wbr />
-                    {row.time.slice(row.time.indexOf("~") + 1)}
-                  </>
-                ) : (
-                  row.time
-                )}
+                <TimeText value={row.time} />
               </td>
               <td className="border-t border-border-soft py-3 pr-3 align-top break-keep text-caption text-ink">
                 {row.content}
@@ -239,7 +273,7 @@ export function RallySchedule() {
                     <div key={item.time} className={index === 0 ? "" : "mt-3"}>
                       {/* 시각을 **항목마다** 적는 이유는 파일 상단 주석에 있다 — 빼면 거짓이 된다 */}
                       <p className="font-semibold text-primary">
-                        {item.time}
+                        <TimeText value={item.time} />
                         <span className="ml-1.5 font-bold text-ink">{item.title}</span>
                       </p>
                       {item.details !== undefined ? (
@@ -262,6 +296,7 @@ export function RallySchedule() {
           ))}
         </tbody>
       </table>
+      </div>
       <p className="mt-4 break-keep text-caption text-ink">{CHANGE_NOTE}</p>
     </div>
   );
