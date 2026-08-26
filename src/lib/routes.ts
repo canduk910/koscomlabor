@@ -62,6 +62,22 @@ export const EXTERNAL_LINKS = {
    */
   naverDirections:
     "https://map.naver.com/p/directions/-/3zfaE8,2AKqrw,%EA%B5%AD%ED%9A%8C%EC%9D%98%EC%82%AC%EB%8B%B9%EC%97%AD%203%EB%B2%88%20%EC%B6%9C%EA%B5%AC,,/-/transit?c=3zfaE8,2AKqrw,17,0,0,0,dh",
+  /**
+   * ★ **참석 예비조사 폼**(사용자 제공 2026-08-26 · 검증 §45-1 에서 **직접 재확인**).
+   *
+   * **도착지 확인**(원본 HTML 실측): 데스크톱·모바일 UA 양쪽 `HTTP/2 200` · **리다이렉트 사슬 0** ·
+   * 최종 URL 이 이 값 그대로다. **단축링크가 아니라** «대상이 바뀔 수 있는» 위험이 구조적으로 없다
+   * (이 페이지의 QR 사고 — `m.site.naver.com/1tgqt → qrpage.kr/pr/` — 는 단축링크였다).
+   * 폼 제목은 `8/28 금융노조 임단투 총력투쟁 결의대회 참석 조사` 이고 설명문이 **우리 사이트
+   * `https://koscomlabor.cloud/` 를 링크한다** — 폼이 코스콤지부의 것임을 자료 스스로 말한다.
+   *
+   * ⚠ **`WebFetch` 의 «설명문 없음» 을 «없다» 로 읽지 마라**(§45-13). 마크다운 변환기가
+   * `FB_PUBLIC_LOAD_DATA_` 같은 **스크립트 안 문자를 통째로 버린다** — 폼·위젯은 **원본 HTML** 을 봐야 한다.
+   * ⚠ **8/28 직전에 한 번 더 열어 보라**(`unionAttendance` 와 같은 규율) — 폼이 마감되면
+   * 배너가 **«닫힌 폼»으로 조합원을 보낸다.** 현재는 응답 수집 중이다(실측 2026-08-26).
+   */
+  preSurvey:
+    "https://docs.google.com/forms/d/e/1FAIpQLScWKY74TnGSHJGLjfdt5k7lkP_EMHaYQAVJnchfW9WdAm4KhA/viewform",
 } as const;
 
 /**
@@ -77,6 +93,15 @@ export const ONNURI_GUIDE_DISPLAY_HOST = new URL(EXTERNAL_LINKS.onnuriGuide).hos
 
 /** 출석체크 카드에 **표시**하는 도메인 — `href` 에서 파생해 링크와 표시가 갈리지 않게 한다 */
 export const UNION_ATTENDANCE_DISPLAY_HOST = new URL(EXTERNAL_LINKS.unionAttendance).host;
+
+/**
+ * 참석 예비조사 배너에 **표시**하는 도메인 (검증 §45-11 조건 3 · 디자이너 §37.9).
+ *
+ * ⚠ **리터럴 `docs.google.com` 을 적지 마라** — `href` 에서 파생시키는 것이 조건이다.
+ * 배너 이름(`참석 예비조사`)과 도착 페이지 제목(`8/28 금융노조 … 참석 조사`)이 **글자가 달라서**
+ * 조합원이 «다른 곳에 왔나» 하지 않도록 **어디로 가는지를 미리 말하는** 장치다.
+ */
+export const PRE_SURVEY_DISPLAY_HOST = new URL(EXTERNAL_LINKS.preSurvey).host;
 
 /**
  * 오시는 길 — **최근접역 정보. 노선·역·출구·URL 은 한 객체다. 하나만 고치지 마라**(§29.5 · 요구 137).
