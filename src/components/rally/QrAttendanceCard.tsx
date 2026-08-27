@@ -32,7 +32,7 @@ import { EXTERNAL_LINKS, UNION_ATTENDANCE_DISPLAY_HOST } from "@/lib/routes";
  * `rally-2026-08-28/page.tsx` 의 *"※ 2차 출석은 …"* 문장도 **함께 고쳤다.**
  * 시각이 또 바뀌면 **두 곳을 같이 본다.**
  *
- * ★ **이 이미지의 QR 은 우리 «QR 인증 바로 하기» 링크와 같은 곳으로 간다**(실측 2026-08-25):
+ * ★ **이 이미지의 QR 은 우리 «손피켓 QR인증 바로하기» 링크와 같은 곳으로 간다**(실측 2026-08-25):
  *   `https://m.site.naver.com/2eTDe` → `https://prpage153.mycafe24.com/bank701/index.php`
  *   (`<title>금융노조 집회참석</title>`)
  * ⚠ **종전 이미지에서는 그렇지 않았다** — 그 QR 은 `qrpage.kr/pr/`(웹 제작 업체 회사소개)로 갔다.
@@ -87,7 +87,7 @@ export function QrAttendanceCard() {
         ## 자리 — `※` 2줄 «다음», 아래 면 블록 «앞» (§48-3)
 
         순서가 **조건 → 결과 → 행동**이 된다:
-        `이 문장(둘 다 해야 한다)` → `아래 면 블록(폐회 후라도 21:00 전에)` → `링크 카드(QR 인증 바로 하기)`.
+        `이 문장(둘 다 해야 한다)` → `아래 면 블록(폐회 후라도 21:00 전에)` → `링크 카드(손피켓 QR인증 바로하기)`.
         ★ **뒤로 옮기지 마라** — 이 문장이 «둘 다 해야 한다»를 **먼저 세워야** 아래 블록의
         *"2차 출석을 아직 하지 않았다면"* 이 **왜 중요한지**가 성립한다. 뒤에 두면 경고를 읽고 나서 이유를 듣는다.
         ⚠ **링크 카드 뒤에 두지 마라** — 누르고 나가면 안 읽는다.
@@ -214,6 +214,13 @@ export function QrAttendanceCard() {
 
         ⚠ **이 문장은 이미지에 매달려 있다.** 2026-08-25 이전 이미지의 QR 은
         **업체 회사소개 홈페이지로 갔고**, 그때는 이 문장을 쓸 수 없어 *"손피켓 QR로"* 라고 특정해야 했다.
+
+        ★★ **2026-08-26 에 `손피켓의` 가 다시 붙었다(사용자 지시). 그러나 «되돌림»이 아니다**(검증 §50-2):
+          종전 `손피켓 QR로`  = **배제적 특정** — 이미지 QR 이 엉뚱한 데로 가서 **거짓을 피하려고** 특정했다
+          이번 `손피켓의 QR을` = **명명** — 현장에 QR 이 여럿일 때 **어느 QR 인지 이름을 붙이는 것**이다
+        **종전 근거는 이미 소멸했다**(교체분 이미지 QR 도 같은 곳으로 간다). 그러므로 이 문장은 **거짓이 되지 않는다.**
+        ⚠ **부작용 하나**: `손피켓의` 를 붙이면 **위 이미지 안 QR 은 이 문장이 안 다루게 된다.**
+          정보가 줄지만 거짓은 아니다. 되돌리려면 **이 표를 먼저 읽어라.**
         **이미지를 교체하면 QR 을 다시 디코딩하고, 다른 곳으로 가면 이 문장부터 고쳐라.**
       */}
       <a
@@ -222,12 +229,36 @@ export function QrAttendanceCard() {
         rel="noopener noreferrer"
         className="rounded-card shadow-card ease-out-soft group mt-4 block bg-primary p-4 transition-opacity duration-150 hover:opacity-95 hover:outline-2 hover:-outline-offset-4 hover:outline-white focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
       >
-        <span className="block break-keep text-lead font-bold text-white group-hover:underline">
-          QR 인증 바로 하기
+        <span className="block break-keep break-words text-lead font-bold text-white group-hover:underline">
+          손피켓 QR인증 바로하기
           <ExternalLinkIcon className="ml-1 inline size-5 align-[-3px]" />
         </span>
-        <span className="mt-1 block break-keep text-caption text-white">
-          QR을 찍으면 나오는 출석체크 페이지와 같습니다. 지정된 출석 시간에만 체크됩니다.
+        {/*
+          ★★ **안심 문장**(사용자가 직접 고른 문면 2026-08-26). **제목 «바로 아래»가 자리 판정이다.**
+
+          제목이 `손피켓 …` 으로 시작하면서 **위험이 하나 생겼다**(검증 §50-3 — 실재 · 크기 «중간»):
+          **이 카드의 존재 이유가 «손피켓이 없는 사람»** 인데(아래 링크 주석 참조),
+          **그 사람이 제목을 보고 «해당 없음»으로 읽고 안 누를 수 있다. 그가 정확히 이 링크가 필요한 사람이다.**
+          ★ **대안 경로가 없다** — 페이지에 QR 이미지가 있어도 **자기 폰 화면의 QR 을 자기 폰으로 찍을 수 없다.**
+
+          → 위험이 **«제목만 스캔하고 건너뛰는 경로»** 이므로 **제목에서 가장 가까운 자리**여야 닿는다.
+            설명 줄 뒤·카드 밖은 그 경로를 못 막는다. **카드 «안»이라 접근성 이름에도 포함**된다(단일 `<a>`).
+          ★ **비대칭**: 스크린리더 사용자는 카드 전체가 단일 `<a>` 라 설명의 «같습니다»를 **반드시 듣는다.**
+            **위험은 시각 스캐너 쪽에만 있다.**
+
+          ⚠ **이 문장이 말하지 않는 것 — 확대하지 마라:**
+            **«손피켓 없이도 출석이 됩니다»가 아니다.** 출석은 **1·2차 QR 인증**이고 이 링크는 그 인증의 **경로**다.
+            **경로와 결과를 섞으면** 조합원이 «링크만 누르면 끝»으로 읽는다.
+            참석명단 작성(지부천막)·상품권 조건과도 섞지 마라 — 위쪽 문장이 이미 진다.
+
+          ★ 사실 근거: 도착지 URL 에 **개인 토큰이 없다**(이미지 QR 의 최종 도착지와 같은 일반 URL · 실측).
+            **누구나 같은 페이지로 간다.**
+        */}
+        <span className="mt-1 block break-keep break-words text-caption text-white">
+          손피켓이 없어도 이 링크로 인증할 수 있습니다.
+        </span>
+        <span className="mt-1 block break-keep break-words text-caption text-white">
+          손피켓의 QR을 찍으면 나오는 출석체크 페이지와 같습니다. 지정된 출석 시간에만 체크됩니다.
         </span>
         {/* 도메인 줄만 한 단계 낮춘다 — **흐리게가 아니라 «덜 굵게»** 다.
             `white/80` 대비는 남색 위에서 여전히 8 이상이라 읽는 데 지장이 없다.
