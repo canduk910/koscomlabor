@@ -319,9 +319,27 @@ export function RallySchedule() {
                   {row.koscom.items.map((item, index) => (
                     <div key={item.time} className={index === 0 ? "" : "mt-3"}>
                       {/* 시각을 **항목마다** 적는 이유는 파일 상단 주석에 있다 — 빼면 거짓이 된다 */}
+                      {/*
+                        ★★ **제목은 `inline-block` 이다**(사용자 지시 2026-08-27 · 실기기 캡처).
+
+                        종전에는 시각과 제목이 **한 줄 안에서 인라인으로 흘러** 제목이 갈라졌다:
+                          `19:00~20:30 결의대회` / `행사`      ← 제목 중간에서 끊긴다
+                          `20:20~20:30 종료` / `출석체크`
+                        사용자 문면: *"시각과 필요한 일이 연결되서 줄바뀜 되는 경우에는
+                        시각 바로 뒤에 줄바뀜을 넣어줘."*
+
+                        ★ **«경우에는» 이 핵심이라 `block` 이 아니라 `inline-block` 이다.**
+                        `inline-block` 은 **원자 인라인 상자**라 «줄에 안 들어가면 통째로 다음 줄»로 간다 —
+                        들어가면 그대로 한 줄이다(`20:30~ 해산`). **조건부 줄바꿈을 CSS 로 얻는 방법이 이것뿐이다.**
+                        ⚠ **`block` 으로 바꾸지 마라** — 항상 두 줄이 되어 `20:30~ 해산` 처럼
+                          이미 한 줄에 들어가던 항목까지 높이를 먹는다.
+                        ⚠ **`whitespace-nowrap` 을 더하지 마라** — 제목이 셀보다 넓으면 셀 밖으로 나간다.
+                          `inline-block` 은 그때 **안에서 접힌다**(안전한 대체동작).
+                        ⚠ `ml-1.5` 는 **같은 줄일 때의 간격**이다. 다음 줄로 가면 자동으로 사라진다.
+                      */}
                       <p className="font-semibold text-primary">
                         <TimeText value={item.time} />
-                        <span className="ml-1.5 font-bold text-ink">{item.title}</span>
+                        <span className="ml-1.5 inline-block font-bold text-ink">{item.title}</span>
                       </p>
                       {item.details !== undefined ? (
                         <ul className="mt-1 space-y-0.5">
