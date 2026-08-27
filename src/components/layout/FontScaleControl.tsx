@@ -93,8 +93,22 @@ export function FontScaleControl() {
 
   return (
     /* `ml-auto`: 좁은 화면에서 `flex-wrap` 으로 **아래 줄로 내려가도 오른쪽에 붙는다.**
-       빼면 줄바꿈된 순간 왼쪽으로 튀어 로고 아래에 어정쩡하게 걸린다 */
-    <div className="ml-auto flex shrink-0 items-center gap-2">
+       빼면 줄바꿈된 순간 왼쪽으로 튀어 로고 아래에 어정쩡하게 걸린다.
+
+       ## ★ 이 컨트롤의 폭이 «헤더 절벽»을 정한다 (2026-08-27)
+
+       헤더가 접히면 **그 아래 모든 것이 50px 내려간다**(첫 화면 예산 — `SiteHeader` 주석의 표).
+       종전 `gap-2` + `w-24` 는 컨트롤 폭 **108.2px** 이라 절벽이 **351.2px** 이었고
+       **360 에서 여유가 8.8px** 뿐이었다. 지금은 **93.2px / 절벽 331px / 여유 29px** 다.
+
+       ⚠ **`sm:` 로 되돌리는 것이 설계다** — 좁은 화면에서만 줄이고 640px 이상에서는 종전 값이다.
+         `sm:gap-2`·`sm:w-24`·`md:w-28` 을 지우지 마라.
+       ★ **슬라이더를 더 줄이지 마라.** 60px 에 12스텝(75~130 · step 5)이라 **5px/스텝**이다.
+         이 컨트롤은 **접근성 기능**이라 작게 만드는 것이 목적과 충돌한다.
+         (터치 대상 높이 `h-touch` **44px 은 유지**된다 — 실측 확인.)
+       ★ 정밀도 부담이 낮은 이유: **드래그하는 즉시 글자 크기가 바뀌어 보인다.**
+         값을 정확히 맞출 필요가 없고 «보기 좋을 때까지» 끌면 된다. */
+    <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
       {/* 두 `가` 는 **장식이 아니라 눈금**이다(§2 — 뜻을 형태 하나에만 싣지 않는다).
           `aria-hidden`: 슬라이더 자신이 이름과 값을 이미 말한다 */}
       <span aria-hidden="true" className="text-[11px] leading-none font-bold text-ink-muted">
@@ -109,7 +123,7 @@ export function FontScaleControl() {
         onChange={(e) => apply(Number(e.target.value))}
         aria-label="글자 크기"
         aria-valuetext={`${scale} 퍼센트`}
-        className="accent-primary h-touch w-24 cursor-pointer focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2 md:w-28"
+        className="accent-primary h-touch w-20 cursor-pointer focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2 sm:w-24 md:w-28"
       />
       <span aria-hidden="true" className="text-[17px] leading-none font-bold text-ink-muted">
         가
