@@ -82,9 +82,22 @@ export function RallyBanner({
             ? /* ★ **`break-keep` 을 빼지 마라**(2026-08-22 — 사용자 화면에서 잡힌 결함).
                  없으면 한글이 **음절 단위로 잘려** `8/28(금) 저녁 결` / `의대회 참석 안내` 처럼
                  낱말 중간에서 줄이 바뀐다. `text-balance` 는 줄 길이를 고르게 할 뿐
-                 **어디서 끊을지는 정하지 않는다** — 둘은 다른 축이고 **둘 다 필요하다.** */
-              "font-display text-hero text-balance break-keep text-white md:text-hero-lg"
-            : "text-h2 text-balance break-keep text-ink"
+                 **어디서 끊을지는 정하지 않는다** — 둘은 다른 축이고 **둘 다 필요하다.**
+
+                 ★★ **`break-words` 도 필요하다**(2026-08-27 · QA 실측). 텍스트 확대 200% 에서
+                 이 줄이 **문서 가로 스크롤 61px** 을 만들고 있었다 — 슬롯 201 vs `scrollWidth` **334**.
+                 `break-words` 를 얹으면 **334 → 75 · 초과 0 · 문서 스크롤 0** 이다.
+
+                 ⚠⚠ **`break-keep` 이 원인이 아니다.** 빼도(=`normal`) **334** 그대로다 —
+                 **`8/28(금)` 은 숫자·괄호·기호라 «끊을 자리가 자체적으로 없다».**
+                 이 사이트가 겪은 «한글 덩어리»(→`break-words`)·«라틴 도메인»(→`break-all`) 과
+                 **또 다른 세 번째 문자 종류**다(`union-design-system §0.8`).
+                 → **`break-keep` 을 빼서 고치려 하지 마라. 아무 효과가 없고 한글만 음절로 잘린다.**
+
+                 ⚠ `panel` 분기에도 함께 넣었다 — 같은 문자열이라 좁은 화면에서 같은 위험을 진다.
+                 **한쪽만 붙이면 «왜 여기만?» 의 답이 «지금 안 넘쳐서» 가 되고, 그 근거는 문면에 매달린다.** */
+              "font-display text-hero text-balance break-keep break-words text-white md:text-hero-lg"
+            : "text-h2 text-balance break-keep break-words text-ink"
         }
       >
         8/28(금) 18:30 결의대회 참석안내

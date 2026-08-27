@@ -171,7 +171,11 @@ export default function BargainingPage() {
               <SectionHeading>쟁의권 확보</SectionHeading>
             </div>
             <div className="rounded-panel mt-6 bg-surface p-6 md:p-10">
-              <p className="font-display text-hero text-primary">96.05%</p>
+              {/* ★ `break-words` — 텍스트 확대 200% 에서 이 줄이 **문서 가로 스크롤 34px** 을 만들고 있었다
+                  (슬롯 185 vs `scrollWidth` 299 → 114 초과 · QA 실측 2026-08-27).
+                  ⚠ **`break-keep` 으로는 안 풀린다** — `96.05%` 는 **숫자·마침표·기호라 끊을 자리가 없다.**
+                  홈 배너 헤드라인(`8/28(금) …`)과 **같은 계열이고 처방이 하나**다. */}
+              <p className="font-display text-hero break-words text-primary">96.05%</p>
               <p className="mt-2 text-lead text-ink">찬성률</p>
               <p className="mt-4 text-body text-ink">투표 68,878명 중 66,154명 찬성</p>
               <p className="mt-4 text-caption text-ink-muted">
