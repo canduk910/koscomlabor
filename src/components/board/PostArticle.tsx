@@ -63,7 +63,31 @@ export function PostArticle({ post, backHref }: PostArticleProps) {
         스펙의 672px(37.3자)와 어긋나고 서체 메트릭에 따라 값이 흔들렸다(§16 이전부터의 결함).
         토큰을 직접 참조해 단일 출처를 유지한다.
       */}
-      <div className="mx-auto max-w-[var(--container-prose)]">
+      {/*
+        ★★ **`break-keep break-words` 를 여기 «한 곳»에 건다**(2026-08-27 · 선제 처방).
+
+        `word-break` 와 `overflow-wrap` 은 **상속되는 속성**이라 이 래퍼 하나가
+        **제목 · 마크다운 본문 · 링크 · 목록 · 인용 전부**를 덮는다.
+        렌더러마다 붙이면 **일곱 곳이 되고 한 곳만 빠지는 사고**가 난다(§ 요구 88 — 한 출처).
+
+        ## 왜 필요한가 — 여기는 «임의 콘텐츠»다
+
+        제목(`text-title md:text-display` = 28/40px)과 본문은 **관리자가 쓰는 임의 문자열**이다.
+        200% 확대에서 제목은 **56/80px** 이 되고, **공백 없는 덩어리 하나**(URL · 긴 영문명 ·
+        `2026-08-28(금)` 같은 숫자·기호 묶음)가 들어오면 **문서 가로 스크롤**이 난다.
+        같은 결함을 이 사이트가 **네 번** 겪었다 — 캡션 · 산문 · 홈 배너 헤드라인 · 임단협 `96.05%`.
+
+        ⚠ **`truncate`(첨부 파일명)는 영향받지 않는다** — `white-space: nowrap` 이 줄바꿈을 이기고
+          `overflow: hidden` 이 넘침을 잡는다. 실제로 그것이 그 자리의 설계다.
+
+        ## ⚠ 미검증 — 런타임으로 재지 못했다
+
+        **프로덕션 게시판에 상세 페이지로 가는 항목이 0건**이다(공지 0 · 소식·교육은 전부
+        `type: "link"` 외부 링크). 로컬은 `NEXT_PUBLIC_API_BASE_URL` 미설정이라 `notFound()` 로 간다.
+        → **이 처방은 «정적 점검 + 같은 토큰에서의 기존 실측»에 근거한다.**
+        **첫 게시물이 올라오면 200% 게이트를 한 번 돌려라**(`_workspace/FOLLOWUPS.md` #22).
+      */}
+      <div className="mx-auto max-w-[var(--container-prose)] break-keep break-words">
         {/* ① 상단 복귀 링크 (§16.12.1 신규) */}
         <p>
           <Link
