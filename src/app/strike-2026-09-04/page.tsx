@@ -4,6 +4,7 @@ import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { ArrowLeftIcon } from "@/components/ui/icons";
 import { RallyStatusBadge } from "@/components/rally/RallyStatus";
+import { StrikeMap } from "@/components/strike/StrikeMap";
 import { strikePhase } from "@/lib/strike";
 import { ROUTES } from "@/lib/routes";
 
@@ -118,10 +119,13 @@ import { ROUTES } from "@/lib/routes";
  *
  * 추후 콘텐츠의 «주소»(플레이스홀더가 아니다):
  *   A. `<h1>` 아래·첫 `<section>` 위 → 참석 예비조사 배너 (세로 예산 재측정 필수)
- *   B. **개요 다음**·QR 줄 앞 → 코스콤지부 위치 섹션 (검증 재판정 필요 — §51-3 은 D-1 로 죽었다)
+ *      ★ **지도가 들어와도 그대로 들어온다** — 지도는 y 694 자리라 **첫 화면 판정선 640 아래**다.
+ *   B. **[2026-08-29 채워짐]** 개요 다음·QR 줄 앞 → **`세종대로 안내지도` 섹션**(`StrikeMap`).
  *      ⚠ 순서 교체 전에는 이 자리를 «집결시간 다음»으로 적었다. **그 표현은 죽었다**(§52.21-2).
  *        코스콤 위치는 «전체 장소(개요)»보다 **세부**라 **일반 → 특수** 순서를 지켜야 한다.
- *   C. B 섹션 안 → 지도 이미지 (`aspect-ratio` 고정 박스로 CLS 0)
+ *   ⚠ **C(«B 섹션 안 → 지도 이미지»)는 죽었다. 인용하지 마라**(M-4·M-17) —
+ *     주최측 원본(`design/IMG_6833.JPG`)은 **바탕이 상용 지도 캡처**라 게시하지 않기로 확정됐고,
+ *     그 자리를 **네이버 지도 API 블록**이 대체했다.
  *
  * ISR revalidate 60초: 상태(예고/당일/종료)를 요청 시점에 계산하므로 정적 프리렌더를 쓰지 않는다.
  */
@@ -148,6 +152,34 @@ export const metadata: Metadata = {
   description:
     "2026년 9월 4일(금) 11시 · 세종대로 (광화문역, 시청역). 전 조합원 집결은 10시 30분입니다.",
 };
+
+/*
+ * 네이버 지도 Client ID — `NEXT_PUBLIC_*` 은 **빌드타임에 번들로 임베드**된다
+ * (`deploy/web/docker-compose.yml` 의 build.args → Dockerfile ARG/ENV).
+ *
+ * ## ★★ 미설정이면 **`<section>` 을 통째로 렌더하지 않는다** (M-6 · M-16)
+ *
+ * 근거는 «보험»이 아니라 **«확인된 실패 모드에 대한 방화벽»**이다 — 인증 401 이면
+ * `window.naver.maps` 는 **있지만 내부가 null** 이라 정리 경로가 throw 하고,
+ * **passive unmount effect 의 예외를 React 가 회복하지 못해 트리 전체가 날아간다**
+ * (재현: `main` 0개 · `body.innerText` = *"This page couldn't load"*).
+ * 이 조건부가 **이미 게시된 문자 정보(집결시간·개요·QR 한 줄·식순)를 지킨다.**
+ * ⚠ **죽은 어포던스를 만들지 마라** — 키가 없을 때 «헤딩 + 영구 실패 박스»만 남기지 않는다.
+ *
+ * ## ⚠⚠ 이때 **코스콤 대오 한 줄도 함께 사라진다 — 그것이 «의도된 상태»다**
+ *
+ * 그 문장(`코스콤지부가 어느 대오인지는 추후 안내합니다.`)이 막는 위험은 **«지도가 대오 4개를
+ * 보여 준다»에서만 생긴다.** 지도가 없으면 그 위험도 없다. **위험과 완화는 같은 조건부 안에 있어야
+ * 한다** — «사라지는 버그»로 보고 지도 밖으로 빼면, 지도가 없는 화면에 **아무도 묻지 않은 답**이 남는다.
+ * 경고는 서버 콘솔로만 간다(조합원에게 운영 사정을 노출할 이유가 없다).
+ */
+const NAVER_MAP_CLIENT_ID = process.env.NEXT_PUBLIC_NAVER_MAP_CLIENT_ID ?? "";
+
+if (NAVER_MAP_CLIENT_ID === "") {
+  console.warn(
+    "[strike] NEXT_PUBLIC_NAVER_MAP_CLIENT_ID 미설정 — 9/4 참석 안내 페이지의 지도 섹션을 렌더하지 않습니다.",
+  );
+}
 
 /**
  * `SectionHeading` 은 **`id` 를 직접 받는다.**
@@ -360,6 +392,28 @@ export default function StrikePage() {
               </dl>
             </div>
           </section>
+
+          {/*
+            ── 삽입 지점 B — 세종대로 안내지도 (2026-08-29 · M-1~M-21 · 디자인 §54·§54.16) ──
+
+            ★ **자리 근거**: 읽는 순서가 집결시간(내가 몇 시) → 개요(무슨 행사·어디) → **여기**(그 «어디»가
+            실제로 어떻게 생겼나) → QR 한 줄 → 식순 이다. **일반 → 특수**이고, 개요의 `장소` 행이
+            세운 「세종대로」를 이 지도가 **세부로 받는다.**
+            ★ **첫 화면 판정선(`360×640`)에 영향이 0 이다** — 이 자리는 y **694.16** 이라 이미 판정선
+              54px 아래다. 대형 수치 `10시 30분` 하단(**334.52 / 361.52**)은 한 픽셀도 움직이지 않는다.
+              ⚠ 그래도 **QA 가 삽입 «후»에 다시 재라**(QA-493 — `today` 를 반드시 함께).
+
+            ⚠ **헤딩 문면 `세종대로 안내지도` 를 좁히지 마라**(M-10) — 이 지도는 무대·대오·화장실·역을
+              함께 그린다. «집결 위치»·«코스콤 위치» 류로 바꾸면 **범위를 좁혀 거짓이 된다.**
+            ⚠ 이 섹션 «밖»에 지도 관련 문장을 만들지 마라 — 완화 안내·확신도 키·코스콤 한 줄·범례가
+              **전부 `figure` 안**에 있고, 그 자리는 `StrikeMap` 이 정본이다(근거는 그 파일 주석).
+          */}
+          {NAVER_MAP_CLIENT_ID !== "" ? (
+            <section aria-labelledby="map-heading" className="mt-section md:mt-section-lg">
+              <SectionHeading id="map-heading">세종대로 안내지도</SectionHeading>
+              <StrikeMap clientId={NAVER_MAP_CLIENT_ID} />
+            </section>
+          ) : null}
 
           {/*
             QR 출석체크 — **사실 한 줄**(리더 D-4 개정 · 검증 §52-4 확정 문면).
