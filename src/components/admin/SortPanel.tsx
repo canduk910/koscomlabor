@@ -18,44 +18,22 @@ import {
 } from "@/components/admin/styles";
 
 /**
- * 게시물 순서 지정 패널 (스펙 §16.15 · 정렬 계약 §3·§8) — admin 신규.
- *
- * ## 저장 방식: 로컬 재배치 + 명시적 "순서 저장" (즉시 저장 아님 — §16.15.1)
- * 위/아래 이동은 본질적으로 여러 번 누르는 조작이다. 누를 때마다 네트워크 왕복이면 응답 순서
- * 역전을 막기 위해 매번 전체를 비활성화해야 하고 조작이 불가능해진다. 또 계약 §3 의 409 검사는
- * **전체 순열 1회 검사**이므로 저장을 잘게 쪼개면 충돌 창이 그만큼 늘어난다.
- * 저장 전 상태는 "저장되지 않은 순서 변경이 있습니다" 문구 + "원래 순서로" 버튼으로 가시화한다.
- *
- * ## 분류별 패널인 이유
- * 계약 §3 은 `ids` 가 **해당 분류 활성 게시물 전체의 순열**이어야 한다고 규정한다(409 조건).
- * 현행 admin 목록은 전 분류 + 삭제분이 섞여 있어 그대로는 순열을 만들 수 없다.
- * 전체 목록은 이 패널 아래에 **그대로 남아 있으므로 은폐가 아니다**(§0.4).
- * 분류 라디오의 "선택됨" 표시는 허용된다 — §15.4 의 활성 상태 금지는 조합원용 섹션
- * 바로가기에 대한 규칙이고, 여기서는 무엇을 정렬하는지 알 수 없으면 조작이 불가능하다.
- *
- * ## 조작 방식: 위/아래 이동 버튼 (리더 확정)
- * 드래그앤드롭은 키보드·스크린리더 비용이 크고, 숫자 직접 입력은 중복·누락 관리를 사용자에게
- * 떠넘긴다. 순번은 **숫자 배지로도** 보여준다(색·위치 단독 의존 금지).
+ * 게시물 순서 지정 패널 (스펙 §16.15 · 정렬 계약 §3·§8).
+ * **로컬 재배치 + 명시적 "순서 저장"**(즉시 저장 아님) · **분류별 패널** — 둘 다 계약 §3 의
+ * 409 검사가 «분류별 전체 순열 1회» 이기 때문이다(§16.15.1). 전체 목록은 이 패널 아래에
+ * 그대로 남으므로 은폐가 아니다(§0.4). 순번은 **숫자 배지로도** 보여준다(색·**위치** 단독 의존 금지).
+ * ⚠ **분류 라디오의 "선택됨" 표시는 «허용»이다**(§16.15.1 표) — §15.4 의 «활성 상태 금지»는
+ *   **조합원용 섹션 바로가기**에 대한 규칙이다. 여기서 지우면 무엇을 정렬하는지 알 수 없다.
  */
 
 /** admin 목록 조회 상한 — 이 값에 도달하면 부분 목록일 수 있으므로 저장을 막는다(§16.15.4-1) */
 const LIST_LIMIT = 100;
 
-/**
- * 409 안내 문구 — **정렬 계약 §3 #4 의 문자열 그대로.**
- * 서버 message 를 그대로 쓰지 않고 상수로 고정하는 이유: 계약이 이 문구를 화면 표시 요건으로
- * 규정하므로, 프록시가 본문을 갈아치우거나 서버 문구가 바뀌어도 요건이 깨지지 않아야 한다.
- */
+/** **정렬 계약 §3 #4 의 문자열 그대로.** 서버 message 를 쓰지 마라 — 계약이 이 문구를 화면 표시 요건으로 규정한다 */
 const CONFLICT_MESSAGE = "목록이 변경되었습니다. 새로고침 후 다시 시도해 주세요.";
 
-/**
- * 저장 성공 문구 — **부모(`AdminApp` 의 상시 `role="status"`)가 표시한다.**
- * 이 패널의 라이브 리전에는 넣지 않는다: 두 리전이 같은 문장을 동시에 가지면 스크린리더가
- * 두 번 읽고 어느 쪽이 권위인지 알 수 없다(리더 판정 2).
- * 프로젝트 규약 = **성공 문구는 부모, 맥락 에러는 패널.**
- * (비밀번호 변경 폼에서 같은 문제를 이미 겪었다 — 성공 직후 폼이 언마운트돼 문구가 사라졌고,
- *  그래서 성공 문구를 부모의 상시 status 로 옮겼다.)
- */
+/** 규약: **성공 문구는 부모(`AdminApp` 상시 `role="status"`), 맥락 에러는 패널.**
+ *  ⚠ 이 패널의 라이브 리전에 넣지 마라 — 두 리전이 같은 문장을 가지면 두 번 낭독된다(리더 판정 2) */
 const SAVED_MESSAGE = "순서를 저장했습니다.";
 
 const RESTORED_MESSAGE = "원래 순서로 되돌렸습니다.";
@@ -65,19 +43,13 @@ const DIRTY_MESSAGE = "저장되지 않은 순서 변경이 있습니다";
 const LIMIT_MESSAGE =
   "게시물이 100건을 넘어 이 화면에서는 순서를 지정할 수 없습니다.";
 
-/**
- * 필수 안내 문구 — 계약 §2 의 정렬 규칙이 `urgent DESC` 를 `sort_order` 보다 **앞**에 두므로
- * urgent 게시물은 지정 순서와 다르게 맨 위에 나온다. 이 사실을 화면에 쓰지 않으면 관리자는
- * "순서 지정이 동작하지 않는다"고 판단한다. **삭제하지 말 것.**
- */
+/** 필수 안내 — 계약 §2 의 `urgent DESC` 가 `sort_order` 보다 앞이라 urgent 는 지정 순서와 다르게
+ *  맨 위에 나온다. 없으면 관리자가 "순서 지정이 동작하지 않는다"고 판단한다. **삭제하지 말 것.** */
 const URGENT_NOTE =
   "긴급으로 표시된 게시물은 공개 목록에서 지정 순서와 무관하게 맨 위에 표시됩니다.";
 
-/**
- * 반영 지연 안내 — 메인페이지는 ISR(`app/page.tsx` 의 `revalidate = 60`)이라 저장 직후
- * 최대 60초까지 이전 순서가 보인다. admin 목록과 API 는 즉시 반영되므로, 이 문구가 없으면
- * 관리자가 "저장이 안 됐다"고 판단해 같은 작업을 반복하게 된다 (QA 13회차 권고 4).
- */
+/** 반영 지연 안내 — 메인은 ISR(`revalidate = 60`)이라 최대 60초 이전 순서가 보인다.
+ *  없으면 관리자가 "저장이 안 됐다"고 판단해 같은 작업을 반복한다. **삭제하지 말 것.** */
 const REVALIDATE_NOTE =
   "저장한 순서는 메인페이지에 최대 1분 뒤 반영됩니다. 관리 목록에는 바로 적용됩니다.";
 
@@ -94,12 +66,8 @@ type PanelState =
   /** baseline = 로드 시점의 id 순서. dirty 판정과 "원래 순서로" 의 정본 */
   | { status: "loaded"; posts: ApiAdminPost[]; baseline: readonly string[] };
 
-/**
- * 패널 표시 순서 (§16.15.4-1): `sortOrder` 오름차순(미지정은 맨 뒤) → `publishedAt` 내림차순
- * → `id` 내림차순.
- * **`urgent` 를 정렬 키로 쓰지 않는다** — 이 패널은 "지정 순서"를 보여주는 화면이고,
- * urgent 우선은 공개 목록의 렌더 규칙이다(그 사실은 URGENT_NOTE 가 알린다).
- */
+/** 패널 표시 순서(§16.15.4-1). ⚠ **`urgent` 를 정렬 키로 쓰지 마라** — 이 패널은 "지정 순서"를
+ *  보여주는 화면이고 urgent 우선은 공개 목록의 렌더 규칙이다(`URGENT_NOTE` 가 알린다) */
 function comparePanelOrder(a: ApiAdminPost, b: ApiAdminPost): number {
   const left = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
   const right = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
@@ -137,15 +105,12 @@ export function SortPanel({ onSaved, onClose, onSessionExpired }: SortPanelProps
 
   const buttonRefs = useRef(new Map<string, MoveButtonRefs>());
 
-  // 프롭 콜백을 ref 로 잡아 로드 효과의 의존성에서 제외한다 — 부모가 매 렌더마다 새 함수를
-  // 만들면(AdminApp 의 인라인 핸들러) 의존성에 넣는 순간 무한 재조회가 된다.
+  // ⚠ 프롭 콜백을 로드 효과의 의존성에 넣지 마라 — 부모의 인라인 핸들러라 무한 재조회가 된다
   const sessionExpiredRef = useRef(onSessionExpired);
   useEffect(() => {
     sessionExpiredRef.current = onSessionExpired;
   }, [onSessionExpired]);
 
-  // 목록 로드. status: "loading" 전환은 이 효과를 트리거한 핸들러가 직접 수행한다
-  // (초기 상태가 이미 "loading" 이므로 효과 안에서 setState 를 반복하지 않는다).
   useEffect(() => {
     let cancelled = false;
     void adminListPosts({ category, limit: LIST_LIMIT }).then((result) => {
@@ -210,13 +175,9 @@ export function SortPanel({ onSaved, onClose, onSessionExpired }: SortPanelProps
     posts[index] = displaced;
     posts[target] = moved;
 
-    /*
-     * §16.15.4-3 포커스 유지 (필수): 행은 key={post.id} 로 렌더하므로 DOM 노드가 이동해
-     * 포커스는 자동 유지된다. 단 **이동으로 그 버튼이 disabled 가 되면**(첫/마지막 행에 도달)
-     * 브라우저가 포커스를 잃는다 → 같은 게시물의 반대 방향 버튼으로 옮긴다.
-     * flushSync 로 커밋을 동기 완료시킨 뒤 포커스를 옮긴다 — 효과 안에서 setState 를 다시
-     * 호출하는 방식(연쇄 렌더)을 피한다. 이벤트 핸들러 안이라 flushSync 사용이 안전하다.
-     */
+    /* §16.15.4-3 포커스 유지(필수). `key={post.id}` 라 보통은 자동 유지되지만 **이동으로 그
+     * 버튼이 `disabled` 가 되면**(첫/마지막 행) 포커스를 잃는다 → 반대 방향 버튼으로 옮긴다.
+     * `flushSync` 로 커밋을 동기 완료시킨 뒤 옮겨야 한다. */
     flushSync(() => {
       setState({ status: "loaded", posts, baseline: state.baseline });
       setAlertMessage("");
@@ -262,8 +223,7 @@ export function SortPanel({ onSaved, onClose, onSessionExpired }: SortPanelProps
     setSaving(false);
 
     if (result.ok) {
-      // 성공 문구는 부모만 표시한다(리더 판정 2 — 이중 낭독 제거). 패널의 라이브 리전은
-      // 비운다: 직전 이동 안내("n번째로 이동했습니다")가 남으면 저장 후 상태를 오해하게 된다.
+      // 패널의 라이브 리전은 비운다 — 직전 이동 안내가 남으면 저장 후 상태를 오해한다
       setStatusMessage("");
       reloadPanel(); // 패널 목록 재조회(sortOrder 반영) → dirty 해제
       onSaved(SAVED_MESSAGE); // 부모가 notice 표시 + 전체 목록 재조회
@@ -357,12 +317,10 @@ export function SortPanel({ onSaved, onClose, onSessionExpired }: SortPanelProps
                 key={post.id}
                 className="flex items-center gap-3 border-b border-border-soft py-3"
               >
-                {/* 순번 배지 32×32 — bg-primary-soft + text-primary 9.23 AAA */}
                 <span className="rounded-badge bg-primary-soft text-primary flex size-8 shrink-0 items-center justify-center text-caption font-bold">
                   {index + 1}
                 </span>
                 <span className="min-w-0 flex-1">
-                  {/* 360px 검산: 가용 152px → 1줄 truncate 가 유일한 선택 */}
                   <span className="block truncate text-body font-semibold text-ink">
                     {post.title}
                   </span>
@@ -407,18 +365,11 @@ export function SortPanel({ onSaved, onClose, onSessionExpired }: SortPanelProps
         <p className="mt-3 text-caption font-semibold text-ink">{DIRTY_MESSAGE}</p>
       ) : null}
 
-      {/*
-        이동·복원 안내. 스크린리더 전용으로 숨기지 않는다 — 마우스 사용자도 결과 확인이 필요하다.
-        **저장 성공 문구는 여기 넣지 않는다**(부모의 상시 status 담당 — 리더 판정 2).
-      */}
+      {/* 이동·복원 안내. 스크린리더 전용으로 숨기지 마라. ⚠ 저장 성공 문구는 여기 넣지 않는다 */}
       <p role="status" className="mt-3 text-caption text-ink">
         {statusMessage}
       </p>
-      {/*
-        실패·409 문구는 **패널이 담당한다**: 어느 패널에서 실패했는지가 맥락이고, 패널이 닫히지
-        않으므로 사라지지 않는다. 409 문구는 재조회 후에도 지우지 않는다 — 사라지면 관리자가
-        자기 작업이 저장됐다고 오해한다(§16.15.4-5).
-      */}
+      {/* ⚠ 409 문구는 재조회 후에도 지우지 마라 — 사라지면 관리자가 저장됐다고 오해한다(§16.15.4-5) */}
       <p role="alert" className="mt-1 text-caption text-urgent-strong">
         {alertMessage}
       </p>
@@ -441,8 +392,7 @@ export function SortPanel({ onSaved, onClose, onSessionExpired }: SortPanelProps
           원래 순서로
         </button>
         <button type="button" onClick={onClose} className={ADMIN_SECONDARY_BUTTON_CLASS}>
-          {/* 확인 다이얼로그를 만들지 않는다 — 문구가 결과를 명시하고, 잃는 것은 아직 저장되지
-              않은 순서뿐이다(§16.15.4-7) */}
+          {/* 확인 다이얼로그를 만들지 마라 — 라벨이 결과를 명시한다(§16.15.4-7) */}
           {dirty ? "저장하지 않고 닫기" : "닫기"}
         </button>
       </div>

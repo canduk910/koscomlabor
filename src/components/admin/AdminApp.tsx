@@ -86,9 +86,8 @@ function LoginForm({ onLoggedIn }: { onLoggedIn: () => void }) {
 }
 
 /**
- * admin 앱 (스펙 §14) — 세션 확인 → 로그인 → 게시물 관리(목록/등록/수정/삭제).
- * 전 API 호출은 세션 쿠키(credentials: "include") 기반 (src/lib/api/admin.ts).
- * API 미설정 시 "API 미연결" 안내만 표시 (가짜 동작 금지).
+ * admin 앱 (§14) — 세션 확인 → 로그인 → 게시물 관리(목록/등록/수정/삭제).
+ * ⚠ API 미설정 시 "API 미연결" 안내만 표시한다 — 가짜 동작을 만들지 마라.
  */
 export function AdminApp() {
   const configured = getApiConnection().status === "configured";
@@ -108,18 +107,16 @@ export function AdminApp() {
   const passwordButtonRef = useRef<HTMLButtonElement | null>(null);
   const sortButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  // 세션 확인 + 초기 비밀번호 여부 조회 (비동기 콜백 setState).
-  // 로그인 직후에도 meToken 을 올려 재조회한다 — 최초 진입에서 세션이 없으면
-  // 이 효과의 결과가 "login"이라 passwordIsInitial 을 아직 알 수 없기 때문.
+  // 세션 확인 + 초기 비밀번호 여부 조회. 로그인 직후에도 meToken 을 올려 재조회한다 —
+  // 최초 진입에서 세션이 없으면 passwordIsInitial 을 아직 알 수 없기 때문이다.
   useEffect(() => {
     if (!configured) return;
     let cancelled = false;
     void adminMe().then((result) => {
       if (cancelled) return;
       if (result.ok) setPasswordIsInitial(result.data.passwordIsInitial);
-      // phase 는 최초 진입에서만 이 조회가 결정한다. 로그인 직후 재조회(meToken > 0)에서
-      // 일시적 통신 실패를 이유로 로그인 화면으로 되돌리지 않는다 —
-      // 세션이 실제로 무효라면 이어지는 목록 조회가 로그인 화면으로 전환한다.
+      // ⚠ 재조회(meToken > 0)의 일시적 통신 실패로 로그인 화면으로 되돌리지 마라 —
+      // 세션이 실제로 무효라면 이어지는 목록 조회가 전환한다. phase 는 최초 진입에서만 정한다.
       if (meToken === 0) setPhase(result.ok ? "ready" : "login");
     });
     return () => {
@@ -189,10 +186,7 @@ export function AdminApp() {
     setPhase("login");
   }
 
-  /**
-   * 비밀번호 패널·PostForm·순서 지정 패널은 같은 슬롯을 공유하므로 동시에 열지 않는다
-   * (§14.8.3 · §16.15.2 — 열려 있는 패널은 항상 1개다).
-   */
+  /** 세 패널은 같은 슬롯을 공유한다 — ⚠ 동시에 열지 마라(§14.8.3 · §16.15.2) */
   function openPasswordPanel() {
     setEditing(null);
     setSortPanelOpen(false);
@@ -235,8 +229,7 @@ export function AdminApp() {
 
   function handlePasswordChanged(sessionsRevoked: number) {
     setPasswordPanelOpen(false);
-    // 계약 §2: 한 번 변경하면 passwordIsInitial 은 영구 false —
-    // /admin/me 재호출 없이 로컬 갱신으로 배너를 즉시 제거한다 (§14.8.2)
+    // 한 번 변경하면 passwordIsInitial 은 영구 false — 재조회 없이 로컬 갱신으로 배너를 제거한다
     setPasswordIsInitial(false);
     setNotice(
       sessionsRevoked > 0
@@ -268,12 +261,9 @@ export function AdminApp() {
 
   return (
     <div className="mt-6">
-      {/*
-        초기 비밀번호 경고 배너 (§14.8.2) — ready 뷰 최상단 첫 자식, 닫기 버튼 없음.
-        라이브 리전(role="status"/"alert")을 붙이지 않는다: 최초 렌더에 포함되어 나타나므로
-        중복·과잉 안내가 된다. <section aria-labelledby> 랜드마크로 건너뛰기·되찾기를 지원.
-        색은 urgent(적색)가 아니라 accent(오렌지) — 오류가 아닌 상시 주의 환기 (§14.8.1).
-      */}
+      {/* 초기 비밀번호 경고 배너 (§14.8.2) — 닫기 버튼 없음.
+          ⚠ 라이브 리전을 붙이지 마라 — 최초 렌더에 포함돼 나타나므로 중복 안내가 된다.
+          색이 적색이 아니라 오렌지인 것은 오류가 아니라 상시 주의 환기이기 때문이다 */}
       {passwordIsInitial ? (
         <section
           aria-labelledby="initial-password-title"
@@ -305,8 +295,7 @@ export function AdminApp() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-h2 text-ink">게시물 관리</h2>
-        {/* flex-wrap: 360px 에서 버튼 합이 콘텐츠 폭(328px)을 넘는다 — §16.15.2 로 4버튼이 되어
-            2행으로 래핑된다(기존 flex-wrap 이 그대로 흡수) */}
+        {/* flex-wrap 필수 — 360px 에서 4버튼 합이 콘텐츠 폭을 넘어 2행으로 래핑된다 */}
         <div className="flex flex-wrap gap-2">
           <button
             type="button"

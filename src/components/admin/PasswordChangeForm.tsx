@@ -39,10 +39,7 @@ const MSG_MISMATCH = "새 비밀번호가 일치하지 않습니다.";
 const MSG_RATE_LIMITED = "시도 횟수를 초과했습니다. 잠시 후 다시 시도해 주세요.";
 const MSG_NETWORK = "서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 
-/**
- * submit 시점 전체 검증. 클라이언트 검증은 UX 보조일 뿐 보안 장치가 아니다 —
- * 동일 규칙을 서버가 다시 검증하고, 그 응답 에러도 아래에서 전부 처리한다.
- */
+/** submit 시점 전체 검증. 클라이언트 검증은 UX 보조일 뿐이다 — 같은 규칙을 서버가 다시 검증한다 */
 function validateAll(values: Values): FieldErrors {
   return {
     current: values.current.length === 0 ? MSG_CURRENT_REQUIRED : null,
@@ -140,12 +137,10 @@ interface PasswordChangeFormProps {
 }
 
 /**
- * 관리자 비밀번호 변경 폼 (스펙 §14.8.3~§14.8.6, 계약 §2·§3).
- * - 모달이 아닌 인라인 패널 (PostForm 과 같은 슬롯 — 상호 배타는 AdminApp 이 보장)
- * - 에러는 blur·submit 에서만 나타나고 정정되면 즉시 사라진다 (타이핑 중 신규 에러 없음)
- * - 제출 버튼을 입력 미완성으로 잠그지 않는다: 누르면 검증하고 첫 오류 필드로 데려간다
- * - 평문 비밀번호는 컴포넌트 로컬 state 에만 두고, 닫힐 때 언마운트로 폐기한다
- *   (로그·URL·스토리지 어디에도 남기지 않는다)
+ * 관리자 비밀번호 변경 폼 (§14.8.3~§14.8.6 · 계약 §2·§3). 모달이 아닌 인라인 패널이다.
+ * - 에러는 blur·submit 에서만 나타난다 — ⚠ 타이핑 중에 새 에러를 띄우지 마라.
+ * - ⚠ 제출 버튼을 입력 미완성으로 잠그지 마라 — 누르면 검증하고 첫 오류 필드로 데려간다.
+ * - ⚠ 평문 비밀번호를 로컬 state 밖으로 내보내지 마라(로그·URL·스토리지 전부).
  */
 export function PasswordChangeForm({
   onChanged,
@@ -189,8 +184,8 @@ export function PasswordChangeForm({
     setErrors((prev) => {
       if (field === "next") return { ...prev, next: live.next };
       if (field === "confirm") return { ...prev, confirm: live.confirm };
-      // current: 빈 값은 submit 에서만 질책한다. 단 "동일" 규칙은 두 필드가 모두
-      // 채워졌을 때 성립하므로, 현재 비밀번호 blur 에서도 새 비밀번호 필드에 반영한다.
+      // current 의 빈 값은 submit 에서만 질책한다. 다만 "동일" 규칙은 두 필드가 다 채워져야
+      // 성립하므로 현재 비밀번호 blur 에서도 새 비밀번호 필드에 반영한다.
       if (live.next === MSG_SAME_AS_CURRENT) return { ...prev, next: MSG_SAME_AS_CURRENT };
       if (prev.next === MSG_SAME_AS_CURRENT) return { ...prev, next: null };
       return prev;
@@ -287,11 +282,8 @@ export function PasswordChangeForm({
       />
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
-        {/*
-          입력 미완성으로 제출을 막지 않는다 (§14.8.6) — 누르면 검증하고 첫 오류 필드로 이동.
-          disabled 시각 처리(opacity·회색)를 넣지 않는다: 흰 텍스트 on #093389 대비가 무너진다.
-          처리 중 표현은 라벨 텍스트 + form aria-busy.
-        */}
+        {/* ⚠ disabled 시각 처리(opacity·회색)를 넣지 마라 — 흰 텍스트의 대비가 무너진다.
+            처리 중 표현은 라벨 텍스트 + form aria-busy 가 진다 */}
         <button
           type="submit"
           disabled={busy}

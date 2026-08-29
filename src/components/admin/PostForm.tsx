@@ -39,10 +39,9 @@ interface PostFormProps {
   /** 수정 모드면 대상 게시물, 신규면 null */
   initial: ApiAdminPost | null;
   /**
-   * 저장 성공 시 호출. 인자로 저장 결과 문구를 넘긴다 —
-   * 이 콜백이 폼을 언마운트하므로 폼 내부 피드백 노드는 화면에 남지 않는다.
-   * 부모의 상시 렌더 `role="status"` 영역에 표시해야 사용자가 결과를 읽을 수 있다
-   * (특히 "첨부 일부 실패" 경고가 사라지면 부분 실패를 모르게 된다 — QA 12회차 권고 1).
+   * 저장 성공 시 호출. 결과 문구를 인자로 넘긴다 — 이 콜백이 폼을 언마운트하므로
+   * ⚠ 결과를 폼 안에 표시하지 마라. 부모의 상시 `role="status"` 영역에 띄워야 읽힌다
+   * (특히 "첨부 일부 실패" 경고가 사라지면 부분 실패를 모르게 된다).
    */
   onSaved: (notice: string) => void;
   onCancel: () => void;
@@ -82,13 +81,10 @@ function RadioPill({
 }
 
 /**
- * admin 게시물 등록/수정 폼 (스펙 §14.4).
- * - 유형 전환 시 입력값 유지 (state 보존 — 실수 방지)
- * - 링크형: preview-link 자동 제목 3상태(로딩/성공/실패 — 실패 시 제목 필드 포커스),
- *   제목은 항상 편집 가능
- * - 소식+작성형: 출처 "(필수)" 동적 표시 (§5 출처 필수 규칙의 UI 반영)
- * - 파일: 클라이언트 선검증(5개/10MB/pdf·png·jpg·webp) 후 저장 시 순차 업로드
- * - publishedAt은 서버 자동 기록 — 폼에 없음 (§15-6)
+ * admin 게시물 등록/수정 폼 (§14.4).
+ * - 유형을 바꿔도 입력값은 유지한다(실수 방지). 자동 제목은 3상태이고 제목은 항상 편집 가능하다.
+ * - 파일은 클라이언트에서 선검증한 뒤 저장 시 순차 업로드한다.
+ * - publishedAt 은 서버가 자동 기록하므로 폼에 없다.
  */
 export function PostForm({ initial, onSaved, onCancel }: PostFormProps) {
   const [type, setType] = useState<PostType>(initial?.type ?? "article");
@@ -195,9 +191,8 @@ export function PostForm({ initial, onSaved, onCancel }: PostFormProps) {
       body: body.trim().length > 0 ? body.trim() : undefined,
       url: type === "link" ? url.trim() : undefined,
       // 빈 입력 정규화: 수정 모드는 명시적 null(= 기존 출처 삭제), 신규는 키 생략.
-      // undefined 로만 보내면 PATCH 병합(`key in patch`)에서 키가 빠져 기존 값이 남는다 —
-      // 사용자가 출처를 비우고 저장했는데 카드에 그대로 표시되는 조용한 실패가 된다.
-      // 빈 문자열을 그대로 보내지 않는다(서버는 "" 도 null 로 정규화하지만, 의도를 값으로 표현한다).
+      // ⚠ undefined 로만 보내지 마라 — PATCH 병합에서 키가 빠져, 출처를 비우고 저장했는데
+      // 카드에 그대로 표시되는 조용한 실패가 된다.
       source: source.trim().length > 0 ? source.trim() : initial !== null ? null : undefined,
       urgent,
       deadline: deadline.length > 0 ? deadline : initial !== null ? null : undefined,
@@ -214,7 +209,7 @@ export function PostForm({ initial, onSaved, onCancel }: PostFormProps) {
       return;
     }
 
-    // 첨부 순차 업로드 (실패 파일은 개별 보고 — 게시물 저장 자체는 유지)
+    // 첨부 순차 업로드 — 실패 파일은 개별 보고하고 게시물 저장 자체는 유지한다
     const uploadErrors: string[] = [];
     for (const file of files) {
       setFeedback({ kind: "success", message: `파일 업로드 중: ${file.name}…` });
@@ -223,7 +218,7 @@ export function PostForm({ initial, onSaved, onCancel }: PostFormProps) {
     }
 
     setSaving(false);
-    // 문구는 폼이 아니라 부모의 상시 status 영역에 남긴다 (onSaved 가 폼을 언마운트한다)
+    // 문구는 부모의 상시 status 영역에 남긴다 — onSaved 가 폼을 언마운트한다
     const notice =
       uploadErrors.length > 0
         ? `게시물은 저장했지만 일부 첨부 업로드에 실패했습니다: ${uploadErrors.join(" ")}`
@@ -255,9 +250,8 @@ export function PostForm({ initial, onSaved, onCancel }: PostFormProps) {
 
       <fieldset className="mt-4">
         <legend className={ADMIN_LABEL_CLASS}>카테고리</legend>
-        {/* 분류 선택지는 POST_CATEGORY_ORDER 파생 — 분류가 늘면 여기에 자동으로 나타난다.
-            선택지를 하드코딩하면 새 분류를 사용자가 등록할 수 없다(노동교육 추가 시 실제 사례).
-            flex-wrap: 3선택지 합(≈353px)이 360px 화면의 콘텐츠 폭(328px)을 넘는다 */}
+        {/* ⚠ 선택지를 하드코딩하지 마라 — POST_CATEGORY_ORDER 파생이라야 새 분류를 등록할 수 있다.
+            flex-wrap 은 3선택지 합이 360px 콘텐츠 폭을 넘기 때문이다 */}
         <div className="inline-flex flex-wrap gap-1 rounded-full bg-surface p-1">
           {POST_CATEGORY_ORDER.map((option) => (
             <RadioPill
@@ -340,11 +334,9 @@ export function PostForm({ initial, onSaved, onCancel }: PostFormProps) {
         </div>
       ) : null}
 
-      {/* 출처는 유형 공통 필드다 (리더 판정 2026-08-17 — §14.4 개정).
-          §15.6R-D 로 링크형 카드도 source(채널명)를 렌더하며 그 표기가 fact-verifier 게이트
-          조건("금융노조 제작물이 아님을 카드 표면에서 구분")의 이행 수단이다. 입력 수단이 없으면
-          사용자가 그 값을 유지·수정할 수 없다. 필수 여부는 확장하지 않는다 —
-          출처 필수는 소식+작성형만(06 명세 §19.2 의 의도적 비대칭). */}
+      {/* 출처는 **유형 공통** 필드다(§14.4) — 링크형 카드도 채널명을 렌더하고, 그 표기가
+          fact-verifier 게이트 조건의 이행 수단이라 입력 수단이 없으면 값을 유지할 수 없다.
+          ⚠ 필수 여부를 확장하지 마라 — 출처 필수는 소식+작성형만이다(의도된 비대칭) */}
       <div className="mt-4">
         <label htmlFor="post-source" className={ADMIN_LABEL_CLASS}>
           출처{sourceRequired ? " (필수)" : ""}

@@ -19,21 +19,16 @@ import {
 
 /**
  * Admin API 계층 (06 명세 §12·§13).
- * - 인증: 서버 세션 httpOnly 쿠키 — **모든 요청 credentials: "include" 필수**
- *   (07 문서 §7.2 — CORS Allow-Credentials 활성화됨, 허용 Origin 명시 목록)
- * - 에러 code 분기: 방명록 방식 계승 (http.ts 공용 — UNAUTHORIZED/RATE_LIMITED/
- *   VALIDATION_ERROR/LINK_FETCH_FAILED/PAYLOAD_TOO_LARGE/NOT_FOUND)
- * - publishedAt은 서버 자동 기록 — 입력에 포함하지 않는다 (§15-6 리더 판정)
+ * - 인증은 서버 세션 httpOnly 쿠키다 — ⚠ 모든 요청에 `credentials: "include"` 가 필수다.
+ * - 에러 code 분기는 `http.ts` 공용 매핑을 쓴다.
+ * - publishedAt 은 서버가 자동 기록한다 — 입력에 포함하지 마라.
  */
 
 /** admin 목록/상세 — deletedAt 노출 (§13.1 GET /admin/posts) */
 export interface ApiAdminPost extends Omit<ApiPostDetail, "body"> {
   body: string | null;
   deletedAt: string | null;
-  /**
-   * 수동 지정 순서 (정렬 계약 §6 — admin 응답 전용. 공개 응답에는 존재하지 않는다).
-   * `null` = 미지정. 관용 파싱: 없거나 정수가 아니면 `null`.
-   */
+  /** 수동 지정 순서 (정렬 계약 §6 — admin 응답 전용). `null` = 미지정 */
   sortOrder: number | null;
 }
 
@@ -92,12 +87,11 @@ export const ATTACHMENT_MIME_TYPES = [
 ];
 
 function parseAdminPost(value: unknown): ApiAdminPost | null {
-  // thumbnailUrl 은 parsePostSummary 가 관용 파싱한다 (계약 §6 — admin 응답에도 동일 필드)
   const summary = parsePostSummary(value);
   if (summary === null || !isRecord(value)) return null;
   const body = typeof value.body === "string" ? value.body : null;
   const deletedAt = typeof value.deletedAt === "string" ? value.deletedAt : null;
-  // 계약 §6: 없거나 정수가 아니면 null — 구버전 API 와 공존하기 위해 invalidResponse 로 올리지 않는다
+  // 없거나 정수가 아니면 null — 구버전 API 와 공존해야 하므로 invalidResponse 로 올리지 않는다
   const sortOrder =
     typeof value.sortOrder === "number" && Number.isInteger(value.sortOrder)
       ? value.sortOrder
@@ -115,7 +109,7 @@ async function requestJson(
   try {
     const response = await fetch(`${connection.baseUrl}${path}`, {
       ...init,
-      credentials: "include", // 세션 쿠키 전송 — 전 admin 요청 필수 (07 §7.2)
+      credentials: "include", // 세션 쿠키 전송 — 전 admin 요청 필수
       headers: { Accept: "application/json", ...(init.headers ?? {}) },
     });
     if (!response.ok) {
@@ -154,11 +148,9 @@ export async function adminLogout(): Promise<ApiResult<null>> {
 }
 
 /**
- * 세션 유효성 + 초기 비밀번호 여부 (§12.1 GET /admin/me — 비밀번호 변경 계약 §1·§3).
- * 하위 호환 방어: 구버전 API(필드 없음)와 신버전 프론트가 잠시 공존할 수 있으므로
- * 필드 누락·타입 불일치를 invalidResponse 로 올리지 않고 안전한 기본값으로 낮춘다.
- * - passwordIsInitial 비boolean → false (경고 배너 미표시가 안전한 기본값)
- * - method 비"session"/"bearer" → "session", expiresAt 비문자열 → null
+ * 세션 유효성 + 초기 비밀번호 여부 (§12.1 · 비밀번호 변경 계약 §1·§3).
+ * ⚠ 필드 누락·타입 불일치를 invalidResponse 로 올리지 마라 — 구버전 API 와 공존해야 한다.
+ *   안전한 기본값으로 낮춘다(passwordIsInitial 은 false = 경고 배너 미표시).
  */
 export async function adminMe(): Promise<ApiResult<AdminMe>> {
   const result = await requestJson("/admin/me", { method: "GET" }, "세션을 확인하지 못했습니다.");
@@ -175,9 +167,8 @@ export async function adminMe(): Promise<ApiResult<AdminMe>> {
 }
 
 /**
- * 비밀번호 변경 (계약 §2 POST /admin/password).
- * 인증(세션 쿠키)만으로는 부족하고 현재 비밀번호를 본문으로 재확인한다.
- * 실패 reason 별 UI 대응은 계약 §3 표 — 호출부(PasswordChangeForm)가 담당한다.
+ * 비밀번호 변경 (계약 §2). 세션 쿠키만으로는 부족하고 현재 비밀번호를 본문으로 재확인한다.
+ * 실패 reason 별 UI 대응은 호출부(PasswordChangeForm)가 담당한다 — 계약 §3 표.
  */
 export async function adminChangePassword(
   currentPassword: string,
@@ -204,7 +195,7 @@ export async function adminChangePassword(
     ok: true,
     data: {
       changedAt,
-      // 정수가 아니면 0 — 성공 문구가 "다른 기기 n건 해제"를 잘못 말하지 않게 한다 (계약 §3)
+      // 정수가 아니면 0 — 성공 문구가 "다른 기기 n건 해제"를 잘못 말하지 않게 한다
       sessionsRevoked:
         typeof sessionsRevoked === "number" && Number.isInteger(sessionsRevoked)
           ? sessionsRevoked
@@ -297,12 +288,9 @@ export async function adminDeletePost(id: string): Promise<ApiResult<{ id: strin
 /* ---------- 순서 지정 (정렬 계약 §3·§8) ---------- */
 
 /**
- * 순서 저장 (POST /admin/posts/reorder) — `ids` 배열 순서대로 sort_order 를 1..n 으로 지정한다.
- *
- * `ids` 는 **해당 분류 활성 게시물 전체의 순열**이어야 한다(계약 §3 #4). 아니면 서버가 409
- * `CONFLICT` 로 거부한다 → `reason === "conflict"`. 호출부는 계약 문구를 표시하고 목록을
- * 재조회하며 **낡은 순서로 재시도하게 두지 않는다**(계약 §8).
- * 409 → "conflict" 매핑은 `http.ts` 의 CODE_TO_REASON·STATUS_TO_REASON 에 등록되어 있다.
+ * 순서 저장 — `ids` 순서대로 sort_order 를 1..n 으로 지정한다.
+ * `ids` 는 **해당 분류 활성 게시물 전체의 순열**이어야 한다(계약 §3 #4). 아니면 서버가 409 로 거부한다.
+ * ⚠ 그때 호출부가 낡은 순서로 재시도하게 두지 마라 — 목록을 재조회한다(계약 §8).
  */
 export async function adminReorderPosts(
   category: PostCategory,

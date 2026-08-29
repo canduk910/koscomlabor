@@ -5,14 +5,10 @@ import { UrgentBadge } from "@/components/ui/UrgentBadge";
 import { ArrowDownIcon, DocumentIcon, ExternalLinkIcon } from "@/components/ui/icons";
 
 /**
- * 게시글 상세 본문 (공지사항·금융노조 소식·노동교육 공용) — 스펙 §16.12.
- * - 마크다운 원문을 react-markdown으로 변형 없이 렌더 (raw HTML 미실행 — XSS 안전).
- * - 본문 내 h1/h2는 문서 위계상 h2로 매핑 (페이지 h1은 게시물 제목).
- * - 링크형: 썸네일(있을 때) + "원문 보기" primary 필 버튼 — 3중 병행 유지
- *   (↗ 아이콘 + "외부 링크(새 창)" 문구 + 접근성 이름).
- * - 첨부 블록 (§16.12.3): "첨부파일" h2 + 파일당 L1 카드 1행(행 전체 다운로드 링크).
- * - 복귀 링크는 상단·하단 2개다(§16.12.1) — 같은 목적지·같은 이름의 링크 2개는 허용 패턴이며,
- *   긴 본문에서 상단 복귀 수단이 없던 문제를 해소한다. 문구는 기존 문자열 재사용(신규 카피 0).
+ * 게시글 상세 본문 (세 분류 공용) — §16.12.
+ * 마크다운 원문을 react-markdown 으로 변형 없이 렌더한다(raw HTML 미실행 — XSS 안전).
+ * 본문 안 h1/h2 는 h2 로 매핑한다 — 페이지 h1 은 게시물 제목이다.
+ * 복귀 링크가 상단·하단 2개인 것은 의도다(§16.12.1) — 긴 본문에서 상단 복귀 수단이 없었다.
  */
 const markdownComponents: Components = {
   h1: ({ children }) => <h2 className="mt-10 text-h2 text-ink">{children}</h2>,
@@ -34,8 +30,7 @@ const markdownComponents: Components = {
     <ol className="mt-5 list-decimal pl-6 text-body text-ink">{children}</ol>
   ),
   li: ({ children }) => <li className="mt-2">{children}</li>,
-  /* 인용 표지는 2px 파란 좌측 보더 1개(11.37) — 4px 회색 보더 대신. 본문 색은 ink(17.40)로
-     올려 AAA 를 유지한다(§16.12.2). 표면 규칙상 인용의 분리 수단은 이 보더 하나뿐이다 */
+  /* 인용의 분리 수단은 좌측 보더 하나뿐이다 — 표면 규칙상 다른 표지를 더하지 마라(§16.12.2) */
   blockquote: ({ children }) => (
     <blockquote className="mt-6 border-l-2 border-primary pl-5 text-ink">
       {children}
@@ -56,37 +51,15 @@ interface PostArticleProps {
 export function PostArticle({ post, backHref }: PostArticleProps) {
   return (
     <article className="mx-auto mt-8 w-full max-w-page px-4 md:mt-14 md:px-8">
-      {/*
-        본문 줄 길이는 컨테이너가 960px 로 넓어져도 prose 672px 를 넘지 않는다(§16.3.3).
-        ⚠ `max-w-prose` 유틸리티를 쓰지 않는다: Tailwind v4 의 `max-w-prose` 는 **내장 정적
-        유틸리티(65ch)** 이고 `--container-prose` 테마 변수로 덮이지 않는다. 실측 620px(≈34자)로
-        스펙의 672px(37.3자)와 어긋나고 서체 메트릭에 따라 값이 흔들렸다(§16 이전부터의 결함).
-        토큰을 직접 참조해 단일 출처를 유지한다.
-      */}
-      {/*
-        ★★ **`break-keep break-words` 를 여기 «한 곳»에 건다**(2026-08-27 · 선제 처방).
-
-        `word-break` 와 `overflow-wrap` 은 **상속되는 속성**이라 이 래퍼 하나가
-        **제목 · 마크다운 본문 · 링크 · 목록 · 인용 전부**를 덮는다.
-        렌더러마다 붙이면 **일곱 곳이 되고 한 곳만 빠지는 사고**가 난다(§ 요구 88 — 한 출처).
-
-        ## 왜 필요한가 — 여기는 «임의 콘텐츠»다
-
-        제목(`text-title md:text-display` = 28/40px)과 본문은 **관리자가 쓰는 임의 문자열**이다.
-        200% 확대에서 제목은 **56/80px** 이 되고, **공백 없는 덩어리 하나**(URL · 긴 영문명 ·
-        `2026-08-28(금)` 같은 숫자·기호 묶음)가 들어오면 **문서 가로 스크롤**이 난다.
-        같은 결함을 이 사이트가 **네 번** 겪었다 — 캡션 · 산문 · 홈 배너 헤드라인 · 임단협 `96.05%`.
-
-        ⚠ **`truncate`(첨부 파일명)는 영향받지 않는다** — `white-space: nowrap` 이 줄바꿈을 이기고
-          `overflow: hidden` 이 넘침을 잡는다. 실제로 그것이 그 자리의 설계다.
-
-        ## ⚠ 미검증 — 런타임으로 재지 못했다
-
-        **프로덕션 게시판에 상세 페이지로 가는 항목이 0건**이다(공지 0 · 소식·교육은 전부
-        `type: "link"` 외부 링크). 로컬은 `NEXT_PUBLIC_API_BASE_URL` 미설정이라 `notFound()` 로 간다.
-        → **이 처방은 «정적 점검 + 같은 토큰에서의 기존 실측»에 근거한다.**
-        **첫 게시물이 올라오면 200% 게이트를 한 번 돌려라**(`_workspace/FOLLOWUPS.md` #22).
-      */}
+      {/* ⚠ `max-w-prose` 유틸리티를 쓰지 마라 — Tailwind v4 의 내장 정적 유틸리티(65ch)라
+            `--container-prose` 테마 변수로 덮이지 않고 서체 메트릭에 따라 값이 흔들린다.
+            토큰을 직접 참조해 단일 출처를 유지한다(§16.3.3). */}
+      {/* ★★ `break-keep break-words` 는 여기 «한 곳»에만 건다 — 상속 속성이라 이 래퍼 하나가
+            제목·본문·링크·목록·인용을 전부 덮는다. ⚠ 렌더러마다 나눠 붙이지 마라(한 곳만 빠진다).
+            제목·본문이 관리자가 쓰는 임의 문자열이라 필요하다(처방 근거: union-design-system §0.8).
+            첨부 파일명의 `truncate` 는 영향받지 않는다 — nowrap 이 이긴다. 그것이 그 자리의 설계다.
+          ⚠ **런타임 미검증이다** — 상세로 가는 게시물이 0건이라 못 쟀다. 첫 게시물이 올라오면
+            200% 게이트를 한 번 돌려라(`_workspace/FOLLOWUPS.md` #22) */}
       <div className="mx-auto max-w-[var(--container-prose)] break-keep break-words">
         {/* ① 상단 복귀 링크 (§16.12.1 신규) */}
         <p>
@@ -99,8 +72,7 @@ export function PostArticle({ post, backHref }: PostArticleProps) {
           </Link>
         </p>
 
-        {/* ② 긴급 배지(조건부) → 제목 → 메타.
-            제목 상단 여백: 배지가 있으면 mt-3(배지와의 근접), 없으면 복귀 링크와 같은 mt-4 */}
+        {/* ② 긴급 배지(조건부) → 제목 → 메타. 제목 상단 여백은 배지가 있으면 좁힌다(근접) */}
         {post.urgent ? (
           <p className="mt-4">
             <UrgentBadge withIcon />
@@ -121,10 +93,8 @@ export function PostArticle({ post, backHref }: PostArticleProps) {
           ) : null}
         </p>
 
-        {/* ③ 썸네일 — 링크형 + thumbnailUrl 있을 때만 (§16.10).
-            목록과 달리 첫 화면 요소이므로 loading="eager". next/image 미사용 사유는 PostList 주석.
-            헤어라인은 목록 카드와 동일 근거(디자이너 판정 2026-08-17). 상세는 4변 전체이고
-            ring/inset 을 쓰면 안 되는 이유는 PostList.tsx 주석 참조 */}
+        {/* ③ 썸네일 — 링크형 + thumbnailUrl 있을 때만. 목록과 달리 첫 화면 요소라 eager 로 받는다.
+            next/image 미사용·헤어라인·ring/inset 금지 사유는 `PostList.tsx` 주석 참조 */}
         {post.type === "link" && post.thumbnailUrl !== null ? (
           <span className="rounded-panel bg-surface mt-8 block aspect-video w-full overflow-hidden border border-border-soft">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -140,8 +110,8 @@ export function PostArticle({ post, backHref }: PostArticleProps) {
           </span>
         ) : null}
 
-        {/* ④ 원문 보기 — 링크형 상세의 1순위 행동이므로 필 버튼으로 격상(§16.12.1).
-            문구·rel·아이콘은 변경 0. hover 에서 배경색을 바꾸지 않는다(새 파랑을 만들지 않기 위해) */}
+        {/* ④ 원문 보기 — 링크형 상세의 1순위 행동이라 필 버튼이다(§16.12.1).
+            ⚠ hover 에서 배경색을 바꾸지 마라 — 새 파랑을 만들게 된다 */}
         {post.type === "link" && post.url !== null ? (
           <p className="mt-6">
             <a
@@ -164,8 +134,7 @@ export function PostArticle({ post, backHref }: PostArticleProps) {
           </div>
         ) : null}
 
-        {/* ⑥ 첨부 (§16.12.3) — L1 카드 스택. "첨부파일" h2 는 회색 행 목록이 무엇인지
-            문장으로 확정하는 UI 레이블이며 게시물 콘텐츠 문안이 아니다 */}
+        {/* ⑥ 첨부 (§16.12.3) — "첨부파일" h2 는 UI 레이블이지 게시물 콘텐츠 문안이 아니다 */}
         {post.attachments.length > 0 ? (
           <>
             <h2 className="mt-12 text-h2 text-ink">첨부파일</h2>

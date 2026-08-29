@@ -12,30 +12,17 @@ import { ROUTES } from "@/lib/routes";
 import { ArrowRightIcon } from "@/components/ui/icons";
 
 /**
- * 카운트다운 달력 (디자인 스펙 §18 · §19) — `/bargaining-2026`(full)과 메인페이지(mini).
+ * 카운트다운 달력(디자인 스펙 §18 · §19) — `/bargaining-2026`(full)과 메인페이지(mini). `size` 는 치수·배치
+ * 프리셋일 뿐이고 데이터·범위 계산·상태 판정·`sr-only` 규약·셀 폭 기하는 두 size 가 100% 공유한다.
+ * 달력이 렌더되지 않아도(§18.7 상태 E) 상세 페이지 카드만으로 정보가 완결되는 **추가 레이어**다(§19.0.2).
  *
- * **size 는 치수·배치 프리셋일 뿐이다**(§19.0 #1). 데이터·범위 계산·상태 판정 7단계·
- * `sr-only` 규약·셀 폭 기하는 두 size 가 100% 공유한다. 별도 `MiniCalendar` 를 만들지 않는
- * 이유는 셀 폭 여유가 **0.30px**(§18.6.1-b)인 설계에서 기하가 두 파일로 갈리면 한쪽 패딩만
- * 바뀌어도 다른 쪽이 조용히 깨지고, 복제된 접근성 규약은 반드시 갈리기 때문이다.
- *
- * 이 컴포넌트는 **추가 레이어**다. 상세 페이지의 카드(장소·시간·상세 안내)를 대체하지 않으며,
- * 달력이 렌더되지 않는 상태(§18.7 상태 E)에서도 카드만으로 정보가 완결되어야 한다.
- * 메인에는 애초에 그 카드가 없었고 미니달력은 없던 자리에 추가되는 레이어라 무엇도 가리지
- * 않는다 — 장소·시간은 상세 페이지에 그대로 있고 하단 링크가 거기로 간다(§19.0.2).
- *
- * 설계상 되살리면 안 되는 것(§18.0 · §19.0 버린 안):
- *  - 월 단위 격자(8월 전체 + 9월 전체) — 62칸에 일정 2칸이면 임박함이 희석된다.
- *    범위는 **오늘이 속한 주의 일요일 ~ 마지막 일정이 속한 주의 토요일** 연속 1개 격자다.
- *  - 지난 날짜의 흐린 회색 숫자 — #6b7280 on #ffffff 는 4.83 으로 AAA 미달(§0.3).
- *    지난 칸은 **숫자 없는 빈 칸**이다.
- *  - `role="grid"` — 방향키 이동이 가능한 인터랙티브 위젯의 role 이다. 이 달력은 비인터랙티브다.
- *  - hover·트랜지션·등장 애니메이션 — 마우스에만 반응하는 상태를 만들지 않는다(§0.4 · §18.8.3).
- *  - mini 에서 셀을 좁히거나 행 수를 줄이는 것 — 폭 여유 0.30px 을 즉시 소진하고, 행을 줄이면
- *    9/4 총파업이 화면에서 사라진다. **축소가 곧 은폐**다(§19.0 #2).
- *
- * 격자 셀 색은 **중대도**(level)가 정하고 **임박도**는 D-n 숫자와 헤드라인이 담당한다(§18.3.2).
- * D-n 으로 색을 정하면 8/28·9/4 가 같은 색이 되어 총파업의 중대성이 화면에서 사라진다.
+ * ⚠ **별도 `MiniCalendar` 를 만들지 마라** — 셀 폭 여유가 1px 미만이라 기하가 갈리면 조용히 깨진다(§19.1.1).
+ * ⚠ **월 단위 격자로 되돌리지 마라** — 62칸에 일정 2칸이면 임박함이 희석된다(§18.0).
+ * ⚠ **지난 날짜에 흐린 회색 숫자를 넣지 마라** — AAA 미달이다(§0.3). 지난 칸은 숫자 없는 빈 칸이다.
+ * ⚠ **`role="grid"` 를 붙이지 마라** — 방향키 이동이 되는 위젯의 role 인데 이 달력은 비인터랙티브다.
+ * ⚠ **hover·트랜지션·등장 애니메이션 금지** — 마우스에만 반응하는 상태를 만들지 않는다(§0.4 · §18.8.3).
+ * ⚠ **mini 에서 셀을 좁히거나 행 수를 줄이지 마라** — 행이 줄면 9/4 총파업이 사라진다. **축소가 곧 은폐**다.
+ * ⚠ **셀 색을 D-n 으로 정하지 마라** — 색은 중대도(level)가 진다. D-n 이면 8/28·9/4 가 같은 색이 된다(§18.3.2).
  */
 
 export interface CalendarEvent {
@@ -74,38 +61,17 @@ const WEEKDAY_LONG_FORMATTER = new Intl.DateTimeFormat("ko-KR", {
   weekday: "long",
 });
 
-/**
- * 카드 면 — **두 size 가 완전히 동일하다. 패딩을 바꾸지 마라(§19.1.1 ★).**
- * 메인과 상세는 컨테이너(`max-w-page` + `px-4 md:px-8`)가 같으므로 패딩이 같으면 모바일
- * 셀 폭이 39.42 / 37.28px 로 완전히 일치하고, §18.6.1-b 의 실측 여유(2.44 / **0.30px**)가
- * mini 에도 그대로 유효하다. 1px 이라도 건드리면 그 순간 재측정 트리거가 발동한다.
- */
+/** 카드 면 — **두 size 가 완전히 동일하다. 패딩을 바꾸지 마라**(§19.1.1 ★). 메인·상세의 컨테이너가 같아
+ *  패딩이 같아야 모바일 셀 폭과 §18.6.1-b 의 실측 여유가 mini 에도 그대로 유효하다.
+ *  **1px 이라도 건드리면 그 순간 재측정 트리거가 발동한다.** */
 const CARD_BASE = "rounded-panel bg-bg shadow-card p-3 md:p-6";
 
 /**
  * 모든 셀 공통(높이는 size 프리셋이 준다) — radius 12px, 숫자와 라벨을 붙여 중앙 정렬.
- *
- * `whitespace-nowrap` 는 **줄바꿈 방어**다(QA 15회차 P2). 라벨은 세로 스택의 2번째 줄이라
- * 폭이 모자라면 `D-` / `20` 2줄로 쪼개진다. 셀 높이는 고정이므로 행이 밀리지는 않고
- * **내용이 색면 밖으로 빠져나간다** — 흰 라벨이 흰 카드 배경 위로 나가 읽을 수 없게 된다
- * (360px 실측: 라벨 22.5px→45px, 셀 scrollHeight 56→62). 현 데이터 최대값은 D-17 이라
- * 미발현이지만, 이 페이지는 2차 총파업 가능성을 안내하고 있어 3주 이상 뒤 일정이
- * 일정 목록에 들어오면 즉시 발현한다(360px 에서 D-20·D-22·D-23·D-25·D-28·D-29·D-30·
- * D-32~D-36·D-38·D-40 의 14개 값이 줄바꿈된다 — 브라우저 실측). **지우지 마라.**
- * 셀·라벨 어디에도 `overflow-hidden`·`truncate` 를 두지 않는다 — 줄바꿈을 막은 자리가
- * **잘림**이 되면 조합원이 `D-2…` 같은 잘린 D-n 을 보게 되어 줄바꿈보다 나쁘다.
- * 넘치더라도 카드 패딩(12px) 안에서 보이게 둔다 — 실측 최대 넘침은 `D-40` 의 0.69px 이고
- * 조상 전 계층이 `overflow: visible` 이라 잘리지 않는다.
- * 월 경계 `9/1` 표기(슬래시 뒤가 줄바꿈 기회)와 `오늘`(한글은 글자 사이에서 끊긴다)도
- * 같은 위험을 갖기에 라벨별로 붙이지 않고 **공통 클래스 한 곳**에서 처리한다.
- */
-/*
- * 셀 — 숫자 위, `D-n`/`오늘` 아래.
- *
- * ★ **`gap-1`(4px)** — 종전 `gap-0.5`(2px). 모바일 셀 세로 예산 실측이 문제였다:
- * 박스 44px 에 내용 35px(peak 은 37px) → **상하 여백이 4.5px, peak 은 3.5px** 였다.
- * *"포인트 박스에 텍스트가 꽉 들어찬 느낌"*(사용자 지적)의 정체가 이 숫자다.
- * md+ 는 같은 내용이 56px 박스라 10.5px 였다 — **모바일만의 문제**였다.
+ * ⚠ **`whitespace-nowrap` 을 지우지 마라**(QA 15회차 P2) — 라벨이 2줄로 쪼개지면 셀 높이가 고정이라 행은
+ *   안 밀리고 **내용이 색면 밖으로 빠져나가** 흰 라벨이 흰 카드 위에 놓인다(현 데이터로는 미발현).
+ * ⚠ **`overflow-hidden`·`truncate` 를 두지 마라** — 잘린 `D-2…` 는 줄바꿈보다 나쁘다. 넘쳐도 패딩 안이다.
+ * ⚠ **`gap-1` 을 `gap-0.5` 로 되돌리지 마라** — 모바일 셀 상하 여백이 4.5px 까지 눌린다(md+ 는 무관).
  */
 const CELL_BASE =
   "font-display flex w-full flex-col items-center justify-center gap-1 rounded-badge leading-none whitespace-nowrap";
@@ -133,18 +99,10 @@ const SIZE_PRESET: Record<
     caption: "text-caption text-ink-muted mb-3 text-left",
   },
   mini: {
-    /*
-     * md+ 는 좌측 열(헤드라인·링크) + 우측 열(격자) 2열.
-     *
-     * **DOM 순서는 헤드라인 → 격자 → 링크로 고정**하고(모바일 시각 순서와 동일), md+ 에서만
-     * 각 항목을 명시적으로 배치해 링크를 좌측 열로 되돌린다. CSS `order` 로 시각만 바꾸면
-     * Tab 순서·스크린리더 낭독이 DOM 순서를 따라가 **보이는 것과 다른 순서로 읽힌다.**
-     * 행은 `[auto_1fr]` — 1행은 헤드라인 높이, 격자가 두 행을 span 해 카드 높이를 정한다.
-     * 세로 gap 은 0(`gap-x-6`)이라 링크는 헤드라인 바로 아래(`md:mt-4` = 16px)에 온다.
-     *
-     * 좌열 폭 12rem 을 늘리면 셀이 좁아진다 — 768px 기준 14rem 으로 키우면
-     * 여유 17.9 → 13.3px. **재측정 트리거**다(§19.4.1)
-     */
+    /* md+ 는 좌열(헤드라인·링크) + 우열(격자) 2열이고 격자가 두 행을 span 한다.
+       ⚠ **DOM 순서는 헤드라인 → 격자 → 링크로 고정**하고 md+ 에서만 명시 배치로 링크를 좌열로 되돌린다 —
+         CSS `order` 로 시각만 바꾸면 Tab 순서·낭독이 **보이는 것과 다른 순서**가 된다.
+       ⚠ 좌열 폭 `12rem` 을 늘리면 셀이 좁아진다 — **재측정 트리거**다(§19.4.1) */
     card: "md:grid md:grid-cols-[12rem_1fr] md:grid-rows-[auto_1fr] md:gap-x-6 md:items-start",
     cell: "h-14 md:h-16",
     // min-w-0 · shrink-0: 일정명이 길어지면 2줄로 흐르고 D-n 은 줄지 않는다(§19.4.3)
@@ -165,26 +123,16 @@ const CELL_EVENT_MAJOR = "bg-primary text-body font-bold text-white";
 const CELL_EVENT_PEAK = "bg-urgent-strong text-lead font-bold text-white";
 const CELL_PLAIN = "text-body text-ink";
 
-/** 2번째 줄 라벨 — 15px 는 §16.3 하한이라 더 줄일 수 없다. 3글자 이상 라벨 금지(§18.6.1) */
-/*
- * `D-n`·`오늘` 라벨 — **13px**(종전 `text-caption` 15px).
- *
- * ⚠ **`--text-caption` 의 *"15px 하한"* 을 어긴 것이 아니라 적용 대상이 다르다.**
- * 그 하한은 **보조 «문장»** 의 것이고, 여기는 **숫자 배지 안의 라벨**이다.
- * 가로 예산이 근거다: 360px 에서 셀 배지 폭이 **약 39px** 인데 `D-13` 이 15px 로 **34px** —
- * 좌우 2.5px 씩밖에 안 남아 글자가 테두리에 붙었다. 13px 면 약 29px 로 5px 씩 남는다.
- * **전문은 `sr-only` 가 그대로 읽는다** — 스크린리더 사용자에게 줄어드는 정보는 0 이다.
- * `rem` 이라 **글자 크기 슬라이더를 따라 함께 커진다.**
- */
+/** `D-n`·`오늘` 라벨 — **13px**. `--text-caption` 의 «15px 하한»을 어긴 것이 아니라 **적용 대상이 다르다**:
+ *  그 하한은 보조 **문장**의 것이고 여기는 **숫자 배지 안의 라벨**이다(15px 이면 `D-13` 이 테두리에 붙는다).
+ *  전문은 `sr-only` 가 그대로 읽어 정보 손실 0 이고 `rem` 이라 슬라이더를 따라 커진다.
+ *  ⚠ **3글자 이상 라벨 금지**(§18.6.1). */
 const LABEL_SIZE = "text-[0.8125rem] leading-none";
 const LABEL_TODAY = `${LABEL_SIZE} font-medium text-primary`;
 const LABEL_MAJOR = `${LABEL_SIZE} font-medium text-white`;
 const LABEL_PEAK = `${LABEL_SIZE} font-semibold text-white`;
 
-/**
- * 격자 안 숫자 표기. 매월 1일은 `9/1` 형식 — 격자에서 월 전환을 알리는 유일한 표지라
- * 생략하지 않는다(§18.2.1).
- */
+/** 격자 안 숫자 표기. 매월 1일은 `9/1` 형식 — 격자에서 월 전환을 알리는 유일한 표지라 생략하지 않는다(§18.2.1) */
 function cellNumberText(iso: string): string {
   const date = new Date(iso);
   const month = date.getUTCMonth() + 1;
@@ -200,13 +148,12 @@ export function StruggleCalendar({
 }: StruggleCalendarProps) {
   const preset = SIZE_PRESET[size];
 
-  // 1~2. 오늘 이후 일정만, 날짜 오름차순(동일 날짜는 peak 우선).
-  //      격자와 헤드라인이 같은 배열을 쓴다 — 단일 출처(§19.3.3)
+  // 1~2. 오늘 이후 일정만, 날짜 오름차순(동일 날짜는 peak 우선). 격자·헤드라인 단일 출처(§19.3.3)
   const today = todayIsoKst(now);
   const future = futureEventsInOrder(events, now);
 
   // 3. 남은 일정이 없으면 달력 자체를 렌더하지 않는다(§18.7 상태 E).
-  //    "일정이 모두 종료되었습니다" 류의 안내 문구를 만들지 않는다 — 문안 창작 금지(§17.7)
+  //    ⚠ "일정이 모두 종료되었습니다" 류 안내 문구를 만들지 마라 — 문안 창작 금지(§17.7)
   if (future.length === 0) return null;
 
   // 4~6. 오늘이 속한 주의 일요일 ~ 마지막 일정이 속한 주의 토요일 (항상 완전한 주)
@@ -219,39 +166,21 @@ export function StruggleCalendar({
     weeks.push(Array.from({ length: 7 }, (_, i) => addDaysIso(start, offset + i)));
   }
 
-  /*
-   * 격자가 비면 렌더하지 않는다 — 아래 `weeks[0].map`(요일 헤더)이 `undefined` 를 읽어
-   * TypeError 로 페이지 전체가 죽는 것을 막는다(QA 15회차 P5 · 17회차 Q2).
-   *
-   * **발생 조건**: `start`·`end` 중 하나라도 빈 문자열이면 `Date.parse("")` 가 `NaN` 이라
-   * `totalDays` 가 `NaN` 이 되고, 위 for 문이 0회 돌아 `weeks` 가 `[]` 로 남는다.
-   * `addDaysIso`·`todayIsoKst` 는 무효 입력에 빈 문자열을 주므로 무효한 `now` 가
-   * 이 상태를 만든다.
-   *
-   * **지금은 도달 불가하다**(정직하게 기록한다): 무효한 `now` 는 그 전에
-   * `futureEventsInOrder` → `daysUntilKst` 안의 `Intl.DateTimeFormat.formatToParts` 가
-   * `RangeError: Invalid time value` 로 먼저 던진다(node 실측 확인). 즉 이 가드는 **현재
-   * 버그를 고치는 코드가 아니라 구조적 방어**다 — 위 예외에 `null` 반환 가드가 붙는 순간
-   * (그게 그 예외의 자연스러운 수정 방향이다) 이 경로가 곧바로 살아난다.
-   * 호출부가 메인·상세 2곳으로 늘어 노출면이 커졌으므로 남겨 둔다.
-   *
-   * 반환 규약은 §18.7 상태 E("일정이 전부 지나면 null")와 같다 — 빈 카드·안내 문구 금지.
-   */
+  /* 격자가 비면 렌더하지 않는다 — `weeks[0].map` 이 `undefined` 를 읽어 페이지가 죽는 것을 막는다
+     (QA 15회차 P5 · 17회차 Q2). **지금은 도달 불가하다**(무효 `now` 는 그 전에 `Intl` 이 `RangeError` 로
+     던진다) — 버그 수정이 아니라 **구조적 방어**이고, 그 예외에 `null` 가드가 붙는 순간 살아난다.
+     ⚠ 반환 규약은 §18.7 상태 E 와 같다 — **빈 카드·안내 문구 금지** */
   if (weeks.length === 0) return null;
 
   if (weeks.length > 6) {
-    // 6행(42일)을 넘으면 "오늘과 목표가 한 화면에 함께 보인다"는 전제가 무너진다.
-    // 렌더는 그대로 진행하되 리더 판단 요청 대상이다(§18.1.2)
+    // 6행(42일)을 넘으면 "오늘과 목표가 한 화면에 보인다"는 전제가 무너진다 — 리더 판단 대상(§18.1.2)
     console.warn(
       `[StruggleCalendar] 격자가 ${weeks.length}행입니다(상한 6행). 설계 전제 재검토가 필요합니다.`,
     );
   }
 
-  /*
-   * 같은 날 2건도 잃지 않는다(§19.3.2) — 셀은 peak 를 표시하고 sr-only 는 그 날의 모든
-   * 일정 제목을 나열한다. `new Map(future.map(...))` 로 만들면 **뒤 항목이 앞을 덮어**
-   * major 가 peak 를 지운다. future 가 peak 우선으로 정렬돼 있으므로 배열 앞이 곧 대표다.
-   */
+  /* 같은 날 2건도 잃지 않는다(§19.3.2) — 셀은 peak 를 표시하고 `sr-only` 는 그 날 전부를 나열한다.
+     ⚠ `new Map(future.map(...))` 로 만들지 마라 — **뒤 항목이 앞을 덮어** major 가 peak 를 지운다 */
   const eventsByDate = new Map<string, CalendarEvent[]>();
   for (const event of future) {
     const sameDay = eventsByDate.get(event.date);
@@ -259,8 +188,7 @@ export function StruggleCalendar({
     else sameDay.push(event);
   }
 
-  // 헤드라인 대상은 **가장 가까운 미래 일정**(§19.3 — §18.4 개정). 메인·상세가 같은 값을
-  // 보여야 조합원이 날짜를 잘못 읽지 않는다. 총파업의 중대성은 격자의 적색 셀이 계속 담당한다
+  // 헤드라인 대상은 **가장 가까운 미래 일정**(§19.3) — 메인·상세가 같은 값을 보여야 날짜를 잘못 안 읽는다
   const headline = future[0];
   const headlineDays = daysUntilKst(headline.date, now);
   const headlineColor =
@@ -292,12 +220,8 @@ export function StruggleCalendar({
       </div>
 
       <table className={`${preset.table} w-full table-fixed`}>
-        {/*
-          mini 는 범위 표기를 화면에 띄우지 않는다 — 격자의 첫·마지막 칸 숫자와 월 경계
-          `9/1` 표기가 범위를 이미 보여주고, 같은 정보가 상세 달력에 시각 노출돼 있다.
-          SR 은 전문을 그대로 얻으므로 정보가 적지 않다(§19.5.2). 또한 메인에는 마감
-          스트립이 있어 표 이름이 `26년 임단협` 으로 시작해야 구별된다(§19.1.2).
-        */}
+        {/* mini 는 범위 표기를 화면에 안 띄운다 — 격자 숫자와 `9/1` 이 이미 범위를 보여주고 SR 은 전문을
+            얻는다(§19.5.2). 표 이름은 `26년 임단협` 으로 시작해야 마감 스트립과 구별된다(§19.1.2) */}
         <caption className={preset.caption}>
           {size === "mini" ? (
             `26년 임단협 투쟁 일정 달력입니다. ${rangeLabel}. 일정이 있는 날에는 일정 이름과 D-n 을 함께 읽습니다.`
@@ -333,8 +257,8 @@ export function StruggleCalendar({
                 if (iso < today) return <td key={iso} className="p-0.5 md:p-1" />;
 
                 if (sameDay !== undefined) {
-                  // 오늘과 겹치면 면 색은 일정이 이기고 오늘은 아웃라인으로 중첩한다(§18.3.4).
-                  // 아웃라인을 빼면 "오늘"이라는 정보가 소실되므로 §16.5 의 승인된 예외다
+                  // 오늘과 겹치면 면 색은 일정이 이기고 오늘은 아웃라인으로 중첩한다 — 아웃라인을 빼면
+                  // "오늘"이 소실되므로 §16.5 의 승인된 예외다(§18.3.4)
                   const peak = sameDay[0].level === "peak";
                   const days = daysUntilKst(iso, now);
                   const label = isToday ? "오늘" : `D-${days}`;
@@ -373,8 +297,7 @@ export function StruggleCalendar({
                   );
                 }
 
-                // 일반 칸에는 sr-only 를 넣지 않는다 — 18칸을 전부 읽으면 표 탐색이 소음이 된다.
-                // 월 경계(매월 1일)만 예외로 완전 표기한다(§18.8.1)
+                // 일반 칸에 `sr-only` 를 넣지 않는다(18칸 전부 읽으면 소음). 월 경계만 완전 표기(§18.8.1)
                 const monthBoundary = new Date(iso).getUTCDate() === 1;
                 return (
                   <td key={iso} className="p-0.5 md:p-1">
@@ -397,15 +320,10 @@ export function StruggleCalendar({
       </table>
 
       {size === "mini" ? (
-        /*
-         * 상세 진입점. HeroPanel 은 urgent 공지가 1건이라도 있으면 모드 1 로 전환되어
-         * 투쟁 안내 CTA 가 사라진다 — 이 링크가 없으면 메인에서 /bargaining-2026 으로
-         * 가는 경로가 0개가 된다(§19.2.2). 카드 전체를 링크로 만들지 않는다(§17.1).
-         *
-         * **격자 뒤에 온다.** 링크는 격자를 본 다음의 출구이므로 본체보다 먼저 나오면
-         * 훑는 화면에서 조합원이 격자를 지나치고 링크만 본다(리더 판정 2026-08-18).
-         * md+ 에서만 좌측 열(1열 2행)로 되돌아간다 — DOM 순서는 그대로다.
-         */
+        /* 상세 진입점. ⚠ **지우지 마라** — `HeroPanel` 이 urgent 공지 1건에도 모드 1 로 전환돼 투쟁 안내
+           CTA 가 사라지므로, 이것이 없으면 메인에서 `/bargaining-2026` 으로 가는 경로가 0개가 된다(§19.2.2).
+           ⚠ **격자 «뒤»에 온다** — 앞에 오면 훑는 화면에서 조합원이 격자를 지나치고 링크만 본다.
+           ⚠ **카드 전체를 링크로 만들지 마라**(§17.1 패널 전체 링크 금지) — 진입점은 이 링크 하나다 */
         <p className="mt-3 md:col-start-1 md:row-start-2 md:mt-4">
           <Link
             href={ROUTES.bargaining}
@@ -419,11 +337,8 @@ export function StruggleCalendar({
     </div>
   );
 
-  /*
-   * mini 는 메인에 블록으로 얹히므로 이름이 필요하다 — `<h2>` 를 만들면 헤딩 아웃라인
-   * (h1 지부명 → h2×4 섹션)이 깨진다. HeroPanel 과 같은 `aria-label` 패턴을 쓴다(§19.1.2).
-   * full 은 상세 페이지의 `<section aria-labelledby="schedule-heading">` 안에 이미 들어간다.
-   */
+  /* mini 는 메인에 블록으로 얹혀 이름이 필요한데 `<h2>` 를 만들면 헤딩 아웃라인이 깨진다 — `HeroPanel`
+     과 같은 `aria-label` 패턴을 쓴다(§19.1.2). full 은 상세 페이지의 `<section aria-labelledby>` 안이다 */
   return size === "mini" ? (
     <section aria-label="26년 임단협 투쟁 안내" className={className}>
       {card}
