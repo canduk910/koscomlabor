@@ -59,11 +59,42 @@ export const LEGEND_KEY = "점선 = 근사 · 옅은 면 = 범위 근사";
 export const MAP_GESTURE_NOTE =
   "지도는 손가락 하나로 움직입니다. 페이지를 내릴 때는 지도 위나 아래 빈 곳을 쓸어 주세요.";
 
+/** 조작 어포던스 — 검증 §59 · M-33 확정 문면. **자리는 조작 안내 문단 «안» 둘째 문장**이다.
+ *  ⚠ **새 문단을 만들지 마라** — 지도 «위» 우리 문단이 3덩어리가 되면 «지도에 닿기 전에 읽어야 할 벽»이 된다.
+ *  ⚠ **`※` 를 붙이지 마라**(종류 1 · 출현 2 고정) · **부정문을 덧붙이지 마라**(`무대·대오는 열리지 않습니다`) —
+ *  긍정문이 이미 범위를 닫는다. ⚠ **`거리뷰를 볼 수 있습니다` 로 바꾸지 마라** — 지도 «안»에 `거리뷰` 토글이
+ *  따로 있고, 「누르면 열린다」가 이 문장이 말하는 **«다른 경로»를 특정**한다.
+ *
+ *  ⚠⚠ **이 문장은 «사실 주장»이다** — 지금 참인 것은 `roadview` 가 **화장실 3 · 역 2 다섯 개뿐**이기 때문이다.
+ *  ★ **양방향으로 깨진다:**
+ *    · **늘리면** — 대오·무대에 `roadview` 를 켜는 순간 «화장실과 역»이 **대상을 좁혀 말하게** 된다.
+ *      **문면부터 고치고 켜라**(검증 §59).
+ *    · **줄이면** — 다섯 중 하나라도 끄면 **«없는 것을 누를 수 있다»** 고 말한다. **같은 무게로 거짓**이다.
+ *    · ★ **지도가 «없을» 때(401 · 로드 실패)** — 이 문장은 거짓이 되지만 **피해가 0 이라 그대로 둔다**
+ *      (눌러 봐도 아무 일이 안 일어난다. 이 프로젝트가 «거짓»으로 막은 것들은 **전부 «행동 → 피해»가 있었다**).
+ *      ⚠⚠ **숨기지 마라** — 같은 문단의 `MAP_GESTURE_NOTE` 둘째 문장(`페이지를 내릴 때는…`)은
+ *      **401 에서도 «참»이고 «가장 필요»** 하다: 마운트 노드의 `touch-action:none` 이 `status` 분기 **«밖»** 이라
+ *      **지도가 죽어도 상자 420px 를 꽉 채우고**, 그 위를 쓸면 갇힌다. **그 문장이 그것을 푸는 «유일한» 문장이다.**
+ *      **거짓 문장을 지우려다 그 문장을 함께 지우게 된다.**
+ *  ⚠ 「무대·대오는 안 됩니다」를 덧붙여 때우지 마라 — 부정문이 늘고, **늘린 쪽은 여전히 거짓**이다.
+ *  ★ 아래 `ROADVIEW_IDS` 가드가 «늘리면·줄이면» 두 방향을 **기계적으로** 잡는다(셋째 방향은 못 잡는다 —
+ *    데이터가 아니라 런타임 상태다). 그리고 가드는 «알리는» 것까지다 */
+export const MAP_AFFORDANCE_NOTE = "지도의 화장실과 역을 누르면 거리뷰가 열립니다.";
+
 /** 지도 `sr-only` 안내문 — 검증 §53-11 (1) 축자.
  *  ⚠⚠ **8/28 문면을 복사하면 «거짓»이 된다** — 9/4 에는 그 텍스트 블록이 없다.
  *  텍스트 등가는 **지도 아래 범례 13행**이 진다 */
 export const MAP_SR_INTRO =
   "아래는 무대·대오 위치를 표시한 지도입니다. 같은 내용을 지도 아래 범례에서 텍스트로 제공합니다.";
+
+/** 「근사」 한 줄 — 검증 §58-2 확정 문면. **`confidence === "estimated"` 인 항목에만** 붙는다.
+ *  ⚠⚠ **`id` 로 분기하지 마라**(이 파일 머리 주석) — `confidence` 축으로만 갈라야 **역에 붙을 길이
+ *  구조적으로 없다.** `verified` 좌표를 「근사」라 말하는 것은 거짓이다(§58-3).
+ *  ★ 자리는 **팝업 «과» 거리뷰 시트 둘 다**다 — 「거리뷰 보기」를 누르면 팝업이 닫히므로(§25.7)
+ *  «한 화면에 두 번»이 아니라 **«연속된 두 화면에 각각 한 번»**이다(§5.3 에 안 걸린다).
+ *  ⚠ **셋째 자리(지도 캔버스 «위»)를 만들지 마라** — 그 선을 넘으면 §5.3 위반이다.
+ *  ⚠ `주변을 살펴 주세요` 류를 덧붙이지 마라 — 우리가 지어낸 행동 지시다(§58-2) */
+export const APPROX_NOTE = "표시 위치는 약 ±25 m 근사입니다.";
 
 /** 코스콤지부 대오 한 줄 — 검증 §53-9 확정 · M-10 채택 문면.
  *  ★ **자리는 지도 `figure` «안» · 캔버스 «밖»**(§53-15 조건 11). 범례 행 금지 · 지도 밖 본문 금지.
@@ -167,6 +198,12 @@ interface StrikeFeatureBase {
   labelGap?: number;
   /** 라벨을 다는 지점을 직접 지정한다. 없으면 `placement` 에서 자동으로 정한다 */
   labelAt?: StrikeLatLng;
+  /** 누르면 팝업이 열리고 거기서 거리뷰를 여는 항목인가 — **화장실 3 + 역 2**(M-28 · 검증 §58).
+   *  ⚠⚠ **대오·무대에 붙이지 마라.** ① 대오 하나를 거리뷰로 비추면 «코스콤은 여기»로 읽혀
+   *  `KOSCOM_COLUMN_NOTE` 와 정면 충돌한다 ② 지도 조작 안내가 «무엇이 눌리는가»를 «주장»하므로
+   *  대상이 늘면 그 문장이 거짓이 된다(§54.18-7 #29).
+   *  ★ 히트 대상은 **«pill 이 있으면 pill · 없으면 기호 배지»** 이고 **점(dot)은 언제나 장식**이다(§54.18-1) */
+  roadview?: true;
 }
 
 /** 대오 밴드 — 축정렬 사각 폴리곤.
@@ -332,6 +369,7 @@ export const STRIKE_MAP_FEATURES: readonly StrikeMapFeature[] = [
     confidence: "estimated",
     position: { lat: 37.569125, lng: 126.976389 },
     placement: "left",
+    roadview: true,
   },
   {
     kind: "dot",
@@ -346,6 +384,7 @@ export const STRIKE_MAP_FEATURES: readonly StrikeMapFeature[] = [
     confidence: "estimated",
     position: { lat: 37.566855, lng: 126.976825 },
     placement: "left",
+    roadview: true,
   },
   {
     kind: "dot",
@@ -362,6 +401,7 @@ export const STRIKE_MAP_FEATURES: readonly StrikeMapFeature[] = [
        **좌표를 옮겨 풀지 마라.** 배치·층·기호로 푼다(흰 링이 «얹힌 층»을 만든다) */
     position: { lat: 37.565673, lng: 126.977271 },
     placement: "left",
+    roadview: true,
   },
   {
     kind: "dots",
@@ -377,6 +417,7 @@ export const STRIKE_MAP_FEATURES: readonly StrikeMapFeature[] = [
     /* pill 1개를 두 점 «위» 중앙에 둔다(구현 조건 15). 근거는 `anchorAtExtreme` 주석에 있다 */
     placement: "top",
     labelAlign: "center",
+    roadview: true,
   },
   {
     kind: "dot",
@@ -393,8 +434,44 @@ export const STRIKE_MAP_FEATURES: readonly StrikeMapFeature[] = [
        ⚠ **좌표를 옮겨 풀지 마라** — 그 순간 `verified` 가 `estimated` 가 된다 */
     placement: "right",
     labelGap: 20,
+    roadview: true,
   },
 ];
+
+/**
+ * `MAP_AFFORDANCE_NOTE` 가 «참인 조건»의 **기계적 방어**. 그 문장은 **«화장실과 역»만 눌린다**고 주장하는데,
+ * 그 주장은 **양방향으로** 깨진다(늘려도 · 줄여도). 이 집합이 **양쪽을 다** 잡는다.
+ *
+ * ⚠⚠ **문면을 이 집합에서 «생성»하지 마라** — 생성된 문면은 **검증을 통과한 적이 없다.**
+ *   가드는 **불일치를 «알리는»** 것까지만 한다. 문면은 §59 확정본 그대로 손으로 적혀 있어야 한다.
+ * ★ **`rally.ts`·`strike.ts` 의 단일 출처 가드와 같은 계보**지만 **거동이 다르다 — 여기는 «죽는다».**
+ *   거기는 «옛 날짜를 들고 남는» 것이라 안내 콘텐츠 자체는 유효해 `console.error` 로 족했다.
+ *   여기는 **화면에 거짓 문장이 나가는** 것이고, 두 값이 **같은 파일의 정적 데이터**라 불일치는
+ *   **`next build` 의 프리렌더에서 반드시 평가된다** → **빌드가 실패하고 조합원에게 닿지 않는다.**
+ *   ⚠ 그래서 «페이지가 죽는다»가 아니라 «**배포되지 않는다**»가 이 `throw` 의 실제 효과다.
+ */
+const ROADVIEW_IDS: readonly string[] = [
+  "toilet-north",
+  "toilet-south",
+  "cityhall-toilet",
+  "gwanghwamun",
+  "cityhall",
+];
+
+{
+  const actual = STRIKE_MAP_FEATURES.filter((f) => f.roadview === true)
+    .map((f) => f.id)
+    .sort()
+    .join(" · ");
+  const expected = [...ROADVIEW_IDS].sort().join(" · ");
+  if (actual !== expected) {
+    throw new Error(
+      `[strikeMap] roadview 집합이 갈렸습니다 — MAP_AFFORDANCE_NOTE("${MAP_AFFORDANCE_NOTE}") 가 거짓이 됩니다.\n` +
+        `  기대: ${expected}\n  실제: ${actual}\n` +
+        "  대상을 바꾸려면 검증 §59 로 문면을 먼저 고치고 ROADVIEW_IDS 를 함께 갱신하십시오.",
+    );
+  }
+}
 
 /* ── 5. 파생값 — 라벨 앵커 · 초기 범위 (손으로 적지 않는다) ───────────── */
 
@@ -485,6 +562,38 @@ export function featurePoints(feature: StrikeMapFeature): readonly StrikeLatLng[
   if (feature.kind === "dot") return [feature.position];
   if (feature.kind === "dots") return feature.points;
   return [];
+}
+
+/** 범례 문면의 «이름 — 설명» 구분자. 13행이 전부 이 형태다 */
+const LEGEND_SEPARATOR = " — ";
+
+/** 짧은 이름 — **`legend` 문면의 «— » 앞부분**이다(§58-6). **신규 문자열 0 · 파생값이다.**
+ *  나오는 값: `간이화장실` · `시청역 화장실` · `광화문역(5호선)` · `시청역(1·2호선)`.
+ *  ★ **쓰이는 곳은 «파노라마 와드 라벨» 하나뿐이다.**
+ *  ⚠ **별도 이름 상수를 만들지 마라** — 한쪽만 고쳐진다(요구 88). 범례를 고치면 여기가 따라온다.
+ *  ⚠ **파노라마 와드에 범례 «전문»을 넣지 마라** — 와드는 `nowrap` 한 줄이라 문장이 화면을 가로지른다.
+ *  ★ 화장실 2곳이 같은 이름(`간이화장실`)이 되지만 **와드에서는** 충돌하지 않는다 — **한 번에 하나**만 뜬다.
+ *
+ *  ⚠⚠ **그래서 이 값을 «접근성 이름»으로 쓰면 안 된다**(M-34) — 접근성 이름은 **다섯 개가 한 목록에 함께
+ *  서므로** 같은 이름 둘이 **구별 불가**가 된다. 마커 버튼의 이름은 **`legend` «전문»**이다.
+ *  ★ **«구별 불가»는 «못 쓰는 것»이고 «반복»은 «불편»이다 — 무게가 다르다.**
+ *  ⚠ 8/28 이 «이름을 짧게»로 푼 것을 근거만 보고 옮기지 마라 — 거기는 **`{번호} {이름}` 의 «번호»가
+ *  구별자**였고 **9/4 는 번호가 0**(§54.16-12)이라 **그 처방이 기대던 것이 여기엔 없다.** */
+export function featureShortName(feature: StrikeMapFeature): string {
+  const cut = feature.legend.indexOf(LEGEND_SEPARATOR);
+  return cut < 0 ? feature.legend : feature.legend.slice(0, cut);
+}
+
+/** 거리뷰 시작점 — **«누른 그 점»**(§58-4). `roadview` 가 아닌 항목은 `null` 이다.
+ *  ⚠⚠ **두 점의 «중점»에서 열지 마라**(§54-8 조건 14) — 세종대로 **노면 한가운데**라 로드뷰가 차로에서
+ *  열리고 «어느 출구인지» 판단에 도움이 0 이다. 이 함수가 중점을 만들지 않는 것이 그 금지의 이행이다.
+ *  ★ **광화문역 판정**: 히트는 pill **하나**인데 점이 **둘**이다(§54.18-1 — 두 점에 각각 히트를 주면
+ *  «한 항목» 계약이 깨지고 같은 이름 둘이 된다). 그래서 여기서 한 점을 골라야 하고, **배열 첫 점**을 쓴다(= ⑥).
+ *  둘 중 하나를 «가깝다»·«주로 쓴다»로 고르면 **우리에게 없는 근거를 주장**하는 것이다 —
+ *  원본은 두 출구를 **동시에** 가리켰다(M-19). ⚠ **`points` 순서를 바꾸면 시작점이 바뀐다.** */
+export function featureRoadviewPoint(feature: StrikeMapFeature): StrikeLatLng | null {
+  if (feature.roadview !== true) return null;
+  return featurePoints(feature)[0] ?? null;
 }
 
 /** 라벨 기본 간격(px) — 세로/가로. 항목이 `labelGap` 을 주면 그것이 이긴다 */

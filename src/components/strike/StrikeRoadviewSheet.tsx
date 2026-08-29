@@ -1,6 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+import { APPROX_NOTE } from "@/lib/strikeMap";
 
 /**
  * 9/4 «거리뷰 하단 시트» — 비모달. `position: fixed` 라 문서 세로를 «0» 먹는다(QA-519).
@@ -54,17 +56,29 @@ function readStoredSheetVh(): number {
 export function StrikeRoadviewSheet({
   panoDate,
   panoStatus,
+  approximate,
   mountRef,
   onClose,
 }: {
   /** 촬영 연월 — **메타에 있을 때만.** 빈 문자열이면 줄 자체가 없다(지어내지 않는다) */
   panoDate: string;
   panoStatus: StrikePanoStatus;
+  /** 「근사」 한 줄을 붙이는가 — **`confidence === "estimated"` 의 파생값**이다(§58-2).
+   *  ⚠⚠ **문면을 인자로 받지 마라** — 호출부가 문장을 «지을» 수 있게 되면 §5.3 이 무너진다.
+   *  여기서 `APPROX_NOTE` 하나만 렌더한다. ⚠ **역에 붙이면 거짓이다**(`verified` 를 근사라 말하는 것 · §58-3) */
+  approximate: boolean;
   mountRef: React.RefObject<HTMLDivElement | null>;
   onClose: () => void;
 }) {
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const panoBoxRef = useRef<HTMLDivElement | null>(null);
+
+  /* 열리면 시트로 포커스를 옮긴다 — 지물 팝업에서 왔을 때 **팝업이 함께 닫히므로**(§25.7) 안 옮기면
+     포커스가 `body` 로 떨어져 키보드 사용자가 페이지 처음부터 순회한다. 되돌리기는 `StrikeMap` 이 진다.
+     ⚠ `preventScroll` 를 빼지 마라 — `fixed` 오버레이라 기본 `focus()` 는 문서를 끌어올린다 */
+  useEffect(() => {
+    sheetRef.current?.focus({ preventScroll: true });
+  }, []);
 
   /* 지연 초기화로 `localStorage` 를 읽어도 안전하다 — 이 컴포넌트는 시트가 열렸을 때만 렌더돼 하이드레이션 불일치가 없다 */
   const [heightVh, setHeightVh] = useState(readStoredSheetVh);
@@ -156,6 +170,8 @@ export function StrikeRoadviewSheet({
          제목을 `<h2>` 로 두지 않은 이유: 지도 `<section>` 안이라 페이지 헤딩 차례에 「거리뷰」가 끼어든다 */
       aria-labelledby={SHEET_TITLE_ID}
       aria-modal={false}
+      /* 열릴 때 포커스를 받는 자리(위 effect). ⚠ 탭 순회에는 안 들어간다(`-1`) */
+      tabIndex={-1}
       /* ★ `z-[300]` 이다. 낮추지 마라 — 네이버의 `.map_copyright`·축척·로고가 `z-index: 100` 이라 그보다 낮은 시트
          «위»에 그려져 글자가 포개진다. ⚠ 그 겹침은 `pointer-events: none` 이라 «기하»로만 검출된다 */
       className="rounded-t-panel fixed inset-x-0 bottom-0 z-[300] flex flex-col border-t-2 border-border-strong bg-bg shadow-hero"
@@ -201,6 +217,14 @@ export function StrikeRoadviewSheet({
             </p>
             {panoDate !== "" ? (
               <p className="mt-1 text-caption tabular-nums text-ink-muted">{panoDate}</p>
+            ) : null}
+            {/* ★★ 「근사」 한 줄 — **로드뷰에는 점선·옅은 면·범례 키가 하나도 없다.** 지도에서 그 세 채널이
+                하던 일을 여기서는 **이 문장 하나가 진다**(§54.18-4 (5)). 그리고 **위험이 최대인 순간이
+                로드뷰를 보는 순간**이다 — «바로 여기»라는 인상을 지도보다 훨씬 강하게 준다.
+                ⚠ **`ink-muted` 로 흐리지 마라** · **접지 마라** · `sr-only` 로 돌리지 마라.
+                ⚠ **행동 지시(`주변을 살펴 주세요` 류)를 덧붙이지 마라** — 「근사」가 이미 그 뜻을 말한다(§58-2) */}
+            {approximate ? (
+              <p className="mt-1 break-keep break-words text-caption text-ink">{APPROX_NOTE}</p>
             ) : null}
           </div>
           <button

@@ -57,6 +57,18 @@ export interface NaverMap {
   panBy(x: number, y: number): void;
   /** 생성 이후 옵션 변경(휠 확대 토글). 부분 객체 — 넘기지 않은 옵션은 유지된다 */
   setOptions(options: Partial<NaverMapOptions>): void;
+  /** 지도가 «자기 크기»로 믿는 값. ⚠ **컨테이너 CSS 크기와 자동으로 같아지지 않는다** — 아래 `setSize` 참조 */
+  getSize(): NaverSize;
+  /**
+   * ★★ **컨테이너 크기가 바뀌면 반드시 부른다.** 네이버 지도는 **`window.resize` 만 듣는다** —
+   * 뷰포트는 그대로인데 **상자만** 줄면(글자 크기 확대 등) 지도는 **옛 크기를 계속 믿고**,
+   * `fitBounds` 가 그 옛 값으로 계산해 **마커가 한 픽셀도 안 움직인다**(QA F-B).
+   * ⚠⚠ **`refresh()` 로는 안 고쳐진다 — 실측했다**(상자 300×375 인데 `getSize()` 가 336×420 그대로).
+   *   `refresh()` 는 **투영·타일 크기**를 다시 보는 것이지 컨테이너를 재는 것이 아니다. **바꿔 쓰지 마라.**
+   * ★ `NaverPanorama.setSize` 와 **같은 계보**다(`union-webapp-dev` §7 — *«위젯이 제공하는 크기 반영 API 를
+   *   직접 호출한다»*). 이 프로젝트에 그 규칙이 이미 있었고 **지도에만 안 걸려 있었다.**
+   */
+  setSize(size: NaverSize): void;
   addListener(eventName: string, listener: (payload?: unknown) => void): NaverMapEventListener;
   destroy(): void;
 }
