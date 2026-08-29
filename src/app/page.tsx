@@ -14,11 +14,11 @@ import { SiteFooter } from "@/components/layout/SiteFooter";
 import { HeroPanel } from "@/components/home/HeroPanel";
 import { DeadlineStrip } from "@/components/home/DeadlineStrip";
 import { OnnuriGuideCard } from "@/components/home/OnnuriGuideCard";
-import { RallyBanner } from "@/components/home/RallyBanner";
+import { StrikeBanner } from "@/components/home/StrikeBanner";
 import { HomeTabs, type HomeTabItem } from "@/components/home/HomeTabs";
 import { StruggleCalendar } from "@/components/bargaining/StruggleCalendar";
 import { STRUGGLE_SCHEDULE, nextStruggleEvent } from "@/lib/struggleSchedule";
-import { rallyPhase } from "@/lib/rally";
+import { strikePhase } from "@/lib/strike";
 
 /**
  * 메인페이지 (스펙 §15 — 탭 → 섹션 나열 전환판. §3 구조도·§4 탭 스펙은 폐기).
@@ -119,11 +119,15 @@ export default async function Home() {
         <div className="mx-auto mt-6 w-full max-w-page px-4 md:mt-10 md:px-8">
           {/* ── 도입 블록 (§16.11.2 — 구조 유지, 간격은 §16.7.2 표) ──
 
-              ★ **8/28 배너가 최상단이다**(사용자 지시 2026-08-21 · §36.2).
-              *"가장 상단에 8/28(금) 결의대회 참석안내 배너를 붙이고, 기존의 26년 임단협
-              투쟁 안내는 삭제하자."*
+              ★ **9/4 총파업 배너가 최상단이다**(사용자 지시 2026-08-29 · 리더 D-6 · §52.10).
+              *"결의대회처럼 총파업 참석안내 페이지를 만들고 배너를 최상단에 배치해줘."*
 
-              | urgent | phase | 히어로 자리 | 8/28 배너 |
+              ⚠⚠ **`RallyBanner`(8/28) 는 «렌더 조건»이 아니라 «파일째» 내려갔다**(D-6·D-12 · §52.9).
+              8/28 이 지난 뒤에도 `past` 분기가 결의대회 배너를 최상단에 계속 렌더하고 있어
+              총파업 배너와 자리를 다퉜다. 되살리려면 git 이력에서 꺼내라 — **복사본을 만들지 마라.**
+              ⚠ **`/rally-2026-08-28` 페이지 자체는 살아 있다.** 공유된 URL 이 열려야 한다(D-6).
+
+              | urgent | phase | 히어로 자리 | 총파업 배너 |
               |--------|-------|-------------|-----------|
               | 있음   | 전부  | **공지**    | `panel` — 바로 아래 |
               | 없음   | upcoming/today | **배너 = `hero`** | (히어로가 곧 배너) |
@@ -132,18 +136,23 @@ export default async function Home() {
               ⚠ **배너는 화면에 1개다.** `hero` 와 `panel` 을 함께 렌더하지 마라 —
               같은 링크가 한 화면에 두 번 나오고 딥블루 강조 면이 둘이 된다(§0.2-5).
               `HeroPanel` 은 urgent 가 없으면 스스로 `null` 을 반환한다.
+
+              ★ **9/5 부터는 이 표의 마지막 줄이 «미니달력이 이어받는다»를 뜻하지 않는다**(§52.10-1).
+              9/4 는 `STRUGGLE_SCHEDULE` 의 **마지막 일정**이라 `nextStruggleEvent()` 가 `null` 을 내고
+              **미니달력도 렌더되지 않는다** — 최상단이 `panel` 배너 하나만 남는다.
+              **거짓은 아니다**(배지가 `완료` 를 말한다). ⚠ **여기에 «다음 일정이 없습니다» 류 문안을
+              짓지 마라** — 다음 투쟁 일정이 배열에 들어오면 저절로 풀린다(`FOLLOWUPS` 등재분).
           */}
           <HeroPanel post={urgentNotice} />
           {urgentNotice !== null ? (
             /* 긴급 공지가 히어로를 차지했다 → 배너는 보조 표면으로 그 아래 */
-            <RallyBanner surface="panel" phase={rallyPhase()} className="mt-3 md:mt-4" />
-          ) : rallyPhase() !== "past" ? (
+            <StrikeBanner surface="panel" phase={strikePhase()} className="mt-3 md:mt-4" />
+          ) : strikePhase() !== "past" ? (
             /* 히어로 자리를 배너가 차지한다 */
-            <RallyBanner surface="hero" phase={rallyPhase()} />
+            <StrikeBanner surface="hero" phase={strikePhase()} />
           ) : (
-            /* 8/28 이 지났고 긴급 공지도 없다 → 배너는 보조 표면으로 최상단.
-               히어로는 비어 있고, 아래 미니달력이 9/4 총파업을 `peak` 로 이어받는다 */
-            <RallyBanner surface="panel" phase="past" />
+            /* 9/4 가 지났고 긴급 공지도 없다 → 배너는 보조 표면으로 최상단 */
+            <StrikeBanner surface="panel" phase="past" />
           )}
           {deadlinePosts.length > 0 ? (
             <div className="mt-3 md:mt-4">
@@ -167,7 +176,8 @@ export default async function Home() {
             8/28 배너가 최상단으로 올라가면서 **같은 곳을 가리키는 진입점이 둘이 됐고**,
             사용자 판정이 *"삭제 — 히어로가 대신한다"* 였다.
             그 컴포넌트의 **표면 언어(테두리 단독 · 흰 면)는 `RallyBanner surface="panel"` 이
-            승계**했고, `rallyPhase()` 상태 표시도 함께 옮겼다.
+            승계**했고, 지금은 **`StrikeBanner` 가 같은 표면 언어를 다시 승계**했다
+            (2026-08-29 · §52.9 — `RallyEntryCard` → `RallyBanner` → `StrikeBanner` 로 **같은 처분의 반복**이다).
           */}
           <div className="mt-8 md:mt-10">
             <OnnuriGuideCard />

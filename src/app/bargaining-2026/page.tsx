@@ -7,7 +7,7 @@ import { StruggleCalendar } from "@/components/bargaining/StruggleCalendar";
 import { ArrowRightIcon, DocumentIcon } from "@/components/ui/icons";
 import { daysUntilKst, formatMonthDaySlash } from "@/lib/date";
 import { STRUGGLE_SCHEDULE } from "@/lib/struggleSchedule";
-import { RALLY_DATE } from "@/lib/rally";
+import { STRIKE_DATE } from "@/lib/strike";
 import { ROUTES } from "@/lib/routes";
 
 /**
@@ -26,7 +26,10 @@ import { ROUTES } from "@/lib/routes";
  *  - `필수유지업무 인력 제외` — 법적 근거 미확인(노동조합법 제42조의2①·제71조② 확인 결과
  *    금융 항목은 "한국은행사업"뿐이다). 조합원이 "법상 당연히 제외된다"고 믿으면
  *    자기 참여 의무를 오판한다
- *  - 9/4 집결 장소 — 원문에 없고 언론(3급) 단독이라 지부 공지로 안내한다
+ *  - 9/4 집결 장소 — ⚠ **이 전제는 2026-08-29 에 소멸했다.** 주최측 자료(2급)가 들어와
+ *    `세종대로 (광화문역, 시청역)` 과 집결 시각이 확정됐다. 아래 카드의 `meta`·`detail` 과
+ *    `/strike-2026-09-04` 가 그 사실을 말한다 — **«지부 공지로 안내한다» 는 더 이상 맞지 않는다.**
+ *    (여전히 없는 것은 **코스콤지부 대오 위치**다. 그것은 주최측 자료에도 없다)
  *  - 임금피크제 `~2028년까지` 시한 — 외부에서 확인되지 않았다
  *  - 6월 결렬 선언 날짜(6/25 vs 6/24 상충)·교섭 횟수(16 vs 14 상충)
  *  - "중재/중재안" — 조정과 중재는 법상 별개다(제60조① vs 제70조①)
@@ -139,16 +142,34 @@ export default function BargainingPage() {
                       <span className="mt-1 block text-caption text-ink-muted">{item.meta}</span>
                       <span className="mt-2 block text-body text-ink">{item.detail}</span>
                       {/*
-                        8/28 카드에만 참석 안내로 나가는 링크 1개를 붙인다(§20.2.5).
-                        이것이 없으면 이 카드가 막다른 길이 되고, 이 페이지만 본 조합원은
-                        집결 시각·위치를 영영 못 본다.
-                        라벨은 목적지와 1:1 이다 — `참석 안내 보기` 는 항상 `/rally-2026-08-28`,
-                        `자세히 보기` 는 항상 `/bargaining-2026`. 같은 문자열이 다른 곳으로 가면
-                        그 자체가 QA 실패다(§20.0-3).
+                        ★★ **2026-08-29 에 목적지가 갈렸다 — 리더 D-9.**
+                        종전 이 주석은 *"`참석 안내 보기` 는 **항상** `/rally-2026-08-28`"* 라고
+                        못박고 있었다. **그 판정을 D-9 가 뒤집었다. 되돌리지 마라.**
+
+                        지금: **`참석 안내 보기` 는 항상 `/strike-2026-09-04`**,
+                        `자세히 보기` 는 항상 `/bargaining-2026`.
+                        규율 자체(**라벨은 목적지와 1:1** · 같은 문자열이 다른 곳으로 가면 그 자체가
+                        QA 실패다 · §20.0-3)는 **그대로 살아 있다** — 뒤집힌 것은 목적지뿐이다.
+
+                        **왜 8/28 카드에서 내렸는가:**
+                         1. 9/4 카드에 같은 라벨을 붙이면 **한 화면에 같은 문자열이 두 목적지**를 갖는다.
+                            새 라벨(`총파업 안내 보기`)을 지으면 조합원이 **둘의 차이를 문자열에서
+                            찾으려 한다** — 차이는 날짜 배지와 「종료」 배지가 이미 말한다(§5.3 신규 문자열 0).
+                         2. **`참석 안내 보기` 는 «지금 참석할 것»을 가리키는 라벨**이다.
+                            끝난 행사에 붙어 있는 편이 더 어색하다.
+
+                        ⚠ **`/rally-2026-08-28` 은 이것으로 사이트 내 도달 경로가 0 인 «고아 라우트»가
+                        된다(홈 배너도 D-6 으로 내려갔다). 그것은 «부작용»이 아니라 «판정»이다** —
+                        **URL 은 살아 있어야 한다.** 카톡·문자로 뿌려진 링크가 그대로 열리는 것이
+                        그 페이지를 남기는 유일한 이유다. **라우트를 삭제하지 마라.**
+                        QA 에게: **이 라우트가 «고아»로 잡히는 것은 의도된 상태다. 실패로 올리지 마라.**
+
+                        링크가 없으면 이 카드가 막다른 길이 되고, 이 페이지만 본 조합원은
+                        집결 시각·위치를 영영 못 본다 — 그래서 **9/4 카드가 그 역할을 승계한다**(§20.2.5).
                       */}
-                      {item.date === RALLY_DATE ? (
+                      {item.date === STRIKE_DATE ? (
                         <Link
-                          href={ROUTES.rally0828}
+                          href={ROUTES.strike0904}
                           className="ease-out-soft mt-3 inline-flex min-h-touch items-center gap-1 text-body font-semibold text-primary transition-colors duration-150 hover:underline focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
                         >
                           참석 안내 보기
