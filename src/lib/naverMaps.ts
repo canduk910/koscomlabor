@@ -55,6 +55,14 @@ export interface NaverMap {
   /** **현재 호출부가 없다** — 두 손가락 팬이 네이버 `pinchZoom` 과 제스처를 나눠 갖지 못해
    *  제거됐다(`RallyMap.tsx` 조작 계약 주석). ⚠ 다시 쓰려면 실기기 실측이 선행돼야 한다 */
   panBy(x: number, y: number): void;
+  /**
+   * ★★ **지정 좌표로 «부드럽게» 이동.** 공식 문서 API 다(§54.17-4 «문서 없는 API 0개» 유지).
+   *  ⚠ `prefers-reduced-motion` 에서는 이것 대신 **`setCenter`** 를 쓴다 — `setZoom(z, useEffect)` 과 같은 규율.
+   *  ★ 9/4 의 «유일한» 호출부는 **히트 포커스 시 화면 밖 표식을 끌어오는 것**이다(WCAG 2.4.7 · M-66-5).
+   *    ⚠ 드래그·확대 같은 «조작»에 쓰지 마라 — 조작은 사용자 손이 진다(M-14). */
+  panTo(coord: NaverLatLng): void;
+  /** 지정 좌표로 **즉시** 이동(애니메이션 없음) — `prefers-reduced-motion` 경로 */
+  setCenter(coord: NaverLatLng): void;
   /** 생성 이후 옵션 변경(휠 확대 토글). 부분 객체 — 넘기지 않은 옵션은 유지된다 */
   setOptions(options: Partial<NaverMapOptions>): void;
   /** 지도가 «자기 크기»로 믿는 값. ⚠ **컨테이너 CSS 크기와 자동으로 같아지지 않는다** — 아래 `setSize` 참조 */

@@ -63,7 +63,8 @@ export function StrikeRoadviewSheet({
   /** 촬영 연월 — **메타에 있을 때만.** 빈 문자열이면 줄 자체가 없다(지어내지 않는다) */
   panoDate: string;
   panoStatus: StrikePanoStatus;
-  /** 「근사」 한 줄을 붙이는가 — **`confidence === "estimated"` 의 파생값**이다(§58-2).
+  /** 「근사」 한 줄을 붙이는가 — **`CONFIDENCE_VISUAL[confidence].approxNote` 의 파생값**이다(§58-2 · M-70).
+   *  ⚠ **`confidence === "estimated"` 로 «다시 계산»하지 마라** — 등급이 «셋»이라 우연한 2분기가 된다.
    *  ⚠⚠ **문면을 인자로 받지 마라** — 호출부가 문장을 «지을» 수 있게 되면 §5.3 이 무너진다.
    *  여기서 `APPROX_NOTE` 하나만 렌더한다. ⚠ **역에 붙이면 거짓이다**(`verified` 를 근사라 말하는 것 · §58-3) */
   approximate: boolean;
@@ -248,7 +249,7 @@ export function StrikeRoadviewSheet({
       </div>
 
       {/* ★ 8/28 문면(«페이지 본문 텍스트를 참고»)을 그대로 옮기면 «또» 거짓이 된다 — 9/4 에는 그 본문이 없다(§55-5).
-          거리뷰는 텍스트 등가가 없는 순수 시각 보조이고 정보는 지도와 범례 13행이 전부 진다 */}
+          거리뷰는 텍스트 등가가 없는 순수 시각 보조이고 정보는 지도와 범례 9행이 전부 진다 */}
       <p className="sr-only">
         거리뷰는 시각 자료입니다. 위치 안내는 지도 아래 범례를 참고해 주세요.
       </p>

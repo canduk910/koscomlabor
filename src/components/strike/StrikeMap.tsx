@@ -4,7 +4,8 @@ import Script from "next/script";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   APPROX_NOTE,
-  KOSCOM_COLUMN_NOTE,
+  CONFIDENCE_VISUAL,
+  KOSCOM_LOCATION_NOTE,
   LEGEND_KEY,
   MAP_AFFORDANCE_NOTE,
   MAP_GESTURE_NOTE,
@@ -18,8 +19,10 @@ import {
   featureRoadviewPoint,
   featureShortName,
   labelGapOf,
+  rectCorners,
 } from "@/lib/strikeMap";
 import type {
+  StrikeConfidenceVisual,
   StrikeLabelPlacement,
   StrikeLatLng,
   StrikeMapFeature,
@@ -38,9 +41,19 @@ import { StrikeRoadviewSheet } from "./StrikeRoadviewSheet";
 import type { StrikePanoStatus } from "./StrikeRoadviewSheet";
 
 /**
- * 9/4 총파업 «세종대로 안내지도» — 대오 4개를 «대등하게» 그린다(강조 하나가 없다. 코스콤 대오가 확정되면
- * 해당 pill 의 면 반전 하나로 끝난다 — `strikeMap.ts` 머리 주석).
- * 설계 `_workspace/02_designer_spec.md` §54 · 검증 `_workspace/01_verifier_factcheck.md` §53~§55.
+ * 9/4 총파업 «세종대로 안내지도» — **무대 4 · 코스콤지부 구역 1 · 임시화장실 2 · 역 2 = 9개**를 그린다.
+ * 설계 `_workspace/02_designer_spec.md` §54 · 검증 `_workspace/01_verifier_factcheck.md` **§61 · §62**.
+ *
+ * ★★★ **2026-09-01 — 주최측 신판(v2)으로 전면 재작성. 「대오 1~4」가 신판에 «개념 자체로» 없다.**
+ *   그래서 이 파일에서도 **밴드 그리기·대오 pill 4개·«강조 하나가 없다»는 시각 과제**가 함께 죽었다.
+ *   ⚠⚠ **이제 «강조»가 «있다»** — 코스콤지부 구역이 유일한 `go` 도형이다. 그것이 v2 지도의 답이다.
+ *   ⚠ **`git` 이력에서 밴드 코드를 되살리지 마라** — 근거는 `strikeMap.ts` 머리 주석.
+ *
+ * ⚠⚠ **아래 겹침·간격 실측값은 «전부 v1 좌표에서 잰 것»이다**(2.7px · 26.7px · 7px² · 8.6px …).
+ *   **v2 는 좌표·축척·항목 수가 전부 다르므로 그 수치가 «지금 참»이라고 가정하지 마라.**
+ *   수치를 지우지 않고 남기는 것은 **«무엇을 어떻게 쟀는가»가 재측정의 출발점**이기 때문이다.
+ *   **QA 는 v2 에서 다시 재라**(각 자리에 ⚠ 로 표시해 뒀다).
+ *
  * ⚠ 8/28 `RallyMap.tsx` 를 복사하지 마라 — 대체면·여백 상수가 전부 여의도 기하다(승계는 §54.2 패턴 8가지뿐).
  * ⚠⚠ 401 이면 네이버 객체가 «있는데 내부가 null» 이라 정리 호출이 throw 하고, unmount effect 의 예외를 React 가
  *   회복하지 못해 페이지가 통째로 죽는다 — 정리 호출은 전부 `safely()` 를 통과한다. 벗기지 마라(§54.10).
@@ -52,7 +65,13 @@ type MapStatus = "loading" | "ready" | "failed";
 const LOAD_TIMEOUT_MS = 8_000;
 const RESIZE_DEBOUNCE_MS = 150;
 
-/** 초기 뷰 여백(px) — 8/28 여의도 값을 쓰지 마라. `top` 만 48 인 것은 광화문역 pill 이 두 점 «위»에 서야 해서다(§54.16-14).
+/** 초기 뷰 여백(px) — 8/28 여의도 값을 쓰지 마라.
+ *  ⚠⚠ **`top: 48` 의 근거는 «죽었다». 값은 유지한다 — 근거를 다시 적는다.**
+ *    종전: *«광화문역 pill 이 그 점 «위»에 서야 한다»*(§54.16-14) → **M-63 ④로 광화문역이 `fitBounds`
+ *    밖이 되어** 초기 화면의 북쪽 극점은 **무대 1 원**이고, 그 pill 은 `left` 라 위 공간을 안 쓴다.
+ *  ★ **그래도 «건드리지 마라»가 판정이다**(M-66-6): 이 값을 줄이면 **§54.16-3 의 «서쪽 여유 27 px»가
+ *    처음부터 다시 계산돼야 한다** — `fitBounds` 결과 → 축척 → 서쪽 열 간격이 **한 줄로 매달려 있다.**
+ *    ⚠ **«근거가 죽었으니 줄이자»가 이 주석이 막는 바로 그것이다.**
  *  ⚠ `fitBounds` 에 줌 상한을 걸지 마라 — «사용자 조작 상한»(`maxZoom`)과 다른 계약이다(§54.16-1) */
 const FIT_PADDING = { top: 48, right: 24, bottom: 44, left: 24 } as const;
 
@@ -60,9 +79,9 @@ const FIT_PADDING = { top: 48, right: 24, bottom: 44, left: 24 } as const;
 const LABEL_MAX_WIDTH_RATIO = 0.7;
 const LABEL_MAX_WIDTH_VAR = "--strike-label-max";
 
-/* ★ 규칙: 마커 `zIndex` 는 «범례 행 순서»를 그대로 따른다(배열 순서 = 범례 13행 순서). 뒤 행이 위다(§54.17-2).
+/* ★ 규칙: 마커 `zIndex` 는 «범례 행 순서»를 그대로 따른다(배열 순서 = 범례 **9행** 순서). 뒤 행이 위다(§54.17-2).
    ⚠⚠ 범례 행 순서를 바꾸면 z 순서가 «함께» 바뀐다 — 둘은 한 쌍이다. `id` 로 z 를 덮어쓰는 특례를 만들지 마라.
-   ⚠ 도형(원 20 · 밴드 25)은 이 규칙 «밖»이다(§54.5-2) */
+   ⚠ 도형(원 20 · 사각형 25)은 이 규칙 «밖»이다(§54.5-2) */
 const MARKER_Z_BASE = 100;
 /** 이름 pill — 도형·배지보다 항상 위. 안에서는 다시 «범례 행 순서»를 따른다 */
 const LABEL_Z_BASE = 1_000;
@@ -70,34 +89,37 @@ const LABEL_Z_BASE = 1_000;
 const SPOT_Z = 900;
 
 /* 색 — §54.7 대비 검증표의 값. **신규 색 0 · 신규 토큰 0** */
-const GO = "#093389"; // 파랑 11.37 — 조합원이 갈 곳(대오·역)
+const GO = "#093389"; // 파랑 11.37 — 조합원이 갈 곳(코스콤지부 구역·역)
 const REFERENCE = "#4b5563"; // 회색 7.56 — 참고 지물(무대·화장실)
 const INK = "#1a1a1a"; // 17.40 — **의미를 지지 않는 중립색**
 const CASING = "#ffffff"; // 흰 casing — 타일 색을 예측하지 않고 대비를 만드는 아래층
 
 const toneColor = (tone: StrikeMapTone): string => (tone === "go" ? GO : REFERENCE);
 
-/* 9/4 도형은 «전부» `estimated` 라 선종은 단일 `shortdot`, 구분은 색·형태만 진다(§53-6). 원(0.10)이 띠(0.14)보다
-   옅은 것은 «이 안 어딘가»와 «여기 모인다»의 차이다. ⚠ `fillOpacity` 0.20 이상 금지(8/28 `verified` 와 같아져
-   확신도 위계가 무너진다) · 회색 금지(M-2) · 테두리 제거 금지(면만으로는 WCAG 1.4.11 3:1 을 못 만든다 · M-15) */
+/* 9/4 도형은 «전부» `estimated` 라 선종은 단일 `shortdot`, 구분은 색·형태만 진다(§53-6). 원(0.10)이 사각형(0.14)보다
+   옅은 것은 **«이 안 어딘가»와 «여기 모인다»의 차이**다 — v2 에서도 그대로 성립한다(무대 = 라벨 상자 중심이라는
+   «우리 가정» · 코스콤지부 구역 = 원본이 «직접 그린» 도형). ⚠ `fillOpacity` 0.20 이상 금지(8/28 `verified` 와
+   같아져 확신도 위계가 무너진다) · 회색 금지(M-2) · 테두리 제거 금지(면만으로는 WCAG 1.4.11 3:1 을 못 만든다 · M-15) */
 const SHAPE_STYLE = {
   strokeStyle: "shortdot",
   strokeWeight: 3,
   casingWeight: 7,
-  bandFillOpacity: 0.14,
+  rectFillOpacity: 0.14,
   circleFillOpacity: 0.1,
 } as const;
 
-/* ⚠ 원(3,3)과 밴드(1,6)의 점선 «밀도» 차이는 네이버가 두 도형을 다른 경로로 그리는 «렌더 산물»이고 «확신도 차이가
-   아니다»(코드는 둘 다 `SHAPE_STYLE` 하나). ⚠⚠ 맞추려고 커스텀 대시 배열을 쓰지 마라 — 9/4 는 «문서 없는 API 0개»가 판정이다(§54.17-4) */
+/* ⚠ 원(3,3)과 폴리곤(1,6)의 점선 «밀도» 차이는 네이버가 두 도형을 다른 경로로 그리는 «렌더 산물»이고 «확신도 차이가
+   아니다»(코드는 둘 다 `SHAPE_STYLE` 하나). ⚠⚠ 맞추려고 커스텀 대시 배열을 쓰지 마라 — 9/4 는 «문서 없는 API 0개»가 판정이다(§54.17-4).
+   ★ **사각형(25)이 원(20) «위»인 것이 v2 에서 뜻을 갖는다** — 코스콤지부 구역 북단(37.568400)과 무대 2 원 남단
+     (37.568411)이 **1.2 m 밖에 안 떨어져** 흰 casing 7px 끼리 반드시 겹친다. 그때 **위에 오는 것이 코스콤 구역**
+     이어야 한다(«어디로 가는가»가 «무엇이 있는가»를 덮는 것이 옳다). ⚠ 이 순서를 뒤집지 마라 */
 function featureZIndex(feature: StrikeMapFeature, index: number): number {
   switch (feature.kind) {
     case "circle":
       return 20;
-    case "band":
+    case "rect":
       return 25;
     case "dot":
-    case "dots":
       return MARKER_Z_BASE + index;
   }
 }
@@ -149,16 +171,20 @@ function placeStyle(placement: StrikeLabelPlacement, gap: number): string {
 /**
  * 누를 수 있는 마커의 히트 정보 — `null` 이면 그 표식은 **순수 장식**이다.
  * ★ 규칙(§54.18-1): **`roadview` 인 항목만 누를 수 있고, 히트는 «pill 이 있으면 pill · 없으면 기호 배지»** 다.
- *   **점(dot)은 언제나 장식**이다. ⚠⚠ **광화문역 두 점에 «각각» 히트를 주지 마라** — «한 항목» 계약
- *   (구현 조건 15)이 화면에서 깨지고 **같은 이름 둘**이 되어 출구 번호를 안 쓰기로 한 M-13 이 무너진다.
- *   **pill 하나 = 팝업 하나**여야 그 위험이 구조적으로 0 이다.
+ *   **점(dot)은 언제나 장식**이다. **pill 하나 = 팝업 하나.**
+ * ★★ 이 규칙이 v2 에서 **코스콤지부 구역**을 그대로 받는다 — 사각형에는 배지가 없고 pill 이 있으므로
+ *   **pill 이 히트**다. ⚠ **사각형 «면»을 클릭 대상으로 만들지 마라**(`clickable: false` 유지) —
+ *   36×40 m 면이 히트가 되면 **거리뷰 모드에서 «길을 눌러 이동»을 통째로 삼킨다.**
+ * ⚠⚠ **종전의 «광화문역 두 점에 각각 히트를 주지 마라»(구현 조건 15)는 «지금은 발동하지 않는다»** —
+ *   v2 광화문역이 **점 하나**다. **그러나 금지 자체는 살아 있다**: 역 좌표가 «출구 2점»으로 뒤집히면
+ *   그 순간 다시 필요하다(`strikeMap.ts` `GWANGHWAMUN_STATION` 미해결 항목). **지우지 마라.**
  */
 interface StrikeHit {
   id: string;
   /** 접근성 이름 — **범례 행 문면 «전문»**(`feature.legend`)이다(M-34).
-   *  ⚠⚠ **`featureShortName`(= «— » 앞부분)으로 줄이지 마라.** 범례 9·10행이 **둘 다 `간이화장실`** 이라
+   *  ⚠⚠ **`featureShortName`(= «— » 앞부분)으로 줄이지 마라.** 범례 **6·7행이 둘 다 `임시화장실`** 이라
    *  짧은 이름을 쓰면 **버튼 두 개의 접근성 이름이 완전히 같아진다** — 스크린리더 사용자가 **어느 것인지 고를 수
-   *  없다.** ★ **«구별 불가»는 «못 쓰는 것»이고 «반복»은 «불편»이다 — 무게가 다르다.**
+   *  없다.** ★ v1 에서는 이것이 9·10행(`간이화장실`)이었다 — **낱말이 바뀌어도 위험은 그대로 남았다.** ★ **«구별 불가»는 «못 쓰는 것»이고 «반복»은 «불편»이다 — 무게가 다르다.**
    *  ★ **8/28 은 짧은 이름을 쓸 수 있었다**(`RallyMap.tsx` — *«길게 쓰면 그룹 순회 때 범례 전문이 6번 반복»*).
    *  **`{번호} {이름}` 의 «번호»가 구별자였기 때문이다.** ⚠ **9/4 에는 번호가 0 이다**(§54.16-12) —
    *  **8/28 의 처방을 근거만 보고 옮기지 마라. 그 처방이 기대던 구별자가 여기엔 없다.**
@@ -184,8 +210,20 @@ interface StrikeHitEntry {
 const HIT_REST_SHADOW_VAR = "--strike-hit-shadow";
 
 /**
- * ⚠⚠ **터치 대상 24×24 는 «지도 마커 한정» 예외다**(리더 판정 27 · §54.18-1 (1)). 근거를 **값으로** 남긴다:
- * 서쪽 열 마커 **최소 중심 간격 26.7px**(메인무대 pill ↔ 간이화장실 배지) · pill 세로 **22 → 24**(padding 2 → 3) ·
+ * ⚠⚠ **터치 대상 24×24 는 «지도 마커 한정» 예외다**(리더 판정 27 · §54.18-1 (1)). 근거를 **값으로** 남긴다.
+ * ⚠⚠⚠ **아래 수치는 «v1 좌표에서» 잰 것이다 — v2 에서 다시 재라.** 지우지 않는 이유는
+ *   **«어디를 어떻게 쟀는가»가 재측정의 출발점**이어서다.
+ * ★★ **v2 브라우저 실측(2026-09-01 · 360×640 · 스크롤바 0 · dpr 1 · 루트 12px · 상자 336×420 · z16)**:
+ *   같은 자리(서쪽 열)가 **여전히 임계**다 — **`무대 2` pill ↔ 임시화장실(북) 배지 상자 2차원 간격 2.0 px**
+ *   (겹침 없음). 다음 세 쌍 **7.0 / 10.0 / 20.9 px.** v1 의 «여유 2.7 px»와 **같은 계열**이다.
+ * ★ **히트 ↔ 히트 최소는 68.0 px** — **24 px 기준 여유 44 px. 통과.**
+ *   ⚠ **위 두 줄을 섞지 마라**: 2.0 px 쪽은 **히트 ↔ «장식»** 이라 **WCAG 2.5.8 대상 쌍이 아니다**(시각 문제).
+ * ⚠⚠ **개발자가 한 번 «24 px 미달»이라는 «없는 결함»을 보고했다가 잡았다** — 원인 둘:
+ *   ① **한 축 성분으로 2차원 간격을 판정**했다 ② **«대상이 무엇인가»를 먼저 안 갈랐다**(장식을 대상으로 셌다).
+ *   ★ **회수된 값 `13.2 px` 를 인용하지 마라**(`strikeMap.ts` `GWANGHWAMUN_STATION` 의 ⛔ 절).
+ * ⚠ **`[data-strike-hit]` 로 세면 «5개»가 나온다 — «무대 pill 이 없다»로 읽지 마라.**
+ *   **무대 pill 4개는 실제로 렌더된다**(실측 45~47 × 24 px · `hit=false` 장식). 그 쿼리는 **히트만** 센다.
+ * (v1 실측) 서쪽 열 마커 **최소 중심 간격 26.7px**(메인무대 pill ↔ 간이화장실 배지) · pill 세로 **22 → 24**(padding 2 → 3) ·
  * 픽토그램 배지 **24** · **잔여 여유 2.7px** → **WCAG 2.5.8 AA 충족 / 2.5.5 AAA(44×44)는 «못 만든다»**.
  * 44 를 주면 **인접 히트가 서로를 삼켜 «누를 수 없는 지물»이 생긴다** — 44 를 지키면 접근성이 **더** 나빠진다.
  * **좌표를 옮겨 간격을 벌리는 것은 금지**다(M-19 — `verified` 가 `estimated` 가 된다).
@@ -195,6 +233,13 @@ const HIT_MIN_PX = 24;
 
 /*
  * ★★ **지도 위 겹침은 «화면 고정»인지 «지리 고정»인지 먼저 가른다** (QA F-D 판정 · M-44).
+ *
+ * ⚠⚠⚠ **아래 «판정»은 v1 기하(대오 밴드 4 · 무대 4 · 화장실 3 · 역 2 · 13행)에서 나온 것이다.**
+ *   **v2 는 항목이 9개이고 좌표·축척이 전부 다르다 — 결론(«고칠 대상이 아니다»)을 그대로 옮기지 마라.**
+ *   ★ 그래도 **«방법»은 그대로 유효하다**: ① 어느 배율에서 나타나고 사라지는지 산출 ② «못 누르는 지물»이
+ *   생기는지로 판정 ③ 정말 없애야 하면 한쪽의 좌표계를 바꾼다. **QA 는 이 방법으로 v2 를 다시 재라.**
+ *   ⚠ 특히 **4번(«여유 0 인 자리»)** 은 v1 에서 `cityhall` pill ↔ 대오 4 밴드 관계에서 나온 것이고
+ *   **그 밴드가 없어졌다** — 그 자리는 **다시 재기 전까지 «있다»고도 «없다»고도 말하지 마라.**
  *
  * pill·배지는 **화면 고정 px**(배율이 바뀌어도 크기가 그대로)이고 그것이 매달린 지점은 **지리 고정**이라
  * **배율마다 둘의 관계가 바뀐다.** 둘을 **한 계면 상수 하나로 풀려고 하면 «못 푼다» —
@@ -220,8 +265,8 @@ const HIT_MIN_PX = 24;
  * ⚠ **`FIT_PADDING.right` 를 키워 «고치지» 마라** — 위 4번(여유 0 인 자리)이 그대로 걸린다.
  */
 
-/** 지도 위 이름 pill(10개) — 글자는 «불투명 흰 pill 위»에만 올린다(타일 위에 직접 얹으면 대비를 계산할 수 없다).
- *  뜻은 범례 13행이 진다(§54.12). ⚠ `width:max-content` 를 빼지 마라 — 앵커가 «0폭 컨테이닝 블록»이라
+/** 지도 위 이름 pill(**7개** — 무대 4 · 코스콤지부 구역 1 · 역 2) — 글자는 «불투명 흰 pill 위»에만 올린다
+ *  (타일 위에 직접 얹으면 대비를 계산할 수 없다). 뜻은 **범례 9행**이 진다(§54.12). ⚠ `width:max-content` 를 빼지 마라 — 앵커가 «0폭 컨테이닝 블록»이라
  *  라벨이 min-content 로 접힌다. ⚠⚠ 폰트를 `rem` 으로 바꾸지 마라 — pill 은 «좌표에 묶인 위치 요소»라
  *  확대를 따르면 가리키는 대상을 덮는다(캔버스 «밖»은 전부 `rem` · §54.6-4 · 디자인 §0.8.2).
  *  ★ `hit` 이 있으면 pill 이 **버튼**이 된다. 그때만 바깥 `aria-hidden` 을 **벗긴다** — 포커스 가능한 요소를
@@ -238,7 +283,9 @@ function pillHtml(options: {
   const { text, placement, gap, color, hit } = options;
   /* `min-height` 로 24 를 **보증**한다 — padding 만으로는 글꼴 메트릭에 따라 값이 흔들린다(위 `HIT_MIN_PX`).
      ⚠ 누를 수 있는 pill 만 키우지 마라 — pill 이 두 크기가 되면 «크기»가 뜻을 지게 되는데 어포던스 축은
-     문장 하나가 진다(§54.18-1 (3)). 10개 전부 같은 상자다 */
+     문장 하나가 진다(§54.18-1 (3)). **7개 전부 같은 상자다** — 코스콤지부 구역 pill 도 무대 pill 과 같은 상자다.
+     ⚠⚠ **코스콤 pill 만 키우거나 색을 반전시키지 마라** — «강조»는 `tone: "go"`(파랑)와 «유일한 채워진 사각형»
+     이라는 **형태**가 이미 진다. 크기까지 얹으면 어포던스 축과 강조 축이 섞인다 */
   const box =
     `position:absolute;${placeStyle(placement, gap)}box-sizing:border-box;` +
     `background:${CASING};border:1px solid ${color};border-radius:9999px;padding:3px 8px;` +
@@ -265,14 +312,19 @@ function pillHtml(options: {
   ].join("");
 }
 
-/** 역 점 배지 — 지름 12px 채움 + 흰 링 3px + 흰 중심점(§54.16-11). 흰 링은 시청역 점이 대오 4 밴드 «안»에 들어갈 때
- *  «얹힌 층»으로 읽히게 하고, 흰 중심점(`◉`)은 «역 입구»를 말한다. ⚠ 좌표를 옮겨 겹침을 풀지 마라 — `verified` 가
- *  `estimated` 가 된다(M-19). ⚠ 종전의 «점 지름 12 → 10px» 처방은 죽었다(대체 처방 전부 기각) — 남는 가림은
- *  «초기 뷰 한 배율의 성질»이라 «확대»에 위임하며, 그래서 확대 버튼을 조건부로 숨기면 안 된다(§54.17-3) */
+/** 역 점 배지 — 지름 12px 채움 + 흰 링 3px + 흰 중심점(§54.16-11). 흰 중심점(`◉`)은 «역 입구»를 말한다.
+ *  ⚠⚠ **흰 링의 종전 근거(«시청역 점이 대오 4 밴드 «안»에 들어가므로 «얹힌 층»으로 읽히게 한다»)는 죽었다** —
+ *    밴드가 없어졌다. **그래도 링은 유지한다. 근거가 «바뀐» 것이다**: 타일 색을 예측할 수 없는 곳에 12px 점을
+ *    얹으면 **어두운 타일 위에서 `#093389` 점이 사라진다.** 링이 그 아래층 대비를 만든다(도형 casing 과 같은 계보).
+ *    ★ 근거를 다시 적는 이유는 하나다 — **다음 사람이 «밴드가 없으니 링도 필요 없다»로 지우지 않게** 하려는 것이다.
+ *  ⚠ 좌표를 옮겨 겹침을 풀지 마라 — `verified` 가 `estimated` 가 된다(M-19). ⚠ 종전의 «점 지름 12 → 10px» 처방은
+ *  죽었다(대체 처방 전부 기각) — 남는 가림은 «초기 뷰 한 배율의 성질»이라 «확대»에 위임하며, 그래서 확대 버튼을
+ *  조건부로 숨기면 안 된다(§54.17-3) */
 function stationDotHtml(color: string): string {
   return [
     /* ★ **점은 언제나 장식이다**(§54.18-1) — `pointer-events:none` · `aria-hidden`. 역의 히트는 pill 이 진다.
-       ⚠ 광화문역은 이 함수가 **두 번** 그려진다. 여기에 히트를 주면 «같은 이름 둘»이 된다 */
+       ⚠ 역 좌표가 «출구 2점»으로 뒤집히면 이 함수가 **한 항목에 두 번** 그려진다. 그때도 히트를 주지 마라 —
+         «같은 이름 둘»이 된다(위 `StrikeHit` 주석) */
     '<div aria-hidden="true" style="pointer-events:none;position:relative;width:0;height:0;">',
     "<span style=\"position:absolute;left:0;top:0;transform:translate(-50%,-50%);",
     `width:12px;height:12px;border-radius:9999px;background:${color};`,
@@ -286,14 +338,17 @@ function stationDotHtml(color: string): string {
 /** 화장실 배지 — 픽토그램만. 이름 pill 을 붙이지 않는다(§54.5-3 · 범례 3행이 남으므로 은폐가 아니다).
  *  테두리 `dashed` 는 «확신도»다 — 역 배지의 `solid` 와 갈리는 축은 «선종»이지 색이 아니다.
  *  ★ `hit` 이 있으면 **픽토그램이 «누를 것»이 된다**(§54.18-1 «pill 이 없으면 기호») — pill 은 여전히 안 만든다
- *  (M-28 · 겹침 재측정 회피 · pill 10개 상한).
+ *  (M-28 · 겹침 재측정 회피 · pill 상한). ⚠ **화장실 2곳에 pill 을 달지 마라** — 둘 다 이름이 `임시화장실` 이라
+ *  **화면에 같은 pill 이 둘** 생기고, 그것은 «두 곳이 있다»가 아니라 «어느 쪽이든 같다»로 읽힌다.
  *  ★ 보이는 배지는 20px + 흰 링 2px = 24px 이고, **히트 상자를 24px 로 «명시»한다** — 링은 `box-shadow` 라
  *  요소 크기에 안 들어가서 그대로 두면 히트가 20px 이 된다(`HIT_MIN_PX` 근거표) */
-function toiletBadgeHtml(hit: StrikeHit | null): string {
+function toiletBadgeHtml(hit: StrikeHit | null, stroke: "solid" | "dashed"): string {
   const badge = [
     '<span aria-hidden="true" style="',
     "width:20px;height:20px;box-sizing:border-box;border-radius:9999px;",
-    `background:${CASING};border:1.5px dashed ${REFERENCE};`,
+    /* ★ 선종은 **`CONFIDENCE_VISUAL` 이 정한다**(M-70) — 여기 `dashed` 를 «박아» 두면
+       `verified` 화장실이 생겨도 조용히 점선으로 그려진다. **하드코딩으로 되돌리지 마라** */
+    `background:${CASING};border:1.5px ${stroke} ${REFERENCE};`,
     `box-shadow:0 0 0 2px ${CASING},0 1px 3px rgb(0 0 0 / .35);`,
     'display:flex;align-items:center;justify-content:center;">',
     symbolSvg("toilet", 13),
@@ -333,14 +388,18 @@ function drawFeature(
   const hits: StrikeHitEntry[] = [];
 
   /* ★ 히트 규칙 한 줄(§54.18-1) — **«pill 이 있으면 pill, 없으면 기호»**. `roadview` 가 아니면 둘 다 `null` 이다.
-     ⚠ 대오 4 · 무대 4 는 pill 이 있어도 `roadview` 가 없어 **안 눌린다** */
+     ⚠⚠ **무대 4개는 pill 이 있어도 `roadview` 가 없어 «안 눌린다»** — 원본에 무대 도형이 없어 그 좌표에서
+       거리뷰를 열면 **빈 도로**를 가리킨다(검증 §62-5). 그리고 `MAP_AFFORDANCE_NOTE` 가 그 사실을 «주장»한다 */
   const hit: StrikeHit | null =
     feature.roadview === true ? { id: feature.id, name: feature.legend } : null;
   const labelHit = feature.label !== null ? hit : null;
   const badgeHit = feature.label === null ? hit : null;
 
-  if (feature.kind === "band") {
-    const path = feature.polygon.map(([lat, lng]) => new maps.LatLng(lat, lng));
+  /* ★ 사각형 = **코스콤지부 구역 하나뿐**이다. 꼭짓점은 **중심 + 치수에서 파생**한다(`rectCorners`) —
+     ⚠ **여기서 좌표를 손으로 적지 마라.** 중심을 옮겨야 할 일이 생기면 `strikeMap.ts` 의 `KOSCOM_AREA` 한 곳만
+     고치면 도형·범례·거리뷰 시작점이 함께 따라온다 */
+  if (feature.kind === "rect") {
+    const path = rectCorners(feature).map((c) => new maps.LatLng(c.lat, c.lng));
     overlays.push(
       new maps.Polygon({
         map,
@@ -361,7 +420,9 @@ function drawFeature(
         strokeOpacity: 1,
         strokeStyle: SHAPE_STYLE.strokeStyle,
         fillColor: color,
-        fillOpacity: SHAPE_STYLE.bandFillOpacity,
+        fillOpacity: SHAPE_STYLE.rectFillOpacity,
+        /* ⚠⚠ **`clickable: true` 로 바꾸지 마라** — 36×40 m 면이 히트가 되면 거리뷰 모드에서
+           «길을 눌러 이동»을 통째로 삼킨다. 이 항목의 히트는 **pill** 이 진다(위 `StrikeHit` 주석) */
         clickable: false,
         zIndex: z,
       }),
@@ -399,10 +460,12 @@ function drawFeature(
     );
   }
 
-  /* 점 배지 — `dots`(광화문역)는 «같은 기호를 두 번» 그린다(§54.16-10 · 범례 1행 · pill 1개 · 점 2개).
-     ⚠ 두 점 사이에 선·도형을 긋지 마라 — «역이 도로를 가로지른다»가 된다 */
+  /* 점 배지 — **`dot` 항목만** 배지를 갖는다(화장실 2 · 역 2). 원·사각형은 **도형이 자기를 말한다.**
+     ⚠ **사각형 중심에 점을 찍지 마라** — 36×40 m 구역인데 도트는 «한 지점»을 주장한다 */
   const content =
-    feature.symbol === "toilet" ? toiletBadgeHtml(badgeHit) : stationDotHtml(color);
+    feature.symbol === "toilet"
+      ? toiletBadgeHtml(badgeHit, CONFIDENCE_VISUAL[feature.confidence].stroke)
+      : stationDotHtml(color);
   for (const point of featurePoints(feature)) {
     const marker = new maps.Marker({
       map,
@@ -444,8 +507,8 @@ function drawFeature(
 
 /** 파노라마 안 위치 표식(와드)의 꼬리 길이(px).
  *  ★ **1단이면 된다** — 8/28 은 여러 지점을 «동시에» 띄워 3단(8·38·68)이 필요했지만 9/4 는 «연 지점 하나»뿐이라
- *  겹칠 상대가 없다(§54.18-4 (3)). ⚠ 단을 늘려 «다른 지점도 띄우자»로 가지 마라 — 대상 5개가 세종대로를 따라
- *  남북으로 늘어서 있어 로드뷰에서 **지평선 한 줄에 겹친다**(§58-6) */
+ *  겹칠 상대가 없다(§54.18-4 (3)). ⚠ 단을 늘려 «다른 지점도 띄우자»로 가지 마라 — 대상 5개(**코스콤지부 구역 ·
+ *  임시화장실 2 · 역 2**)가 세종대로를 따라 남북으로 늘어서 있어 로드뷰에서 **지평선 한 줄에 겹친다**(§58-6) */
 const WARD_STEM_PX = 8;
 /** 라벨(1000+)·거리뷰 표식(900)과 겨루지 않는다 — 와드는 «파노라마 안»이라 지도 z 축과 다른 세계다 */
 const WARD_Z = 300;
@@ -648,8 +711,8 @@ const POPUP_BUTTON_CLASS =
  *   그래야 팝업이 열린 채로도 **드래그할 절반이 언제나 남는다.**
  *
  * 문면(§58-5 확정) — **`legend` 파생 · 신규 문자열 0**:
- * ⚠ **제목 줄을 만들지 마라** — 9/4 는 번호가 0 이고(§54.16-12) **화장실 3은 `label: null`** 이다.
- *   `label` 을 채우면 **지도에 pill 이 생긴다**(pill 10개 상한 · §54.5-3).
+ * ⚠ **제목 줄을 만들지 마라** — 9/4 는 번호가 0 이고(§54.16-12) **화장실 2는 `label: null`** 이다.
+ *   `label` 을 채우면 **지도에 pill 이 생긴다**(§54.5-3 · `toiletBadgeHtml` 주석).
  * ⚠ **`popupNote`(거리 rows)를 가져오지 마라** — 8/28 은 «실제로 «잰» 값»만 쓴다는 계약이고
  *   **9/4 는 잰 거리가 0** 이며 거리 문구는 §53-15 가 금지한다.
  * ⚠ **접근성 이름을 `aria-label` 로 만들지 마라** — `legend` 문면이 진다(`union-webapp-dev` §8).
@@ -686,8 +749,10 @@ function StrikeMapPopup({
         {feature.legend}
       </p>
       {/* ★ **`confidence` 축으로만 분기한다** — `id === "toilet-north"` 류 분기를 만들면 **역에 붙을 길이 생긴다.**
-          `verified` 좌표를 「근사」라 말하는 것은 거짓이다(§58-3). ⚠ `ink-muted` 로 흐리지 마라 */}
-      {feature.confidence === "estimated" ? (
+          `verified` 좌표를 「근사」라 말하는 것은 거짓이다(§58-3). ⚠ `ink-muted` 로 흐리지 마라.
+          ⚠⚠ **`=== "estimated"` 로 되돌리지 마라**(M-70) — 등급이 «셋»이라 그 비교는 **우연한 2분기**다.
+          `CONFIDENCE_VISUAL` 은 3항을 전부 명시하므로 **등급이 늘면 타입이 빌드를 죽인다** */}
+      {CONFIDENCE_VISUAL[feature.confidence].approxNote ? (
         <p className="mt-1.5 break-keep break-words text-caption leading-[1.55] text-ink">
           {APPROX_NOTE}
         </p>
@@ -723,10 +788,15 @@ function StrikeMapFallback({ status }: { status: Exclude<MapStatus, "ready"> }) 
       {/* ★ **`failed` 에서만** 둘째 줄이다 — 로딩은 곧 뜨므로 목록으로 보낼 이유가 없다.
           ⚠⚠ **「범례」라는 낱말을 쓰지 마라** — **화면에 그런 제목이 없다**(`figcaption` 목록에 헤딩이 0).
           조합원이 무엇을 찾아야 할지 모른다. **「아래 목록」이 «실제로 보이는 것»을 가리킨다.**
-          ⚠ 이 줄이 «지도가 죽어도 위치 정보는 남는다»의 유일한 안내다. 지우지 마라 */}
+          ⚠ 이 줄이 «지도가 죽어도 위치 정보는 남는다»의 유일한 안내다. 지우지 마라.
+          ★★★ **2026-09-01 §63 판정 2 확정본.** v1 문면은 `무대·대오 위치는…` 이었는데 「대오」가 죽었고,
+            개발자 잠정안(`무대·코스콤지부 구역 위치는…`)은 **화장실 2 · 역 2 가 빠져** 반려됐다 —
+            ★ **나열하면 반드시 하나가 빠진다.** `집회 장소` 가 **9개를 하나도 빠뜨리지 않고** 덮는다.
+            ⚠ **「코스콤지부 구역을 포함한…」으로 늘리지 마라** — **실패 화면의 목적은 «아래로 가라» 하나**다.
+            ⚠ **「범례」를 쓰지 마라**(위) · **`failed` 조건을 풀지 마라**(로딩은 곧 뜬다) */}
       {status === "failed" ? (
         <p className="mt-1 break-keep break-words text-caption text-ink">
-          무대·대오 위치는 아래 목록에 있습니다.
+          집회 장소는 아래 목록에 있습니다.
         </p>
       ) : null}
     </div>
@@ -742,14 +812,20 @@ export function StrikeMap({ clientId }: { clientId: string }) {
 
   const [streetMode, setStreetMode] = useState(false);
   /** 열린 거리뷰의 지점(`null` 이면 시트가 없다). ★ 초기 파노라마를 «우리가» 고르지 않는다 — 원문이 두 역을 대등
-   *  하게 말해 하나를 고르면 «그쪽으로 오라»가 된다(§54.16-6 (2)). ⚠ `estimated` 좌표를 시작점으로 쓰지 마라 */
+   *  하게 말해 하나를 고르면 «그쪽으로 오라»가 된다(§54.16-6 (2)).
+   *  ⚠⚠ **종전의 «`estimated` 좌표를 시작점으로 쓰지 마라»는 «초기 시점» 이야기이고, «지물에서 여는 것»과 다르다.**
+   *    v2 는 `roadview` 5개 중 **3개가 `estimated`**(코스콤지부 구역 · 임시화장실 2)라 조합원이 누르면
+   *    그 근사 좌표에서 열린다 — **그것이 §58-4(«누른 그 점»)의 계약**이고, 시트가 「근사」 한 줄을 함께 진다.
+   *    ⚠ 두 문장을 한 덩어리로 읽어 «근사 좌표에서는 거리뷰를 열지 말자»로 뒤집지 마라 */
   const [streetAt, setStreetAt] = useState<{ lat: number; lng: number } | null>(null);
   /** 거리뷰를 **«지물에서» 열었을 때만** 채운다 — 파노라마 와드와 시트 「근사」 줄이 여기서 나온다.
    *  ⚠ 거리뷰 모드에서 «길을 눌러» 연 경우는 `null` 이다(가리킬 지물이 없다 — 와드도 근사 줄도 없다) */
   const [streetSpot, setStreetSpot] = useState<{
     at: StrikeLatLng;
     name: string;
-    approximate: boolean;
+    /** 시트 「근사」 한 줄 · 와드 선종 — **둘 다 `CONFIDENCE_VISUAL` 에서만 나온다**(M-70).
+     *  ⚠ `confidence === "estimated"` 로 다시 계산하지 마라 — 등급이 셋이라 «우연한 2분기»가 된다 */
+    visual: StrikeConfidenceVisual;
     tone: StrikeMapTone;
     mark: string;
   } | null>(null);
@@ -758,8 +834,12 @@ export function StrikeMap({ clientId }: { clientId: string }) {
   const [spotAt, setSpotAt] = useState<{ lat: number; lng: number } | null>(null);
   const [spotPan, setSpotPan] = useState(0);
   const [spotFov, setSpotFov] = useState(SPOT_CONE_FALLBACK_FOV);
-  /** 열린 팝업 — **한 번에 하나**(§54.18-3 (3)). ★ **«누른 그 점»을 함께 들고 있는다**(§58-4):
-   *  `feature` 만 두면 광화문역에서 **어느 점인지 잃는다**. 기본은 **전부 닫힘**(자동 열림 금지) */
+  /** 열린 팝업 — **한 번에 하나**(§54.18-3 (3)). ★ **«누른 그 점»을 함께 들고 있는다**(§58-4).
+   *  ★ v2 에서 이 필드가 «일하는» 곳은 **코스콤지부 구역**이다 — 사각형에는 점이 없어 `featureRoadviewPoint`
+   *    가 **중심을 계산해 넘기고**, 그 값이 여기 담긴다(도형·범례로는 나가지 않는다).
+   *  ⚠ **`feature` 만 두는 구조로 «단순화»하지 마라** — 역 좌표가 «출구 2점»으로 뒤집히면 그 순간
+   *    «어느 점을 눌렀는가»를 다시 잃는다(`strikeMap.ts` `GWANGHWAMUN_STATION` 미해결 항목).
+   *  기본은 **전부 닫힘**(자동 열림 금지) */
   const [popup, setPopup] = useState<{
     feature: StrikeMapFeature;
     at: StrikeLatLng;
@@ -822,7 +902,7 @@ export function StrikeMap({ clientId }: { clientId: string }) {
      * 뒤집은 결과다(근거가 틀려서가 아니라 사용자가 위험을 고지받고 택했다). 딸려 온 제약:
      * `touch-action: none` 이라 지도 «위»에서 페이지가 안 내려간다 → 완화는 지도 «위» 안내 문구
      * (`MAP_GESTURE_NOTE`)가 진다. 둘은 한 쌍이다.
-     * ⚠ 휠 줌·키보드 이동은 열지 않는다(페이지 스크롤을 빼앗는다 · 키보드 경로는 범례 13행) ·
+     * ⚠ 휠 줌·키보드 이동은 열지 않는다(페이지 스크롤을 빼앗는다 · 키보드 경로는 범례 9행) ·
      *   `logoControl`·`mapDataControl` 을 끄지 마라(네이버 이용약관상 출처·로고 표기 필수).
      */
     let map: NaverMap;
@@ -919,7 +999,7 @@ export function StrikeMap({ clientId }: { clientId: string }) {
   }, []);
 
   /** 팝업 열기/닫기 — **한 번에 하나만.** 같은 항목을 다시 누르면 닫힌다(토글).
-   *  ⚠ `roadview` 가 아닌 항목이 들어오면 **아무 일도 하지 않는다** — 대오·무대에 팝업이 열리는 길을 막는다 */
+   *  ⚠ `roadview` 가 아닌 항목이 들어오면 **아무 일도 하지 않는다** — **무대 4개**에 팝업이 열리는 길을 막는다 */
   const selectFeature = useCallback(
     (id: string | null) => {
       const next =
@@ -938,7 +1018,7 @@ export function StrikeMap({ clientId }: { clientId: string }) {
     [popupSideOf],
   );
 
-  /** 시트를 닫는다. **거리뷰 모드도 함께 끈다** — 길만 남으면 눌러도 열 것이 없다 */
+  /** 시트를 닫는다. **거리뷰 모드도 함께 끈다** — 남으면 «팝업을 열려던 다음 탭»이 거리뷰를 연다(1차 목적은 위치 안내 · 후속 #32) */
   const closeStreetView = useCallback(() => {
     setStreetAt(null);
     setStreetSpot(null);
@@ -969,7 +1049,9 @@ export function StrikeMap({ clientId }: { clientId: string }) {
   }, [selectFeature]);
 
   /** 팝업의 「거리뷰 보기」 — **«누른 그 점»에서 연다**(§58-4).
-   *  ⚠⚠ **광화문역 두 점의 중점에서 열지 마라** — 도로 노면 한가운데다(판정은 `featureRoadviewPoint`).
+   *  ★ 코스콤지부 구역은 **사각형 «중심»** 에서 열린다 — 36×40 m 라 어느 꼭짓점을 골라도 «그 모서리가
+   *    특별하다»는 주장이 되고, 중심이 유일하게 **아무것도 더 주장하지 않는 점**이다(`featureRoadviewPoint`).
+   *  ⚠⚠ **점이 «둘»인 항목이 생기면 중점에서 열지 마라** — 도로 노면 한가운데다(판정은 `featureRoadviewPoint`).
    *  ⚠⚠ **팝업을 함께 닫는다**(§25.7) — 안 닫으면 지도가 **두 겹**으로 덮인다. 그리고 「근사」 한 줄이
    *    팝업에서 사라지므로 **시트가 그 문장을 이어받아야 한다**(§58-2 — 두 자리가 한 쌍이다) */
   const openRoadviewHere = useCallback(() => {
@@ -981,7 +1063,7 @@ export function StrikeMap({ clientId }: { clientId: string }) {
     setStreetSpot({
       at: open.at,
       name: featureShortName(open.feature),
-      approximate: open.feature.confidence === "estimated",
+      visual: CONFIDENCE_VISUAL[open.feature.confidence],
       tone: open.feature.tone,
       mark:
         open.feature.symbol === undefined
@@ -1140,6 +1222,56 @@ export function StrikeMap({ clientId }: { clientId: string }) {
     return () => node.removeEventListener("keydown", onKeyDown);
   }, [selectFeature, status]);
 
+  /*
+   * ★★★ **히트가 «포커스»를 받았는데 그 표식이 상자 밖이면 지도를 그리로 옮긴다 — WCAG 2.4.7(AA).**
+   *
+   * ⚠⚠ **M-63 ④가 «만든» 결함이다**(리더 실측 · M-66-5). 광화문역을 `fitBounds` 에서 빼자
+   *   그 히트 rect 가 **상자 top 보다 32 px «위»** 에 놓였고, 상자는 `overflow:hidden` 이라 통째로 잘린다.
+   *   그런데 그 요소는 **`role="button" tabindex="0"` 이라 «탭이 도달한다»** —
+   *   **포커스 링이 클립 «밖»에 그려져 키보드 사용자가 «보이지 않는 정거장»에 선다.**
+   * ⚠⚠⚠ **브라우저의 «자동 스크롤»이 이것을 «숨긴다»**(실측):
+   *   `focus()` 하면 컨테이너 `scrollTop` 은 **0 → 0** 이다 — 요소가 **스크롤 원점 «위»** 라
+   *   **음수 `scrollTop`** 이 필요한데 그것은 불가능하다(`scrollHeight 548 / clientHeight 420` 이라
+   *   «스크롤 가능»해 보이지만 **그 방향으로는 못 간다**). 대신 **«페이지»가 스크롤된다**(`scrollY 0 → 440`) —
+   *   **지도 섹션이 화면에 왔을 뿐 표식은 상자 안으로 영영 안 들어온다.**
+   *   ★ **«페이지가 스크롤됐으니 됐다»로 읽지 마라 — 그것이 이 결함이 숨는 방식이다.**
+   *
+   * ⛔ **`aria-hidden`·`tabindex="-1"` 로 «숨겨서» 고치지 마라** — 그러면 **키보드 사용자만** 광화문역
+   *   거리뷰를 못 쓴다. 그리고 **역 둘 중 하나만 거리뷰가 열리면 «그쪽으로 오라»가 된다**(이미 기각된 형태).
+   * ★ **가드가 필수다** — 이미 «완전히» 상자 안이면 **아무것도 하지 않는다.** 없으면 탭 이동마다 지도가 흔들린다.
+   * ★ `moved` 가 `true` 가 되는 것은 **정상**이다 — 「처음 위치로」 버튼이 나타나 되돌아갈 수 있다.
+   *   ⚠ `panTo` 는 `dragend` 를 안 쏘므로 **여기서 직접 세운다.** 안 세우면 **복귀 경로가 없다.**
+   * ⚠ `focus` 는 버블링하지 않는다 — **`focusin`** 이어야 위임이 선다.
+   */
+  useEffect(() => {
+    const node = mountRef.current;
+    const box = boxRef.current;
+    if (node === null || box === null || status !== "ready") return;
+    const onFocusIn = (e: FocusEvent) => {
+      const target = e.target instanceof Element ? e.target : null;
+      const id = target?.closest<HTMLElement>("[data-strike-hit]")?.dataset.strikeHit;
+      if (id === undefined) return;
+      const el = node.querySelector<HTMLElement>(`[data-strike-hit="${id}"]`);
+      if (el === null) return;
+      const b = box.getBoundingClientRect();
+      const r = el.getBoundingClientRect();
+      /* ★ 가드 — «완전히» 안에 있으면 끝. 부분 가림도 옮긴다(포커스 링은 요소 바깥에 그려진다) */
+      if (r.top >= b.top && r.bottom <= b.bottom && r.left >= b.left && r.right <= b.right) return;
+      const maps = window.naver?.maps;
+      const map = mapRef.current;
+      const feature = STRIKE_MAP_FEATURES.find((f) => f.id === id);
+      if (maps === undefined || map === null || feature === undefined) return;
+      /* 표식의 «지리 앵커»로 옮긴다 — pill 은 앵커에서 화면 고정 px 만큼 떨어져 있으므로
+         앵커가 중앙이면 pill 은 반드시 상자 안이다(상자 반높이 210px ≫ 최대 오프셋 38px) */
+      const at = featureLabelAnchor(feature);
+      const coord = new maps.LatLng(at.lat, at.lng);
+      safely(() => (prefersReducedMotion() ? map.setCenter(coord) : map.panTo(coord)));
+      setMoved(true);
+    };
+    node.addEventListener("focusin", onFocusIn);
+    return () => node.removeEventListener("focusin", onFocusIn);
+  }, [status]);
+
   /* 줌·팬 중에도 팝업은 **열린 채 유지**한다(박스 고정이라 흔들리지 않는다).
      다만 **연 마커가 화면 밖으로 나가면 닫는다** — 가리키는 대상이 없는 설명은 뜻이 없다(8/28 승계) */
   useEffect(() => {
@@ -1274,15 +1406,16 @@ export function StrikeMap({ clientId }: { clientId: string }) {
      *   `FOLLOWUPS #12` · `union-webapp-dev` §7). **기능 감지 + `try/catch` + 조용한 비활성**으로 감싼다.
      *   ⚠ **8/28 은 이 가드가 없다**(`RallyMap.tsx` 로드뷰 라벨). 여기서 감싸면 **미해결이 8/28 하나로 남는다** —
      *     확산을 «범위»로 막는 것이다. **이 `try/catch` 를 벗기지 마라.**
-     *   ★ **없어지면 무엇이 남는가**: **거리뷰 자체는 그대로 열린다.** «어디인지»는 **범례 13행 · 지도 마커 ·
+     *   ★ **없어지면 무엇이 남는가**: **거리뷰 자체는 그대로 열린다.** «어디인지»는 **범례 9행 · 지도 마커 ·
      *     지도 위 시선 부채꼴**이 진다. ⚠ **실패를 조합원에게 알리지 마라** — 없어진 것을 모르는 편이 낫다(오류가 아니다).
      * ⚠⚠ **`init` 직후에 만들면 `left:-9999px` 에 박혀 영영 안 보인다**(8/28 실측 · `setPov` 로도 안 풀린다) —
      *   **첫 `pano_changed` 뒤 한 틱**에 만든다. `setPanoId(같은 id)` 로 흔들지 마라(오히려 -9999 로 돌아간다).
      * ⚠ **«전부» 띄우지 마라** — 근거는 `wardHtml` 주석.
      * ★ 위치는 **파노라마 카메라가 아니라 «그 지물»**이다 — 카메라는 가장 가까운 촬영점으로 옮겨 가고,
      *   와드가 답하는 질문은 *«그래서 그것이 사진 속 어디인가»* 다.
-     * ⚠ **시야 밖 «저 방향» 표시를 만들지 마라**(§54.18-4 (4)) — 화장실 좌표가 ±25 m 라 **방위 주장이 크게
-     *   틀릴 수 있다.** 네이버가 시야 밖 마커를 치우는 거동을 그대로 둔다.
+     * ⚠ **시야 밖 «저 방향» 표시를 만들지 마라**(§54.18-4 (4)) — 화장실 좌표가 **±30 m** 라 **방위 주장이 크게
+     *   틀릴 수 있다.** ⚠ 종전 `±25 m` 는 **v1 예산**이라 낡았다(§63-4 · `APPROX_NOTE` 와 같은 값).
+     *   **판정은 유지 · 수치만 갱신**했다. 네이버가 시야 밖 마커를 치우는 거동을 그대로 둔다.
      */
     let ward: NaverMarker | null = null;
     let wardTimer = 0;
@@ -1303,8 +1436,8 @@ export function StrikeMap({ clientId }: { clientId: string }) {
               content: wardHtml({
                 name: streetSpot.name,
                 color: toneColor(streetSpot.tone),
-                /* ★ 확신도 분기는 **`confidence` 축**이다(`approximate` 가 그 파생값) — `id` 비교 금지 */
-                dashed: streetSpot.approximate,
+                /* ★ 확신도 분기는 **`CONFIDENCE_VISUAL` 한 곳**에서만 나온다(M-70) — `id` 비교 금지 */
+                dashed: streetSpot.visual.stroke === "dashed",
                 mark: streetSpot.mark,
               }),
               anchor: new maps.Point(0, 0),
@@ -1540,14 +1673,21 @@ export function StrikeMap({ clientId }: { clientId: string }) {
           ) : null}
         </div>
 
-        {/* 코스콤지부 대오 한 줄 — 자리는 `figure` «안» · 캔버스 «밖»이다(§53-15 조건 11 · 지도를 «본 뒤» 읽는다).
-            ⚠⚠ 키가 없어 지도 섹션이 사라지면 이 문장도 함께 사라진다 — «의도된 상태»다. 위험(대오 4개를 보여
-            준다)과 완화(넷 중 하나를 임의로 고르지 말라)가 같은 조건부 «안»에 있어야 한다. 밖으로 빼지 마라 */}
+        {/* ★★★ 코스콤지부 «위치» 한 줄 — 자리는 `figure` «안» · 캔버스 «밖»이다(§53-15 조건 11 · 지도를 «본 뒤» 읽는다).
+            ★★ **M-3 이 미리 정해 둔 대로 «그 자리에서 문면만» 바뀌었다** — 종전
+              `코스콤지부가 어느 대오인지는 추후 안내합니다.` 가 **답이 있는데 «없다»고 말하고 있었다**(§61 A-4).
+              **새 자리를 만들지 않았다.**
+            ⚠⚠ 키가 없어 지도 섹션이 사라지면 이 문장도 함께 사라진다 — **«의도된 상태»이나 근거가 바뀌었다**:
+              v1 에서는 «대오 4개를 보여 주는 위험»과 «넷 중 하나를 임의로 고르지 말라는 완화»가 한 쌍이었는데
+              **그 위험이 없어졌다.** 지금 한 쌍인 것은 **«지도가 무대 2 를 가리킨다»와 «그 무대 2 가 우리다»** 다 —
+              지도 없이 문장만 남으면 조합원이 **무대 2 가 어디인지 모른 채 «무대 2」라는 말만** 갖는다.
+              **«사라지는 버그»로 보고 지도 밖으로 빼지 마라** */}
         <p className="mt-4 max-w-[var(--container-prose)] break-keep break-words text-caption text-ink">
-          {KOSCOM_COLUMN_NOTE}
+          {KOSCOM_LOCATION_NOTE}
         </p>
 
-        {/* 범례 13행 — 이 지도의 «텍스트 등가 전부»다. 행은 `STRIKE_MAP_FEATURES` 에서 파생된다.
+        {/* 범례 **9행**(v1 13행 → 9행 · M-57) — 이 지도의 «텍스트 등가 전부»다. 행은 `STRIKE_MAP_FEATURES` 에서 파생된다.
+            ★ **«양 끝이 역으로 닫힌 사슬»** 형태가 v2 에서도 성립한다(§62-4 실측 검산 통과).
             ⚠ 범례 행을 지우지 마라 — 줄이려면 «지도에서 뺀다»(§0.4 은폐 금지). 접지도 `sr-only` 로 돌리지도 마라.
             `<figure>` 의 «마지막 직계 자식»이어야 한다(HTML 스펙).
             ★ 행은 flex 아이템이라 `break-words` 가 «안 든다» — 200% 판정선은 «최장 어절 9자»다(§54.6-2).
@@ -1586,7 +1726,7 @@ export function StrikeMap({ clientId }: { clientId: string }) {
           /* ★ 「근사」 한 줄은 **`confidence` 축**으로만 붙는다 — 역에는 붙을 길이 구조적으로 없다(§58-3).
              ⚠ 팝업이 닫히면서 그 문장이 사라지므로 **시트가 이어받는다**(§58-2 — 두 자리가 한 쌍이다).
              ⚠ 거리뷰 «모드»에서 길을 눌러 연 경우는 `false` 다 — 가리키는 지물이 없어 근사를 말할 대상이 없다 */
-          approximate={streetSpot?.approximate === true}
+          approximate={streetSpot?.visual.approxNote === true}
           mountRef={panoMountRef}
           onClose={closeStreetView}
         />
