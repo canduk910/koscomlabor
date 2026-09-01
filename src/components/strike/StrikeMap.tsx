@@ -11,6 +11,7 @@ import {
   MAP_GESTURE_NOTE,
   MAP_SR_INTRO,
   STRIKE_MAP_FEATURES,
+  TOILET_NOTE,
   STRIKE_MAP_FIT_BOUNDS,
   STRIKE_MAP_MAX_ZOOM,
   STRIKE_MAP_MIN_ZOOM,
@@ -125,7 +126,7 @@ function featureZIndex(feature: StrikeMapFeature, index: number): number {
 }
 
 /** ⚠ 인증 실패 뒤 `setMap(null)`·`destroy()` 는 throw 하고, unmount effect 의 예외는 React 가 회복하지
- *  못해 트리 전체가 날아간다(지도뿐 아니라 개요·집결시간·식순이 함께 사라진다). 벗기지 마라(§54.10) */
+ *  못해 트리 전체가 날아간다(지도뿐 아니라 개요·집결시간·일정이 함께 사라진다). 벗기지 마라(§54.10) */
 function safely(run: () => void): void {
   try {
     run();
@@ -1577,7 +1578,7 @@ export function StrikeMap({ clientId }: { clientId: string }) {
         <p className="sr-only">{MAP_SR_INTRO}</p>
 
         {/* 드래그 개방의 «유일한 실효 완화 수단»이다(§55-1 «강함»).
-            ★ 지도 «위»다. 아래로 내리지 마라 — 지도가 화면 하단을 덮을수록 그 아래(범례 · 코스콤 한 줄 · 식순 · QR)는
+            ★ 지도 «위»다. 아래로 내리지 마라 — 지도가 화면 하단을 덮을수록 그 아래(범례 · 코스콤 한 줄 · 일정 · QR)는
             전부 화면 밖이라 «위험이 최대인 순간에 완화가 0» 이 된다.
             ⚠ 흐리지 마라 · 접지 마라 · `sr-only` 로 돌리지 마라 · `※` 를 붙이지 마라.
             ★★ 조작 어포던스(`MAP_AFFORDANCE_NOTE`)는 **이 문단 «안» 둘째 문장**이다(§59 · M-33).
@@ -1716,6 +1717,13 @@ export function StrikeMap({ clientId }: { clientId: string }) {
               </li>
             ))}
           </ul>
+          {/* ★ 화장실 안내 — **원본 지도 상자 축자**(`TOILET_NOTE` 주석에 근거 전부).
+              ⚠⚠ **`figcaption` «안»에 둔 것은 의도다** — `<figcaption>` 은 `<figure>` 의 **마지막 직계
+                자식**이어야 해서(HTML 스펙 · 위 주석) 밖으로 빼면 그 제약이 깨진다.
+              ⛔ **범례 `<ul>` 안의 «행»으로 넣지 마라** — 범례 행은 **지도 도형의 텍스트 등가**이고
+                이 문장에는 **대응하는 도형이 없다**(「스벅 등」은 좌표가 없다).
+              ⚠ 세로 증분·배치는 **QA·디자이너 회부** — 개발자가 정하지 않았다 */}
+          <p className="mt-3 break-keep break-words text-caption text-ink">{TOILET_NOTE}</p>
         </figcaption>
       </figure>
 
