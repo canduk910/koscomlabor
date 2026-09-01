@@ -40,9 +40,6 @@ category: notice           # notice | news | page
 urgent: false              # 긴급(기한 있는 행동 필요) 여부
 deadline: 2026-08-30       # 선택 — 행동 기한
 source: "금융노조 본조 발표문"  # 출처 표기
-verified: true             # fact-verifier 승인 여부
-verified_date: 2026-08-16
-verifier_report: _workspace/01_verifier_factcheck.md
 ---
 ```
 
@@ -106,7 +103,7 @@ npx tsc --noEmit && npm run lint && npm run build
 ## 8. 링크의 접근성 이름은 «내부 텍스트» 가 진다 — `aria-label` 로 만들지 마라 (2026-08-26 신설)
 
 > **장면**: 외부 구글 폼으로 가는 배너를 만들며 «외부 이동 3중 병행(↗ 아이콘 + 도메인 표기 + 접근성 이름)»
-> 을 지키려고 `<a aria-label="참석 예비조사">` 를 붙이려 했다. 그런데 그 카드에는 **게시 조건인 경고 문장**
+> 을 지키려고 `<a aria-label="참석 예비조사">` 를 붙이려 했다. 그런데 그 카드에는 **사용자가 지정한 경고 문장**
 > 이 들어 있었다 — *"당일 QR 출석체크는 따로 해야 합니다."* 그것 없이는 조합원이 폼 제출을 출석으로 오인한다.
 > **`aria-label` 은 내용을 «대체» 한다.** 붙이는 순간 **그 문장이 링크 낭독에서 사라진다** —
 > 링크 목록·탭 이동으로 페이지를 훑는 스크린리더 사용자는 **경고를 못 듣고 누른다.**
