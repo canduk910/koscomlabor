@@ -146,15 +146,19 @@ function SectionHeading({ id, children }: { id: string; children: React.ReactNod
   );
 }
 
-/** 시각 문자열의 `-` **뒤**에 줄바꿈 기회를 준다 — 숫자·콜론·하이픈에는 **줄바꿈 기회가 자체적으로
- *  없다**(`union-design-system` §0.8 셋째 문자 종류).
+/** 시각 문자열의 **구분자 뒤**에 줄바꿈 기회를 준다 — 숫자·콜론·하이픈·물결에는 **줄바꿈 기회가
+ *  자체적으로 없다**(`union-design-system` §0.8 셋째 문자 종류).
+ *  ★★ **구분자는 «두 종류»다**(2026-09-01 신판) — 대부분 `-` 인데 **`13:00~13:15`·`13:15~13:30`
+ *    두 행만 `~`** 다. 이 함수는 **어느 쪽이든 찾아서 그 뒤에 `<wbr>` 을 넣을 뿐**이고 문자 자체는
+ *    손대지 않는다. ⚠ **여기서(또는 데이터에서) 구분자를 통일하지 마라** — 원문이 섞어 쓴다
+ *    (§51-7 원문 보존 · 검증 §61-5 (2) · 게시 조건 45).
  *  ⚠ **`<wbr>` 은 `textContent` 에는 안 남지만(축자 보존 ✓) 프리렌더 HTML 에서는 갈린다** —
  *  게이트가 HTML 에 대고 `10:30-11:00` 을 grep 하면 **0건**이다. **태그를 제거하고 세라**
  *  (`grep -c` 금지 — `grep -o | wc -l`).
  *  ⚠ **`RallySchedule` 의 같은 헬퍼를 import 하지 마라** — 8/28 전용이라 지역 헬퍼로 다시 쓴다 */
 function TimeText({ value }: { value: string }) {
-  const i = value.indexOf("-");
-  // `14:20` 단독 행 — **`~` 를 붙이지 마라**(검증 조건 8). 원문은 폐회선언 시각만 말한다
+  const i = value.search(/[-~]/);
+  // `15:15` 단독 행 — **구분자를 붙이지 마라**(검증 조건 8). 원문은 폐회선언 시각만 말한다
   if (i < 0) return <>{value}</>;
   return (
     <>
@@ -166,36 +170,47 @@ function TimeText({ value }: { value: string }) {
 }
 
 interface ProgramRow {
-  /** 원문 표기 그대로. **구분자는 `-` 다** — `~` 로 통일하지 마라(검증 조건 8 · §51-7) */
+  /** 원문 표기 그대로. ★★ **구분자를 통일하지 마라** — 20행 중 **`13:00~13:15`·`13:15~13:30`
+   *  두 행만 `~`** 이고 나머지는 `-` 다(원문 축자 · §51-7 · 검증 §61-5 (2) · 게시 조건 45) */
   time: string;
   content: string;
-  /** 원문 「비고」 — **소속 병기가 게시 조건이다**(검증 조건 4 · §7-1). 소속 없는 `윤석구 위원장` 류는
-   *  게시 불가이고 **「외」와 어순은 고정**이다. 재배열하지 마라 */
-  person: string | null;
 }
 
-/** 원문 「5. 총파업 식순」 20행 축자 */
+/** 원문 「5. 총파업 식순」 20행 축자 — **2026-09-01 신판**(`design/총파업_식순.jpg`)으로 전면 교체.
+ *  구판 값(폐회 `14:20` · 연대사→투쟁사 순 · 응원이벤트 없음)은 **주최측 신판이 들어온 순간 거짓**이
+ *  됐다(검증 §61 A-5 · 게시 조건 45).
+ *
+ * ★★★ **「비고」를 되살리지 마라.** 신판 원본의 비고란은 **20행 전부 공란**이다(검증자가 원본
+ *   직접 판독 · §61-1 · A-6). v1 에 있던 `윤석구 금융노조 위원장`·`김동명 한국노총 위원장 외` 는
+ *   **근거가 «두 겹»으로 없다** — 인명도, 소속도 신판에 없다.
+ *   ⚠ **«전에 있었으니 유지»가 바로 §5.8.2 가 막은 «구판에 기댄 판정»이다.**
+ *   ⚠⚠ **`/rally-2026-08-28` 의 `RallySchedule` 에 같은 두 이름이 남아 있는 것은 «정당한 출현»이다**
+ *     — 그쪽 근거는 **8/28 원문의 비고란**이다. **여기서 지웠다고 그쪽까지 지우지 마라**(§5.8.3).
+ *
+ * ★ **비고 «열»은 이 표에 원래 없다** — D-29 가 이미 3열 → 2열로 정했고, 비고는 내용 셀의
+ *   **둘째 줄**이었다. 이번에 사라진 것은 그 둘째 줄이다. **3열로 되돌리지 마라**(200% 에서 내용
+ *   열이 한글 1자 폭으로 눌린다 · 디자이너 실측). */
 const PROGRAM: readonly ProgramRow[] = [
-  { time: "10:30-11:00", content: "대오정비", person: null },
-  { time: "11:00-11:30", content: "사전집회 / 구호제창 / 동영상 상영", person: null },
-  { time: "11:30-11:35", content: "지도부 및 내외빈 입장", person: null },
-  { time: "11:35-11:40", content: "깃발 입장", person: null },
-  { time: "11:40-11:45", content: "노동의례", person: null },
-  { time: "11:45-11:55", content: "참가조직 소개", person: null },
-  { time: "11:55-12:05", content: "총파업 선언 및 대회사", person: "윤석구 금융노조 위원장" },
-  { time: "12:05-12:10", content: "구호제창", person: null },
-  { time: "12:10-12:20", content: "격려사", person: "김동명 한국노총 위원장 외" },
-  { time: "12:20-12:30", content: "투쟁사", person: null },
-  { time: "12:30-12:50", content: "문화공연 1", person: null },
-  { time: "12:50-13:00", content: "연대사", person: null },
-  { time: "13:00-13:10", content: "투쟁사", person: null },
-  { time: "13:10-13:30", content: "문화공연 2", person: null },
-  { time: "13:30-13:40", content: "연대사", person: null },
-  { time: "13:40-14:00", content: "문화공연 3", person: null },
-  { time: "14:00-14:10", content: "상징의식", person: null },
-  { time: "14:10-14:15", content: "결의문 낭독", person: null },
-  { time: "14:15-14:20", content: "파업가 제창", person: null },
-  { time: "14:20", content: "폐회선언", person: null },
+  { time: "10:30-11:00", content: "대오정비" },
+  { time: "11:00-11:30", content: "사전집회 / 구호제창 / 동영상 상영/경과보고" }, // ★ `상영/경과보고` 에 공백 없음(원문 그대로)
+  { time: "11:30-11:35", content: "지도부 및 내외빈 입장" },
+  { time: "11:35-11:40", content: "깃발 입장" },
+  { time: "11:40-11:45", content: "노동의례" },
+  { time: "11:45-11:55", content: "참가조직 소개" },
+  { time: "11:55-12:05", content: "총파업 선언 및 대회사" },
+  { time: "12:05-12:10", content: "구호제창" },
+  { time: "12:10-12:30", content: "격려사" },
+  { time: "12:30-12:50", content: "문화공연 1" },
+  { time: "12:50-13:00", content: "투쟁사" },
+  { time: "13:00~13:15", content: "응원이벤트" }, // ★ 구분자가 `~` — 원문 그대로. `-` 로 고치지 마라
+  { time: "13:15~13:30", content: "연대사" }, // ★ 구분자가 `~` — 원문 그대로. `-` 로 고치지 마라
+  { time: "13:30-13:50", content: "문화공연 2" },
+  { time: "13:50-14:00", content: "투쟁사" },
+  { time: "14:00-14:50", content: "문화공연 3" },
+  { time: "14:50-15:00", content: "상징의식" },
+  { time: "15:00-15:10", content: "결의문 낭독" },
+  { time: "15:10-15:15", content: "파업가 제창" },
+  { time: "15:15", content: "폐회선언" }, // ★ 종료 시각이 아니라 «폐회선언 시각»이다. 범위로 펴지 마라
 ];
 
 /** 원문 하단 단서 — **마침표까지 축자다.** 「조정될 수 있습니다」로 문체를 고치지 마라.
@@ -504,13 +519,10 @@ export default function StrikePage() {
                       <td className="border-t border-border-soft py-3 pr-1.5 align-top break-keep break-words text-caption text-ink">
                         <TimeText value={row.time} />
                       </td>
+                      {/* ⚠ **둘째 줄(구 「비고」)을 되살리지 마라** — 신판 비고란은 20행 전부
+                          공란이다(`PROGRAM` 주석 · 검증 §61 A-6). */}
                       <td className="border-t border-border-soft py-3 align-top break-keep break-words text-caption text-ink">
                         {row.content}
-                        {row.person !== null ? (
-                          <span className="mt-1 block text-caption text-ink-muted">
-                            {row.person}
-                          </span>
-                        ) : null}
                       </td>
                     </tr>
                   ))}
