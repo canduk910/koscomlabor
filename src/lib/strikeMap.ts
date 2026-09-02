@@ -99,7 +99,7 @@ export const CONFIDENCE_VISUAL: Readonly<Record<StrikeGeoConfidence, StrikeConfi
 };
 
 /** 라벨이 앵커에서 뻗는 방향 */
-export type StrikeLabelPlacement = "right" | "left" | "top" | "bottom";
+export type StrikeLabelPlacement = "right" | "left" | "top" | "bottom" | "center";
 
 export interface StrikeLatLng {
   lat: number;
@@ -501,7 +501,7 @@ export const STRIKE_MAP_FEATURES: readonly StrikeMapFeature[] = [
     confidence: "estimated",
     center: STAGE_1,
     radiusMeters: STAGE_RADIUS_M,
-    placement: "left",
+    placement: "center",
   },
   {
     kind: "circle",
@@ -548,10 +548,11 @@ export const STRIKE_MAP_FEATURES: readonly StrikeMapFeature[] = [
     center: KOSCOM_AREA,
     widthMeters: KOSCOM_AREA_WIDTH_M,
     heightMeters: KOSCOM_AREA_HEIGHT_M,
-    /* 무대 pill 4개가 전부 `left` 라 **동쪽이 비어 있다** — 그 자리를 쓴다.
-       ⚠ 무대 pill 을 `right` 로 옮기지 마라 — 서쪽 열(화장실 배지)과의 간격이 v1 에서 **2.7px** 까지 몰렸던
-         자리라 **양쪽을 한꺼번에 흔든다.** 배치를 바꾸려면 QA 재측정이 함께 간다 */
-    placement: "right",
+    /* ★ **2026-09-02 — 무대 pill 4개가 «도형 안»(`center`)으로 들어갔다**(사용자 지시).
+       그래서 이 pill 의 `right` 는 **더 이상 «비어 있는 동쪽을 쓴다»가 아니라 «도형 밖에 남는 유일한 pill»** 이다.
+       ⚠ **`center` 로 옮기지 마라** — 이 pill 은 **누를 수 있고**(`roadview`), 도형 안에 넣으면
+         사각형이 클릭을 가로챈다. ⚠ 배치를 바꾸면 화장실 배지와의 간격을 다시 재라 */
+    placement: "center",
     roadview: true,
   },
   {
@@ -564,7 +565,7 @@ export const STRIKE_MAP_FEATURES: readonly StrikeMapFeature[] = [
     confidence: "estimated",
     center: STAGE_3,
     radiusMeters: STAGE_RADIUS_M,
-    placement: "left",
+    placement: "center",
   },
   {
     kind: "circle",
@@ -576,7 +577,7 @@ export const STRIKE_MAP_FEATURES: readonly StrikeMapFeature[] = [
     confidence: "estimated",
     center: STAGE_4,
     radiusMeters: STAGE_RADIUS_M,
-    placement: "left",
+    placement: "center",
   },
   {
     kind: "dot",
@@ -781,6 +782,10 @@ function anchorAtExtreme(
       return { lat: (b.south + b.north) / 2, lng: b.west };
     case "right":
       return { lat: (b.south + b.north) / 2, lng: b.east };
+    /* ★ `center` 는 «극점»이 아니라 **도형 중심**이다(2026-09-02 · 무대 pill 이 도형 «안»에 든다).
+       ⚠ `align` 을 무시한다 — 중심에 서·동 정렬이 성립하지 않는다. */
+    case "center":
+      return { lat: (b.south + b.north) / 2, lng: (b.west + b.east) / 2 };
   }
 }
 
@@ -818,13 +823,32 @@ export function featureShortName(feature: StrikeMapFeature): string {
 }
 
 /** 거리뷰 시작점 — **«그 지물의 지점»**(§58-4). `roadview` 가 아닌 항목은 `null` 이다.
- *  ★ **사각형(코스콤지부 구역)은 «중심»에서 연다** — 36×40 m 구역이라 어느 꼭짓점을 골라도
- *    «그 모서리가 특별하다»는 주장이 되고, 중심이 유일하게 **아무것도 더 주장하지 않는 점**이다.
- *  ⚠ 중심 좌표를 **데이터로 저장하지 마라** — 이 함수가 그때 계산해 넘기는 값이지
- *    지도 도형·범례로 나가는 값이 아니다(§54-8 조건 14 의 정신). */
+ *
+ *  ⛔ **«중심에서 연다»는 죽었다 — 사용자 지시(2026-09-02)**:
+ *    *「로드뷰 상에서 시야밖에 코스콤지부구역이 존재해서 바로 보이지를 않아. 조금 더 남쪽의 지점에서
+ *    로드뷰보기를 해서 로드뷰에서 코스콤지부구역이 표시될 수 있도록 하자」*
+ *    ★ 종전 근거(«중심이 유일하게 아무것도 더 주장하지 않는 점»)는 **«지도 위에서는» 참이었지만
+ *    «거리뷰 안에서는» 카메라가 구역 «한가운데» 서서 구역이 발밑에 깔린다** — 보이지 않는다.
+ *
+ *  ★ **사각형은 «남쪽 가장자리에서 한 높이만큼 더 남쪽»에서 연다.** 거리뷰 초기 시점이 «북쪽»이라
+ *    (`spotPan` 계열 · 세종대로가 남북축) 그 지점에서 보면 **구역 전체가 정면에 들어온다.**
+ *  ⚠ **`ROADVIEW_SOUTH_OFFSET_M` 을 줄이지 마라** — 40 m 는 «사각형 높이»(`KOSCOM_AREA_HEIGHT_M`)와
+ *    같은 값이고, 그보다 짧으면 카메라가 구역 «안»으로 다시 들어온다.
+ *  ⚠ **키우지도 마라** — 네이버 파노라마는 «가장 가까운 촬영 지점»으로 스냅하므로 멀수록 «다른 길»로
+ *    떨어질 수 있다(횡단보도 건너편 등). **바꾸려면 실제로 열어 보고 확인하라.**
+ *  ⚠ 이 좌표를 **데이터로 저장하지 마라** — 이 함수가 그때 계산해 넘기는 값이지
+ *    지도 도형·범례로 나가는 값이 아니다(§54-8 조건 14 의 정신). 도형은 여전히 `center` 가 진다. */
+const ROADVIEW_SOUTH_OFFSET_M = KOSCOM_AREA_HEIGHT_M;
+
 export function featureRoadviewPoint(feature: StrikeMapFeature): StrikeLatLng | null {
   if (feature.roadview !== true) return null;
-  if (feature.kind === "rect") return feature.center;
+  if (feature.kind === "rect") {
+    const b = featureBounds(feature);
+    return {
+      lat: b.south - ROADVIEW_SOUTH_OFFSET_M / LAT_DEGREE_METERS,
+      lng: feature.center.lng,
+    };
+  }
   return featurePoints(feature)[0] ?? null;
 }
 

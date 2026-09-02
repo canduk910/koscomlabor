@@ -169,6 +169,11 @@ function placeStyle(placement: StrikeLabelPlacement, gap: number): string {
       return `left:0;bottom:${gap}px;transform:translateX(-50%);`;
     case "bottom":
       return `left:0;top:${gap}px;transform:translateX(-50%);`;
+    /* ★ **사용자 지시(2026-09-02)** — *「텍스트도 그냥 실제 지역 위에 있는 구역버튼 안으로 밀어넣었으면」*.
+       도형 «중심»에 얹는다. `gap` 을 쓰지 않는다(도형 밖으로 밀 이유가 없다).
+       ⚠ **무대 pill 전용이다** — 히트가 있는 pill 을 `center` 로 옮기면 도형이 클릭을 가로챌 수 있다. */
+    case "center":
+      return "left:0;top:0;transform:translate(-50%,-50%);";
   }
 }
 
@@ -310,6 +315,14 @@ function pillHtml(options: {
     `border:1px solid ${color};border-radius:9999px;padding:3px 8px;` +
     `min-height:${HIT_MIN_PX}px;display:flex;align-items:center;justify-content:center;text-align:center;` +
     `font-size:11px;font-weight:600;line-height:1.3;color:var(--strike-hit-ink,${color});` +
+    /* ★ **비활성 처리 — 사용자 지시(2026-09-02)**: *「무대 1, 3, 4는 조금 더 비활성화 처리를 하자」*.
+       **히트가 없고 `reference` 인 pill**(= 무대 1·3·4)에만 붙는다.
+       ⚠ **도형의 `fillOpacity` 를 낮추지 마라** — 8/28 실측에서 0.08 은 타일 대비 **1.15:1** 로 은폐다.
+         pill 을 흐리게 하는 쪽이 «간략히»와 «안 보이게» 사이에서 안전하다.
+       ⚠ **`0.7` 아래로 내리지 마라** — 흰 면 위 `#4b5563` 이 0.7 에서 대비 **5.1:1**(AA 통과),
+         0.5 면 3.2:1 로 본문 기준을 깬다. **무대 이름은 여전히 읽혀야 한다.**
+       ★ 무대 2 는 `go` 라 여기 안 걸린다 — «강조»와 «비활성»이 한 조건으로 갈린다. */
+    (hit === null && color === REFERENCE ? "opacity:0.7;" : "") +
     "white-space:normal;word-break:keep-all;width:max-content;" +
     `max-width:var(${LABEL_MAX_WIDTH_VAR},70%);`;
   /* 타일 위 pill 을 «떠 있는 것»으로 만드는 그림자. 히트일 때는 **변수로** 내린다(위 `HIT_REST_SHADOW_VAR`) */
