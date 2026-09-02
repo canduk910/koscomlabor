@@ -205,3 +205,37 @@ html {
   outline: 2px solid transparent;
   outline-offset: 1px;
 }
+
+/*
+ * 9/4 지도 마커 히트의 **선택 표시**(사용자 지시 ① · 2026-09-01 · `MAP-EMPHASIS.md` §1).
+ * ★★ «링»이 아니다 — 요소 «안»(content-box)에 불투명 판이 들어선다. 위 포커스 3종과 **다른 방향**이다.
+ * ⚠ `box-shadow` 를 쓰지 마라 — 위 두 규칙이 그 속성을 이미 «전부» 쓴다(쉬는 그림자 + 포커스 이중 링).
+ * ⚠ `outline` 을 쓰지 마라 — 투명 `outline` 은 고대비 모드 보험으로 예약돼 있다(위 규칙).
+ * ⚠ `transition` 을 붙이지 마라 — `prefers-reduced-motion` 전역 무효화로 그 사용자에게 뜻이 사라진다.
+ * ★ 대비를 «타일에 안 묻는다»: 판의 이웃이 전부 우리 것이다 —
+ *   판 `#1a1a1a` ↔ 흰 padding 링 / 흰 배지 바탕 `#ffffff` = **17.40 «고정»**.
+ *   그리고 **타일과 맞닿는 픽셀(pill 의 tone 1px 테두리 · 배지의 흰 2px 링)은 한 개도 안 바뀐다**
+ *   → **1.4.11 «노출»이 늘지 않는다.**
+ * ⚠⚠ 판을 `background-color` 로 만들지 마라 · pill 테두리를 흰색으로 뒤집지 마라 —
+ *   둘 다 «타일과 맞닿는 픽셀»을 바꾸고, 그 순간 어두운 타일에서 `#093389` ↔ `#1a1a1a` = **1.53** 이 된다
+ *   (위 이중 링 문단이 기각한 바로 그 실패다).
+ * ★ 변수를 «받는» 자리는 `StrikeMap.tsx` 의 `pillHtml`·`toiletBadgeHtml` 이다 — 그쪽 주석에
+ *   «배경 이미지 층은 둘이어야 한다»는 단일 실패점이 적혀 있다.
+ */
+[data-strike-hit][aria-pressed="true"] {
+  --strike-hit-plate: #1a1a1a;
+  --strike-hit-ink: #ffffff;
+}
+
+/* 고대비(강제색) 모드 — 위 판은 `background-image`(그러데이션)라 그 모드에서 그려진다는 보장이 없고,
+   `background-color`·`border-color`·`color` 는 시스템이 «강제 치환»한다. 그대로 두면 **그 모드에서 선택 전/후 차이가 0** 이다.
+   ⚠ 여기서 `background-color` 를 «직접» 쓰지 마라 — 인라인이 이긴다. 반드시 «변수»로 내린다.
+   ★ 시스템 색은 그 모드에서 «명시하면» 존중된다 — 보장된 유일한 수단이다.
+   ⚠ 이 블록은 **미실측이다**(`MAP-EMPHASIS.md` §9-2). 게시 전에 반드시 재라 — 차이가 0 이면 게시 조건 미달이다. */
+@media (forced-colors: active) {
+  [data-strike-hit][aria-pressed="true"] {
+    --strike-hit-plate: transparent;
+    --strike-hit-face: Highlight;
+    --strike-hit-ink: HighlightText;
+  }
+}

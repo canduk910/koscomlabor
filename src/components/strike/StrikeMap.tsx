@@ -90,8 +90,11 @@ const LABEL_Z_BASE = 1_000;
 const SPOT_Z = 900;
 
 /* 색 — §54.7 대비 검증표의 값. **신규 색 0 · 신규 토큰 0** */
-const GO = "#093389"; // 파랑 11.37 — 조합원이 갈 곳(코스콤지부 구역·역)
-const REFERENCE = "#4b5563"; // 회색 7.56 — 참고 지물(무대·화장실)
+/* ★★ `go` = 조합원의 **«경로»**(내리는 역 → 우리 무대 → 우리 구역) — **4개**다.
+   종전 문면 *«조합원이 갈 곳(코스콤지부 구역·역)»* 은 **죽었다**[2026-09-01 · 사용자 확정].
+   정의는 `strikeMap.ts` 의 `StrikeMapTone` 이 진다 — **여기는 그것을 가리킨다** */
+const GO = "#093389"; // 파랑 11.37 — 경로(코스콤지부 구역·무대 2·역 2)
+const REFERENCE = "#4b5563"; // 회색 7.56 — 참고 지물(무대 1·3·4·화장실)
 const INK = "#1a1a1a"; // 17.40 — **의미를 지지 않는 중립색**
 const CASING = "#ffffff"; // 흰 casing — 타일 색을 예측하지 않고 대비를 만드는 아래층
 
@@ -287,11 +290,26 @@ function pillHtml(options: {
      문장 하나가 진다(§54.18-1 (3)). **7개 전부 같은 상자다** — 코스콤지부 구역 pill 도 무대 pill 과 같은 상자다.
      ⚠⚠ **코스콤 pill 만 키우거나 색을 반전시키지 마라** — «강조»는 `tone: "go"`(파랑)와 «유일한 채워진 사각형»
      이라는 **형태**가 이미 진다. 크기까지 얹으면 어포던스 축과 강조 축이 섞인다 */
+  /* ★★ **선택 표시(지시 ① · `MAP-EMPHASIS.md` §1-3 · 2026-09-01)의 «판»이 아래 `background-*` 세 줄에 들어선다.**
+     변수 3개(`--strike-hit-plate`·`--strike-hit-face`·`--strike-hit-ink`)는 `globals.css` 의
+     `[data-strike-hit][aria-pressed="true"]` 가 설정한다 — **여기서는 «폴백»만 준다.**
+     ★ 층1 = 판(`content-box` · 기본 투명 `#0000`) · 층2 = 흰 면(`border-box` · 오늘과 동일).
+       폴백이 전부 오늘 값이라 **장식 pill 4개(무대)는 변수가 영영 설정되지 않아 픽셀이 오늘과 같다.**
+       ⚠ 그래서 **문자열을 두 벌로 가르지 마라** — 두 벌이 되면 한쪽만 고쳐진다.
+     ⚠⚠ **`background` 단축을 쓰지 마라** — 단축은 `background-image` 를 «리셋»해 판이 통째로 사라진다.
+     ⚠⚠ **그러데이션 층을 «둘째가 중복 같다»로 하나로 줄이지 마라** — `background-clip` 의 콤마 목록은
+       **배경 «이미지 층» 수만큼만 살아남는다.** 1층이 되면 둘째 값(`border-box`)이 버려지고 배경«색»이
+       `content-box` 로 클립돼 **pill 7개 전부·모든 상태에서 흰 padding 면이 사라져 타일이 비친다**(실측 · §9-1 재확인 대상).
+     ⚠ `border`·`padding`·`min-height`·`font` 는 한 글자도 건드리지 마라 — 상자가 불변이어야 2.5.8 이 불변이다 */
   const box =
     `position:absolute;${placeStyle(placement, gap)}box-sizing:border-box;` +
-    `background:${CASING};border:1px solid ${color};border-radius:9999px;padding:3px 8px;` +
+    `background-color:var(--strike-hit-face,${CASING});` +
+    `background-image:linear-gradient(var(--strike-hit-plate,#0000),var(--strike-hit-plate,#0000)),` +
+    `linear-gradient(var(--strike-hit-face,${CASING}),var(--strike-hit-face,${CASING}));` +
+    "background-clip:content-box,border-box;" +
+    `border:1px solid ${color};border-radius:9999px;padding:3px 8px;` +
     `min-height:${HIT_MIN_PX}px;display:flex;align-items:center;justify-content:center;text-align:center;` +
-    `font-size:11px;font-weight:600;line-height:1.3;color:${color};` +
+    `font-size:11px;font-weight:600;line-height:1.3;color:var(--strike-hit-ink,${color});` +
     "white-space:normal;word-break:keep-all;width:max-content;" +
     `max-width:var(${LABEL_MAX_WIDTH_VAR},70%);`;
   /* 타일 위 pill 을 «떠 있는 것»으로 만드는 그림자. 히트일 때는 **변수로** 내린다(위 `HIT_REST_SHADOW_VAR`) */
@@ -306,7 +324,10 @@ function pillHtml(options: {
   }
   return [
     '<div style="position:relative;width:0;height:0;">',
-    `<span role="button" tabindex="0" data-strike-hit="${hit.id}" style="${box}${HIT_REST_SHADOW_VAR}:${drop};cursor:pointer;">`,
+    /* ⚠ `aria-pressed` 를 **빌드 시점부터** 박는다 — `role="button"` 에 이 속성이 «도중에 생기면»
+       스크린리더가 역할을 바꿔 읽는다. 값 동기화는 아래 «선택 표시 동기화» effect 가 진다(§1-4 (C)).
+       ⚠ 위 장식 분기(`hit === null`)에는 **넣지 마라** — `aria-hidden` 뒤다 */
+    `<span role="button" tabindex="0" aria-pressed="false" data-strike-hit="${hit.id}" style="${box}${HIT_REST_SHADOW_VAR}:${drop};cursor:pointer;">`,
     `<span aria-hidden="true">${text}</span>`,
     `<span class="sr-only">${hit.name}</span>`,
     "</span></div>",
@@ -349,7 +370,15 @@ function toiletBadgeHtml(hit: StrikeHit | null, stroke: "solid" | "dashed"): str
     "width:20px;height:20px;box-sizing:border-box;border-radius:9999px;",
     /* ★ 선종은 **`CONFIDENCE_VISUAL` 이 정한다**(M-70) — 여기 `dashed` 를 «박아» 두면
        `verified` 화장실이 생겨도 조용히 점선으로 그려진다. **하드코딩으로 되돌리지 마라** */
-    `background:${CASING};border:1.5px ${stroke} ${REFERENCE};`,
+    /* ★ 선택 판이 배지 «안»(content-box = 17×17 = 20 − 1.5×2)을 채운다 — 위 `pillHtml` 과 **똑같은 3줄**이다.
+       ⚠⚠ 둘째 층을 지우지 마라 — 그 층이 점선의 «틈»에 **흰 바탕**을 남긴다. 틈이 타일이 되면 `#4b5563` 점선이
+         어두운 타일에서 «실선»으로 읽혀 **M-70 확신도 표시가 죽는다.**
+       ★ 커스텀 속성은 «상속»된다 — 변수는 부모 seat(`[data-strike-hit]`)에 설정되고 이 span 이 물려받는다 */
+    `background-color:var(--strike-hit-face,${CASING});`,
+    `background-image:linear-gradient(var(--strike-hit-plate,#0000),var(--strike-hit-plate,#0000)),`,
+    `linear-gradient(var(--strike-hit-face,${CASING}),var(--strike-hit-face,${CASING}));`,
+    "background-clip:content-box,border-box;",
+    `border:1.5px ${stroke} ${REFERENCE};`,
     `box-shadow:0 0 0 2px ${CASING},0 1px 3px rgb(0 0 0 / .35);`,
     'display:flex;align-items:center;justify-content:center;">',
     symbolSvg("toilet", 13),
@@ -367,7 +396,8 @@ function toiletBadgeHtml(hit: StrikeHit | null, stroke: "solid" | "dashed"): str
     '<div style="position:relative;width:0;height:0;">',
     /* 배지 히트에는 쉬는 그림자를 «안» 준다 — 그림자는 안쪽 20px 배지가 이미 갖고 있다(이중으로 주면 번진다).
        포커스 이중 링은 `globals.css` 의 `[data-strike-hit]:focus-visible` 이 진다 */
-    `<span role="button" tabindex="0" data-strike-hit="${hit.id}" style="${seat}cursor:pointer;">`,
+    /* ⚠ `aria-pressed` 는 위 pill 과 **같은 이유로 빌드 시점부터** 박는다(역할이 도중에 바뀌어 읽힌다) */
+    `<span role="button" tabindex="0" aria-pressed="false" data-strike-hit="${hit.id}" style="${seat}cursor:pointer;">`,
     badge,
     `<span class="sr-only">${hit.name}</span>`,
     "</span></div>",
@@ -1304,6 +1334,26 @@ export function StrikeMap({ clientId }: { clientId: string }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [focusHit, popup, selectFeature]);
 
+  /* ★★★ **선택 표시 동기화**(사용자 지시 ① · `MAP-EMPHASIS.md` §1-4 (E)) — 열린 팝업의
+       «주인»을 지도 위에서 가리킨다. 지금 이것이 없으면 팝업에 제목도 번호도 없어
+       **«무엇을 눌러 이 팝업이 열렸는지»를 화면에서 확인할 방법이 0** 이다
+       (특히 범례 6·7행이 **둘 다 「임시화장실」** 로 시작한다).
+     ★★ **`setIcon` 재렌더 경로를 만들지 마라**: 마커 DOM 이 갈아치워지면 ① 포커스가 날아가고
+       ② `popupSideOf`·`focusHit`·`focusin` 세 곳의 `querySelector` 와 경합하며
+       ③ 포커스 복원을 넣으면 `focusin` 이 다시 발화해 **선택할 때마다 지도가 움직인다**(`panTo`).
+       여기서는 **속성 하나만** 바꾼다 — 노드가 유지된다.
+     ★ 해제 4경로(같은 것 재클릭 · 지도 빈 곳 · bounds 밖 자동 · `Esc`)와 거리뷰 토글·「거리뷰 보기」가
+       **전부 `popup` 을 지난다** → 되돌림이 자동이다. **별도 정리 코드를 만들지 마라.**
+     ⚠ 장식 pill·장식 배지는 `[data-strike-hit]` 이 아니라 이 순회에 안 잡힌다(`aria-hidden` 뒤다) */
+  useEffect(() => {
+    const node = mountRef.current;
+    if (node === null || status !== "ready") return;
+    const open = popup?.feature.id ?? null;
+    for (const el of node.querySelectorAll<HTMLElement>("[data-strike-hit]")) {
+      el.setAttribute("aria-pressed", el.dataset.strikeHit === open ? "true" : "false");
+    }
+  }, [popup, status]);
+
   /* 거리뷰 모드 — 길 레이어를 깔고 «클릭으로 위치를 정한다»(`StreetLayer` 는 타일 오버레이라 지도 클릭을 가로채지 않는다).
      ⚠ `maps.StreetLayer` 가 없어도 클릭 이동은 남아야 하니 레이어와 클릭 리스너를 한 조건으로 묶지 마라(QA-516).
      ⚠ `status` 를 의존성에서 빼지 마라(길이 안 깔린다) */
@@ -1683,9 +1733,20 @@ export function StrikeMap({ clientId }: { clientId: string }) {
               **그 위험이 없어졌다.** 지금 한 쌍인 것은 **«지도가 무대 2 를 가리킨다»와 «그 무대 2 가 우리다»** 다 —
               지도 없이 문장만 남으면 조합원이 **무대 2 가 어디인지 모른 채 «무대 2」라는 말만** 갖는다.
               **«사라지는 버그»로 보고 지도 밖으로 빼지 마라** */}
-        <p className="mt-4 max-w-[var(--container-prose)] break-keep break-words text-caption text-ink">
-          {KOSCOM_LOCATION_NOTE}
-        </p>
+        {/* ★★★ **사용자 지시 ②(2026-09-01)의 «강조» 신설분은 전부 이 판이 진다** —
+            원본 배치도의 «지도 밖 흰 콜아웃»(금색 테두리 + 불투명 흰 면)의 승계다.
+            **캔버스에는 새 강조를 만들 수 없다**(`MAP-EMPHASIS.md` §2-1 — 시각 채널 14개가 전부 임자가 있고,
+            잉크를 밖으로 키우면 **1.32 m 떨어진 무대 2 원을 더 지운다** — ②가 강조하라고 지목한 바로 그 무대다).
+            ★★ 이 문장이 **「무대 2」와 「구역」을 둘 다 이름으로 부르는 유일한 문장**이다 — ②의 두 대상을 한 번에 진다.
+            ⚠⚠ **테두리를 빼지 마라** — 틴트 면 `#eff6ff` 는 흰 배경 대비 **1.09** 라 «판»이 안 선다.
+              판을 세우는 것은 `border-primary`(#093389 ↔ 흰 **11.37**)이고, 그 값은 **지도의 코스콤지부 구역
+              도형과 «같은 색»** 이다 — 지도 «안»의 파란 사각형과 이 판을 잇는 유일한 끈이다.
+            ⚠ 링크·셰브런·hover 를 붙이지 마라 — 카드 형태는 «외부 이동»을 뜻한다(디자인 §0.7).
+            ⚠ `mt-4`·`max-w-` 는 `<p>` 에서 **래퍼로 옮겼다**(중복 금지). **문면은 한 글자도 안 바뀐다.**
+            ⚠ `<figcaption>` 은 `<figure>` 의 «마지막 직계 자식»이어야 한다 — 이 판은 그 «앞» 형제다. **뒤로 옮기지 마라** */}
+        <div className="rounded-card mt-4 max-w-[var(--container-prose)] border-2 border-primary bg-primary-tint p-3">
+          <p className="break-keep break-words text-caption text-ink">{KOSCOM_LOCATION_NOTE}</p>
+        </div>
 
         {/* 범례 **9행**(v1 13행 → 9행 · M-57) — 이 지도의 «텍스트 등가 전부»다. 행은 `STRIKE_MAP_FEATURES` 에서 파생된다.
             ★ **«양 끝이 역으로 닫힌 사슬»** 형태가 v2 에서도 성립한다(§62-4 실측 검산 통과).
