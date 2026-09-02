@@ -430,6 +430,57 @@ function toiletBadgeHtml(hit: StrikeHit | null, stroke: "solid" | "dashed"): str
 
 /** 항목 1개 — 도형(흰 casing 2겹) + 점 배지 + 이름 pill. 타일 색은 예측할 수 없으므로 흰 굵은 스트로크를
  *  아래 깔아 배경을 가정하지 않고 대비를 만든다(§54.7 · casing 가시성은 9/4 타일에서 실측한다) */
+/** 선택 하이라이트 — **도형 «둘레»에 굵은 후광 + 채움**을 얹는다(8/28 `RallyMap.createHighlight` 와 같은 구조).
+ *
+ *  ★★ **2026-09-02 사용자 지시**: *「버튼 선택했을 때 강조효과는 버튼이 아니라 «구역박스»에 생겨야 해.
+ *    8/28 결의대회 페이지 참고한거 맞아?」* — **맞지 않았다.** 종전에는 pill 에 링만 걸었고
+ *    **8/28 이 실제로 하는 «도형 하이라이트»를 안 봤다.** 이 함수가 그것이다.
+ *
+ *  ⚠ **`clickable: false`** — 히트를 가로채면 «같은 것을 다시 눌러 닫기»가 깨진다.
+ *  ⚠ **z 는 casing(`z-1`)보다 «한 단 더 아래»**(`z-2`) — 도형의 두 겹 구조(본선 + 흰 casing)를 덮지 않는다.
+ *  ⚠ **점(화장실·역)에는 도형이 없다 — 빈 배열이다.** 그쪽 강조는 배지의 판·링이 진다.
+ *  ⛔ **`strokeWeight` 를 확신도(선종)와 섞지 마라** — 이 오버레이는 `solid` 고정이고 **아래 도형의
+ *    `shortdot` 을 안 건드린다.** 확신도는 여전히 도형 본선이 진다(M-70). */
+function createHighlight(
+  maps: NaverMapsNamespace,
+  map: NaverMap,
+  feature: StrikeMapFeature,
+  index: number,
+): NaverOverlay[] {
+  const color = toneColor(feature.tone);
+  const style = {
+    map,
+    strokeColor: color,
+    strokeWeight: 14,
+    strokeOpacity: 0.3,
+    strokeStyle: "solid" as const,
+    fillColor: color,
+    fillOpacity: 0.18,
+    clickable: false,
+    zIndex: featureZIndex(feature, index) - 2,
+  };
+
+  switch (feature.kind) {
+    case "dot":
+      return [];
+    case "circle":
+      return [
+        new maps.Circle({
+          ...style,
+          center: new maps.LatLng(feature.center.lat, feature.center.lng),
+          radius: feature.radiusMeters,
+        }),
+      ];
+    case "rect":
+      return [
+        new maps.Polygon({
+          ...style,
+          paths: [rectCorners(feature).map((c) => new maps.LatLng(c.lat, c.lng))],
+        }),
+      ];
+  }
+}
+
 function drawFeature(
   maps: NaverMapsNamespace,
   map: NaverMap,
@@ -905,6 +956,9 @@ export function StrikeMap({ clientId }: { clientId: string }) {
   const boxRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<NaverMap | null>(null);
   const overlaysRef = useRef<NaverOverlay[]>([]);
+  /** 선택 하이라이트 오버레이 — 도형 «위»에 얹었다 지운다. `overlaysRef` 와 «따로» 둔다:
+   *  저기 섞으면 지도 재구성 때 함께 지워져 **선택 상태가 조용히 풀린다** */
+  const highlightRef = useRef<NaverOverlay[]>([]);
   const hitsRef = useRef<StrikeHitEntry[]>([]);
   /** 열린 팝업의 id — `selectFeature` 가 «같은 것을 다시 누르면 닫는다»를 판정할 때 쓴다.
    *  상태를 클로저로 읽으면 옛 값을 본다(`useCallback([])`) */
@@ -1037,6 +1091,25 @@ export function StrikeMap({ clientId }: { clientId: string }) {
   /** 히트를 눌렀을 때의 화면 자리 — **세로만 정한다**(§54.18-3 (1) · 가로는 박스에 고정이라 계산할 것이 없다).
    *  마커가 박스 위쪽이면 팝업은 아래로 붙어 **가리키는 대상을 덮지 않는다.**
    *  ⚠ 지리 좌표로 추정하지 마라 — **렌더된 DOM 에서 읽는다** */
+  /* ★★ **선택 하이라이트 — 도형에 후광을 얹는다**(사용자 지시 2026-09-02 · 8/28 `RallyMap` 과 같은 구조).
+     ⚠ **`popup` 을 의존성으로 쓴다** — `popupIdRef` 는 ref 라 바뀌어도 다시 안 그린다.
+     ⚠ `status` 도 필요하다 — 지도가 `ready` 가 되기 «전»에 그리면 오버레이가 떠돈다.
+     ⛔ 이 정리(`clear`)를 `overlaysRef` 쪽에 합치지 마라 — 지도 재구성과 선택 해제는 «다른 사건»이다. */
+  useEffect(() => {
+    const maps = window.naver?.maps;
+    const map = mapRef.current;
+    const clear = () => {
+      for (const overlay of highlightRef.current) safely(() => overlay.setMap(null));
+      highlightRef.current = [];
+    };
+    clear();
+    if (maps === undefined || map === null || status !== "ready" || popup === null) return clear;
+    const index = STRIKE_MAP_FEATURES.findIndex((f) => f.id === popup.feature.id);
+    if (index < 0) return clear;
+    highlightRef.current = createHighlight(maps, map, popup.feature, index);
+    return clear;
+  }, [popup, status]);
+
   const popupSideOf = useCallback((id: string): "top" | "bottom" => {
     const el = mountRef.current?.querySelector<HTMLElement>(`[data-strike-hit="${id}"]`) ?? null;
     const box = boxRef.current;
