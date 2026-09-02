@@ -18,6 +18,7 @@ import {
   featureLabelAnchor,
   featurePoints,
   featureRoadviewPoint,
+  featureWardPoint,
   featureShortName,
   labelGapOf,
   rectCorners,
@@ -1186,10 +1187,17 @@ export function StrikeMap({ clientId }: { clientId: string }) {
     const open = popup;
     if (open === null) return;
     streetOriginRef.current = open.feature.id;
-    setStreetAt(open.at);
-    setSpotAt(open.at);
+    /* ★★ **세 지점이 «각각 다르다»**(사용자 지시 2026-09-02) — 한 값으로 묶지 마라:
+       ① `open.at` = 팝업이 뜬 자리(라벨 앵커) — **여기서는 안 쓴다**
+       ② `featureRoadviewPoint` = **카메라가 서는 곳**(사각형은 남쪽으로 물린다)
+       ③ `featureWardPoint` = **거리뷰 «안» 와드**(사각형은 구역보다 북쪽 40m)
+       ⚠ 종전에는 셋 다 `open.at` 이었다 — 그래서 «남쪽으로 물리는» 계산이 «한 번도 안 쓰였다». */
+    const camera = featureRoadviewPoint(open.feature) ?? open.at;
+    const ward = featureWardPoint(open.feature) ?? open.at;
+    setStreetAt(camera);
+    setSpotAt(ward);
     setStreetSpot({
-      at: open.at,
+      at: ward,
       name: featureShortName(open.feature),
       visual: CONFIDENCE_VISUAL[open.feature.confidence],
       tone: open.feature.tone,
