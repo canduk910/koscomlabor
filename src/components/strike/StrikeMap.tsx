@@ -375,12 +375,23 @@ function stationDotHtml(color: string): string {
  *  ★ `hit` 이 있으면 **픽토그램이 «누를 것»이 된다**(§54.18-1 «pill 이 없으면 기호») — pill 은 여전히 안 만든다
  *  (M-28 · 겹침 재측정 회피 · pill 상한). ⚠ **화장실 2곳에 pill 을 달지 마라** — 둘 다 이름이 `임시화장실` 이라
  *  **화면에 같은 pill 이 둘** 생기고, 그것은 «두 곳이 있다»가 아니라 «어느 쪽이든 같다»로 읽힌다.
- *  ★ 보이는 배지는 20px + 흰 링 2px = 24px 이고, **히트 상자를 24px 로 «명시»한다** — 링은 `box-shadow` 라
- *  요소 크기에 안 들어가서 그대로 두면 히트가 20px 이 된다(`HIT_MIN_PX` 근거표) */
+ *  ★ 보이는 배지는 `TOILET_BADGE_PX` + 흰 링 2px 이고, **히트 상자를 `TOILET_HIT_PX` 로 «명시»한다** —
+ *  링은 `box-shadow` 라 요소 크기에 안 들어가서 그대로 두면 히트가 배지 크기로 줄어든다.
+ *
+ *  ★★ **2026-09-02 — 20 → 28px 로 키웠다**(사용자 지시 *「화장실 버튼은 크기를 좀 키우자」*).
+ *    같은 날 **무대 pill 4개가 도형 «안»(`placement:"center"`)으로 들어가** 서쪽 열이 비었고,
+ *    종전에 이 값을 묶던 제약(*「무대 pill ↔ 배지 여유 2.0px」*)이 **사라졌다.**
+ *  ⚠ **그 여유는 «다시 생길 수 있다»** — 무대 pill 을 `left`·`right` 로 되돌리면 이 크기가 충돌한다.
+ *    **pill 배치를 바꾸는 사람이 이 값을 함께 재라.**
+ *  ⚠ **32px 를 넘기지 마라** — 화장실 둘 사이(남북 255m · z16 에서 134px)는 여유가 크지만
+ *    **코스콤 pill(`right`)과 역 배지**가 서쪽·동쪽에서 다가온다. 키우려면 6폭 실측이 함께 간다. */
+const TOILET_BADGE_PX = 28;
+const TOILET_HIT_PX = TOILET_BADGE_PX + 4;
+
 function toiletBadgeHtml(hit: StrikeHit | null, stroke: "solid" | "dashed"): string {
   const badge = [
     '<span aria-hidden="true" style="',
-    "width:20px;height:20px;box-sizing:border-box;border-radius:9999px;",
+    `width:${TOILET_BADGE_PX}px;height:${TOILET_BADGE_PX}px;box-sizing:border-box;border-radius:9999px;`,
     /* ★ 선종은 **`CONFIDENCE_VISUAL` 이 정한다**(M-70) — 여기 `dashed` 를 «박아» 두면
        `verified` 화장실이 생겨도 조용히 점선으로 그려진다. **하드코딩으로 되돌리지 마라** */
     /* ★ 선택 판이 배지 «안»(content-box = 17×17 = 20 − 1.5×2)을 채운다 — 위 `pillHtml` 과 **똑같은 3줄**이다.
@@ -394,12 +405,12 @@ function toiletBadgeHtml(hit: StrikeHit | null, stroke: "solid" | "dashed"): str
     `border:1.5px ${stroke} ${REFERENCE};`,
     `box-shadow:0 0 0 2px ${CASING},0 1px 3px rgb(0 0 0 / .35);`,
     'display:flex;align-items:center;justify-content:center;">',
-    symbolSvg("toilet", 13),
+    symbolSvg("toilet", 18),
     "</span>",
   ].join("");
   const seat =
     "position:absolute;left:0;top:0;transform:translate(-50%,-50%);" +
-    `width:${HIT_MIN_PX}px;height:${HIT_MIN_PX}px;display:flex;align-items:center;justify-content:center;`;
+    `width:${TOILET_HIT_PX}px;height:${TOILET_HIT_PX}px;display:flex;align-items:center;justify-content:center;`;
   /* `roadview` 가 없는 픽토그램 항목은 지금 0 이지만 분기를 남긴다 — 히트 규칙은 «데이터가 정한다»가
      이 구현의 계약이고, 없애면 규칙이 «화장실은 늘 눌린다»로 굳는다 */
   if (hit === null) {

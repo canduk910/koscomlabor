@@ -528,7 +528,7 @@ export const STRIKE_MAP_FEATURES: readonly StrikeMapFeature[] = [
     confidence: "estimated",
     center: STAGE_2,
     radiusMeters: STAGE_RADIUS_M,
-    placement: "left",
+    placement: "center",
   },
   {
     kind: "rect",
@@ -552,7 +552,7 @@ export const STRIKE_MAP_FEATURES: readonly StrikeMapFeature[] = [
        그래서 이 pill 의 `right` 는 **더 이상 «비어 있는 동쪽을 쓴다»가 아니라 «도형 밖에 남는 유일한 pill»** 이다.
        ⚠ **`center` 로 옮기지 마라** — 이 pill 은 **누를 수 있고**(`roadview`), 도형 안에 넣으면
          사각형이 클릭을 가로챈다. ⚠ 배치를 바꾸면 화장실 배지와의 간격을 다시 재라 */
-    placement: "center",
+    placement: "right",
     roadview: true,
   },
   {
