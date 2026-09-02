@@ -838,7 +838,7 @@ export function featureShortName(feature: StrikeMapFeature): string {
  *    떨어질 수 있다(횡단보도 건너편 등). **바꾸려면 실제로 열어 보고 확인하라.**
  *  ⚠ 이 좌표를 **데이터로 저장하지 마라** — 이 함수가 그때 계산해 넘기는 값이지
  *    지도 도형·범례로 나가는 값이 아니다(§54-8 조건 14 의 정신). 도형은 여전히 `center` 가 진다. */
-const ROADVIEW_SOUTH_OFFSET_M = 90;
+const ROADVIEW_SOUTH_OFFSET_M = KOSCOM_AREA_HEIGHT_M;
 
 /** 거리뷰 «안»에 심는 와드 지점 — **지도 도형과 «별개»다**(사용자 지시 2026-09-02).
  *  *「로드뷰상 코스콤지부구역 와드는 메인지도의 구역박스와는 «별개»로 40미터정도 더 북쪽에 심었으면」*
@@ -847,8 +847,13 @@ const ROADVIEW_SOUTH_OFFSET_M = 90;
 const WARD_NORTH_OFFSET_M = 40;
 
 /** 거리뷰를 «어디서» 여나 — 사각형은 **남쪽으로 물려** 구역이 정면에 들어오게 한다.
- *  ⚠ **`ROADVIEW_SOUTH_OFFSET_M` 은 «구역 남쪽 가장자리»에서 재는 값이다.**
- *    90 m 는 실측 조정치다 — 40 m 로는 카메라가 구역에 너무 붙어 와드가 시야 위로 벗어났다. */
+ *  ⚠ **`ROADVIEW_SOUTH_OFFSET_M` 은 «구역 남쪽 가장자리»에서 재는 값**이고 40 m(= 사각형 높이)다.
+ *    카메라 → 구역 가까운 변 40 m · 먼 변 80 m · **구역 시야각 48°**(기본 화각 80~90° 안).
+ *
+ *  ⛔ **이 값을 «늘리지» 마라.** 2026-09-02 에 90 m 로 늘렸다가 되돌렸다 —
+ *    그때 «와드가 안 보인다»의 참 원인은 **거리가 아니라 «이 함수가 아예 안 쓰이던 것»** 이었다
+ *    (`openRoadviewHere` 가 카메라·와드에 팝업 앵커를 넣고 있었다). **원인을 오진하고 값을 키웠고,
+ *    배선을 고친 뒤에는 90 m 가 «너무 멀었다»**(구역 시야각 23° — 절반 크기로 보인다). */
 export function featureRoadviewPoint(feature: StrikeMapFeature): StrikeLatLng | null {
   if (feature.roadview !== true) return null;
   if (feature.kind === "rect") {
