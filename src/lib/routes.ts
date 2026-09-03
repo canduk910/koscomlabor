@@ -14,7 +14,7 @@ export const EXTERNAL_LINKS = {
    * ⚠ 호스트가 `mycafe24.com` 이라 «공식»으로 안 보여도 도메인은 화면에 노출한다(§14.1 3중 병행).
    * ⚠ 8/28 전에 주최측에 URL 유효성을 한 번 더 확인하라(요구 78).
    */
-  unionAttendance: "https://prpage153.mycafe24.com/bank701/index.php",
+  unionAttendance: "https://prpage153.mycafe24.com/bank703/index.php",
   /**
    * 네이버 길찾기 — **도착지 = 국회의사당역 3번 출구**(사용자 지시). 좌표부는 base62 로
    * `round(좌표 × 1e7) + 2_000_000_000` 이고 이 값은 `126.9186104, 37.5278498` 이다.
