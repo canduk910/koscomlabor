@@ -820,6 +820,9 @@ export default function StrikePage() {
                   (§52.21-3 · QA 491). «클래스 비율»은 화면 값이 아니고,
                   **`row-gap` 은 «6행 사이 5곳 전부»에 붙는다.**
                 라벨 3개(`일시`·`장소`·`참석대상`)는 **원문 축자**다. 우리가 지은 이름이 아니다.
+                ⚠ **다만 «값»은 셋 다 원문이 아니다** — `일시`(11시 삭제) · `장소`(코리아나호텔 앞) ·
+                  `참석대상`(2026-09-03) 전부 **사용자 지시로 교체됐다.** 라벨이 축자라고 값까지
+                  원문으로 되돌리지 마라 — 각 `<dd>` 의 주석이 그 값의 근거를 진다.
               */}
               <dl className="grid gap-y-1 md:grid-cols-[auto_1fr] md:gap-x-4 md:gap-y-2">
                 <dt className="break-keep break-words text-caption font-semibold text-ink-muted">
@@ -854,7 +857,15 @@ export default function StrikePage() {
                 <dt className="mt-4 break-keep break-words text-caption font-semibold text-ink-muted md:mt-0">
                   참석대상
                 </dt>
-                <dd className="break-keep break-words text-body text-ink">금융노조 전 조합원</dd>
+                {/* ★★ **사용자 지정 문면**(2026-09-03) — 종전 `금융노조 전 조합원` 은 **죽었다.**
+                    ⛔ **원문(「2. 개요」)으로 되돌리지 마라** — 라벨 3개는 원문 축자지만 **이 값은 아니다.**
+                      원문은 금융노조 전체를 말하고, 이 페이지는 **코스콤지부 조합원**이 본다.
+                    ⛔ **`(이 페이지 참석자 명단 기준)` 을 빼지 마라** — 「내가 대상인가」를 조합원이
+                      **이 페이지 안에서 확인할 수 있게** 하는 부분이다. 위 「참석자 명단」 섹션을 가리킨다.
+                      ⚠ 그러니 **「참석자 명단」 섹션을 지우거나 이름을 바꾸면 이 문장이 가리킬 곳을 잃는다.** */}
+                <dd className="break-keep break-words text-body text-ink">
+                  사내게시판에서 총파업 대상으로 공지된 조합원(이 페이지 참석자 명단 기준)
+                </dd>
               </dl>
             </div>
           </section>
