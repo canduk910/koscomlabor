@@ -698,15 +698,42 @@ export default function StrikePage() {
               ⚠ **`quality={90}`** — 그림 안에 «읽어야 하는 숫자»가 있다. 75 로 내리지 마라.
                 `sizes` 는 다른 사진 3장과 «같은 슬롯»이다(§V3-IMAGES). */}
           <figure className="mt-4">
-            <Image
-              src="/images/strike-2026-09-04/qr-guide.jpg"
-              width={1600}
-              height={892}
-              quality={90}
-              sizes="(min-width: 768px) 624px, calc(100vw - 54px)"
-              alt="출석체크 QR코드 안내입니다. 참석확인은 총 2회이고 1차는 10시부터 12시, 2차는 14시 30분부터 16시입니다. 핸드폰 한 대로 한 명만 인증할 수 있고, 브라우저의 위치 서비스 이용 동의 설정이 필요합니다. 등록하지 못한 경우 지부로 현장 인증샷을 제출하거나 수기접수를 요청합니다."
-              className="rounded-badge border border-border-soft block h-auto w-full"
-            />
+            {/* ★★ **그림에도 링크를 건다**(사용자 지시 2026-09-03) — 조합원이 QR 그림을 «누른다».
+                ⚠⚠ **바로 위 카드와 «같은 곳»으로 간다 — 링크가 둘이 된다.** 그래서 이 링크는
+                  **«포인터 전용»** 이다: `aria-hidden` + `tabIndex={-1}`.
+                  ★ 그러면 **키보드·스크린리더는 카드 «한 번»만 만나고**(중복 정지점·중복 낭독 0),
+                    **손가락·마우스는 그림을 눌러 갈 수 있다.**
+                  ⚠ **`aria-hidden` 과 «포커스 가능 여부»는 한 쌍이다** — 둘 중 하나만 주면
+                    WCAG 4.1.2 위반이다(포커스는 가는데 이름이 없는 요소가 생긴다).
+                ⛔ **이 링크에 `aria-label` 을 붙이지 마라** — 붙이는 순간 «둘째 링크»가 되살아나
+                  같은 목적지가 두 번 낭독된다.
+                ★★ **그림의 «정보»는 사라지지 않는다** — `alt` 를 비우는 대신
+                  아래 `figcaption`(`sr-only`)이 그것을 진다. **비시각 사용자가 시각 두 벌을 잃지 않는다.**
+                  ⛔ **그 `figcaption` 을 지우지 마라** — 그림 속 `1차 10:00~12:00`·`2차 14:30~16:00` 은
+                    **페이지 어디에도 «글자»로 없다**(표의 시각은 «다른 것»이다). */}
+            <a
+              href={EXTERNAL_LINKS.unionAttendance}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-hidden="true"
+              tabIndex={-1}
+              className="ease-out-soft block transition-opacity duration-150 hover:opacity-95"
+            >
+              <Image
+                src="/images/strike-2026-09-04/qr-guide.jpg"
+                width={1600}
+                height={892}
+                quality={90}
+                sizes="(min-width: 768px) 624px, calc(100vw - 54px)"
+                alt=""
+                className="rounded-badge border border-border-soft block h-auto w-full"
+              />
+            </a>
+            <figcaption className="sr-only">
+              출석체크 QR코드 안내입니다. 참석확인은 총 2회이고 1차는 10시부터 12시, 2차는 14시 30분부터
+              16시입니다. 핸드폰 한 대로 한 명만 인증할 수 있고, 브라우저의 위치 서비스 이용 동의 설정이
+              필요합니다. 등록하지 못한 경우 지부로 현장 인증샷을 제출하거나 수기접수를 요청합니다.
+            </figcaption>
           </figure>
 
           {/* ── 돌아가기 ── */}
