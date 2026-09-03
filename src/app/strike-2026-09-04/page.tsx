@@ -7,7 +7,12 @@ import { ArrowLeftIcon, ExternalLinkIcon } from "@/components/ui/icons";
 import { RallyStatusBadge } from "@/components/rally/RallyStatus";
 import { StrikeMap } from "@/components/strike/StrikeMap";
 import { strikePhase } from "@/lib/strike";
-import { EXTERNAL_LINKS, ROUTES, UNION_ATTENDANCE_DISPLAY_HOST } from "@/lib/routes";
+import {
+  EXTERNAL_LINKS,
+  ROUTES,
+  STRIKE_SHEET_DISPLAY_HOST,
+  UNION_ATTENDANCE_DISPLAY_HOST,
+} from "@/lib/routes";
 
 /**
  * 9/4 총파업 참석 안내 (디자인 스펙 §52). **모든 문장은 검증 게이트를 통과한 사실만 담는다.**
@@ -615,8 +620,16 @@ export default function StrikePage() {
               ⛔ `<br>`·`<span>` 분할 금지(단일 텍스트 노드 계약) · 새 자리 금지 · 필 버튼 금지 · `※` 금지.
               ⚠ **아래 카드의 `당일 지정된 시각에만 체크됩니다.` 는 그대로 «참»이다 — 함께 고치지 마라.**
                 표가 그 «지정된 시각»의 «값»을 준다. **«규칙 + 그 값»이지 «같은 사실의 두 확정도»가 아니다.** */}
+          {/* ★★ **둘째 문장은 사용자 지정 문면이다**(2026-09-03) — 그림에 링크가 걸린 것을 «글자로» 알린다.
+              ⛔ **`QR출석체크`(붙여쓰기)를 카드 제목 `금융노조 QR 출석체크` 에 맞춰 띄우지 마라** — 지정 문면이다.
+              ⛔ **이 문장을 근거로 아래 그림을 포커스 가능하게 만들지 마라** — 그림은 «포인터 전용»이고
+                (`aria-hidden` + `tabIndex={-1}`) 풀면 **같은 목적지가 두 번 낭독된다.**
+                ★ 비시각 사용자에게는 이 문장의 **`링크`(=카드)** 가 경로다 — 기능 손실 0.
+              ⛔ **`아래 …` 가 가리키는 것은 «카드 + QR 그림» 둘뿐이다.** 그 뒤에 다른 목적지의 카드를
+                «같은 면»으로 붙이면 이 문장이 그것까지 삼킨다(아래 참여명단 카드 주석 참조). */}
           <p className="mt-section break-keep break-words text-body text-ink md:mt-section-lg">
-            당일 QR 출석체크가 있습니다.
+            당일 QR 출석체크가 있습니다. 아래 링크나 이미지를 클릭하시면 QR출석체크와 동일한 링크로
+            접속됩니다.
           </p>
 
           {/*
@@ -735,6 +748,32 @@ export default function StrikePage() {
               필요합니다. 등록하지 못한 경우 지부로 현장 인증샷을 제출하거나 수기접수를 요청합니다.
             </figcaption>
           </figure>
+
+          {/* ★★ **9/4 총파업 참여명단(출석부)**(사용자 지시 2026-09-03) — 자리는 «QR 인증 내용 바로 아래»다.
+              ⛔ **QR 카드와 합치거나 「같은 것」이라 설명하지 마라** — 급여 근거가 되는 출석은
+                **① 출석부 ② QR 두 절차**다. 하나로 읽히면 조합원이 다른 하나를 건너뛴다
+                (2026-09-02 에 그 문장을 지운 적이 있다).
+              ⛔ **남색 면(`bg-primary`)으로 올리지 마라** — 바로 위 `아래 링크나 이미지를 클릭하시면
+                QR출석체크와 «동일한 링크»` 가 **면이 같으면 이 카드까지 삼킨다.** 흰 면이 «다른 목적지»를 진다.
+              ⛔ **설명 줄을 짓지 마라** — 사용자가 준 것은 «제목 한 줄»뿐이다.
+              ★ 외부 이동 3중 병행(§14.1): ↗ 아이콘 + `외부 링크(새 창)` + 카드 내부 텍스트가 지는 접근성 이름.
+                **`aria-label` 금지** — 붙이면 도메인·새 창 고지가 낭독에서 사라진다. */}
+          <a
+            href={EXTERNAL_LINKS.strikeAttendanceSheet}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-card shadow-card ease-out-soft group mt-4 block bg-bg p-4 transition-opacity duration-150 hover:opacity-95 hover:outline-2 hover:-outline-offset-4 hover:outline-primary focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
+          >
+            <span className="block break-keep break-words text-lead font-bold text-primary group-hover:underline">
+              9/4 총파업 참여명단(출석부)
+              <ExternalLinkIcon className="ml-1 inline size-5 align-[-3px]" />
+            </span>
+            {/* 도메인은 `href` 에서 파생한다 — 리터럴을 적으면 링크와 표시가 갈린다.
+                `break-all` 은 공백 없는 라틴 덩어리라 필요하다(§0.8). `#4b5563` on 흰 면 = 7.56 AAA */}
+            <span className="mt-1.5 block break-all text-caption text-ink-muted">
+              외부 링크(새 창) · {STRIKE_SHEET_DISPLAY_HOST}
+            </span>
+          </a>
 
           {/* ── 돌아가기 ── */}
           <p className="mt-section md:mt-section-lg">

@@ -16,6 +16,14 @@ export const EXTERNAL_LINKS = {
    */
   unionAttendance: "https://prpage153.mycafe24.com/bank703/index.php",
   /**
+   * 9/4 총파업 참여명단(출석부) — **지부가 만든 구글 시트**(사용자 제공 2026-09-03).
+   * ⚠ **`?usp=sharing` 를 떼지 마라** — 공유 링크의 일부다.
+   * ⚠ 이 링크는 «주최측 QR» 과 «다른 것»이다 — 원문 ※ 가 요구하는 **출석부 서명** 쪽이다.
+   *   ⛔ 둘을 한 카드로 합치거나 «같은 것»이라 설명하지 마라(2026-09-02 에 그 오류를 이미 냈다).
+   */
+  strikeAttendanceSheet:
+    "https://docs.google.com/spreadsheets/d/1gaG0B9LqDl6RnBT3vSAJiLvB5jZ9cQiYD0RfPkIq3Aw/edit?usp=sharing",
+  /**
    * 네이버 길찾기 — **도착지 = 국회의사당역 3번 출구**(사용자 지시). 좌표부는 base62 로
    * `round(좌표 × 1e7) + 2_000_000_000` 이고 이 값은 `126.9186104, 37.5278498` 이다.
    * ⚠ **KDB산업은행 좌표(`3zfgXq,2AKonz`)로 되돌리지 마라** — 지도상 더 가까운데도 네이버가 엉뚱한
@@ -48,6 +56,8 @@ export const ONNURI_GUIDE_DISPLAY_HOST = new URL(EXTERNAL_LINKS.onnuriGuide).hos
 
 /** 출석체크 카드에 **표시**하는 도메인 — `href` 에서 파생해 링크와 표시가 갈리지 않게 한다 */
 export const UNION_ATTENDANCE_DISPLAY_HOST = new URL(EXTERNAL_LINKS.unionAttendance).host;
+/** 참여명단 시트의 표시 도메인 — **`href` 에서 파생한다**(리터럴을 적으면 링크와 표시가 갈린다) */
+export const STRIKE_SHEET_DISPLAY_HOST = new URL(EXTERNAL_LINKS.strikeAttendanceSheet).host;
 
 /** 참석 예비조사 배너에 **표시**하는 도메인(§45-11 조건 3 — 배너 이름과 도착 페이지 제목이 글자가 다르다).
  *  ⚠ 리터럴 `docs.google.com` 을 적지 마라 — `href` 파생이 게시 조건이다. */
