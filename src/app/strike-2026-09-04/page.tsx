@@ -627,165 +627,176 @@ export default function StrikePage() {
                 ★ 비시각 사용자에게는 이 문장의 **`링크`(=카드)** 가 경로다 — 기능 손실 0.
               ⛔ **`아래 …` 가 가리키는 것은 «카드 + QR 그림» 둘뿐이다.** 그 뒤에 다른 목적지의 카드를
                 «같은 면»으로 붙이면 이 문장이 그것까지 삼킨다(아래 참여명단 카드 주석 참조). */}
-          <p className="mt-section break-keep break-words text-body text-ink md:mt-section-lg">
-            당일 QR 출석체크가 있습니다. 아래 링크나 이미지를 클릭하시면 QR출석체크와 동일한 링크로
-            접속됩니다.
-          </p>
+          {/* ── 블록 1 — 출석체크 안내 (사용자 지시 2026-09-03) ──
+              ★★ **섹션으로 «갈랐다»** — 종전에는 QR 카드·그림·참여명단이 «머리글 없이» 한 덩어리라
+                사용자가 *「너무 QR코드랑 함께 섹션에 포함된 느낌」* 이라 지적했다.
+              ⛔ **참여명단 카드를 이 섹션 안으로 되돌리지 마라** — 목적지도 절차도 다르다. */}
+          <section aria-labelledby="attendance-heading" className="mt-section md:mt-section-lg">
+            <SectionHeading id="attendance-heading">출석체크 안내</SectionHeading>
+            <p className="mt-6 break-keep break-words text-body text-ink">
+              당일 QR 출석체크가 있습니다. 아래 링크나 이미지를 클릭하시면 QR출석체크와 동일한 링크로
+              접속됩니다.
+            </p>
 
-          {/*
-            ★★ **QR 출석체크 카드**(리더 M-26 · 검증 §57-3 (2) — **한 글자도 고치지 마라**).
+            {/* ★★ **급여지급 출석은 «두 절차»다**(사용자 지시 2026-09-03 · 2026-09-02 재확인).
+                ⛔ **둘을 「같은 것」으로 묶거나 하나를 지우지 마라** — 하나로 읽히면 조합원이
+                  다른 하나를 건너뛴다. **QR 만 하고 출석부를 안 쓰면 급여 근거가 빈다.**
+                ⛔ **`시작종료 시` 를 「시작·종료 시」로 «고치지 마라»** — 사용자 지정 문면이다.
+                ⛔ **시각을 여기에 적지 마라** — 「총파업 일정」 표가 축자로 진다(요구 88 · 한 출처). */}
+            <ol className="rounded-panel shadow-card mt-6 list-decimal space-y-3 bg-bg py-5 pl-10 pr-5 text-body text-ink marker:font-bold marker:text-primary md:py-8 md:pl-14 md:pr-8">
+              <li className="break-keep break-words">지부천막에서 출석부 작성</li>
+              <li className="break-keep break-words">시작종료 시 QR출석체크</li>
+            </ol>
 
-            ## 왜 «넣는다» 인가 — 근거는 «편익»이 아니라 **«대안이 더 나쁘다»** 다
+            {/*
+              ★★ **QR 출석체크 카드**(리더 M-26 · 검증 §57-3 (2) — **한 글자도 고치지 마라**).
 
-            M-24 로 `/rally-2026-08-28` 이 `/bargaining-2026` 에서 **한 번의 클릭 거리**가 됐다.
-            그래서 **«링크를 안 넣는다»가 링크를 «막는» 것이 아니다** — 조합원은 8/28 카드에서
-            같은 주소를 찾아내고, 그때 **`1차·2차`(8/28 시각) · `상품권 5만원`(8/28 조건) ·
-            `참석명단 작성(지부천막)`(8/28 동선) · `손피켓`(8/28 배포물)** 을 **한 덩어리로** 가져간다.
-            → **«안 넣는다»는 링크에 «8/28 조건을 묶어서» 주는 것이다**(§57-1).
+              ## 왜 «넣는다» 인가 — 근거는 «편익»이 아니라 **«대안이 더 나쁘다»** 다
 
-            ## ⚠ 옮겨 오면 안 되는 것 — **확인된 것은 «주소 하나»뿐이다**
+              M-24 로 `/rally-2026-08-28` 이 `/bargaining-2026` 에서 **한 번의 클릭 거리**가 됐다.
+              그래서 **«링크를 안 넣는다»가 링크를 «막는» 것이 아니다** — 조합원은 8/28 카드에서
+              같은 주소를 찾아내고, 그때 **`1차·2차`(8/28 시각) · `상품권 5만원`(8/28 조건) ·
+              `참석명단 작성(지부천막)`(8/28 동선) · `손피켓`(8/28 배포물)** 을 **한 덩어리로** 가져간다.
+              → **«안 넣는다»는 링크에 «8/28 조건을 묶어서» 주는 것이다**(§57-1).
 
-            **8/28 카드의 설명 3줄을 옮기지 마라** — *"손피켓이 없어도 이 링크로 인증할 수 있습니다."* ·
-            *"손피켓의 QR을 찍으면 나오는 출석체크 페이지와 같습니다. 지정된 출석 시간에만 체크됩니다."*
-            **전부 손피켓 전제**이고 **9/4 배포물은 미확인**이다(§57-6 #3).
-            ⚠ **`손피켓` 금지** · ⚠ **`바로하기` 금지** — 8/28 카드 제목이 `손피켓 QR인증 바로하기` 다.
-              **두 페이지의 라벨이 갈려야** «한 문자열 두 목적지» 충돌이 없다(§20.0-3 계열).
-            ⚠ **`지정된 출석 시간` 을 쓰지 마라** — 9/4 는 시각이 미정이라 **그 확정 명사를 못 쓴다.**
-              그래서 `당일 지정된 시각에만` 이다.
+              ## ⚠ 옮겨 오면 안 되는 것 — **확인된 것은 «주소 하나»뿐이다**
 
-            ## 문면 근거
+              **8/28 카드의 설명 3줄을 옮기지 마라** — *"손피켓이 없어도 이 링크로 인증할 수 있습니다."* ·
+              *"손피켓의 QR을 찍으면 나오는 출석체크 페이지와 같습니다. 지정된 출석 시간에만 체크됩니다."*
+              **전부 손피켓 전제**이고 **9/4 배포물은 미확인**이다(§57-6 #3).
+              ⚠ **`손피켓` 금지** · ⚠ **`바로하기` 금지** — 8/28 카드 제목이 `손피켓 QR인증 바로하기` 다.
+                **두 페이지의 라벨이 갈려야** «한 문자열 두 목적지» 충돌이 없다(§20.0-3 계열).
+              ⚠ **`지정된 출석 시간` 을 쓰지 마라** — 9/4 는 시각이 미정이라 **그 확정 명사를 못 쓴다.**
+                그래서 `당일 지정된 시각에만` 이다.
 
-            | 줄 | 근거 |
-            |---|---|
-            | `금융노조 QR 출석체크` | 도착지 `<title>` 「**금융노조** 집회참석」과 낱말이 겹쳐 **«맞게 왔다»가 확인된다**. 뒤 낱말은 위 `<p>` 와 같다 |
-            | `당일 지정된 시각에만 체크됩니다.` | ★ 도착지 실측 문면(「지정된 시간에만 체크 가능합니다」)의 **요지**다 — 우리 창작이 아니다. **`당일` 이 «미리 눌러 출석했다고 믿는» 경로를 막는다**(성공 피드백 유무는 확인 불가 · §57-6 #1) |
+              ## 문면 근거
 
-            ## 형태 — **8/28 카드와 «일부러» 같게 뒀다**(§57-3 (3) 조건 5 · §0.7)
+              | 줄 | 근거 |
+              |---|---|
+              | `금융노조 QR 출석체크` | 도착지 `<title>` 「**금융노조** 집회참석」과 낱말이 겹쳐 **«맞게 왔다»가 확인된다**. 뒤 낱말은 위 `<p>` 와 같다 |
+              | `당일 지정된 시각에만 체크됩니다.` | ★ 도착지 실측 문면(「지정된 시간에만 체크 가능합니다」)의 **요지**다 — 우리 창작이 아니다. **`당일` 이 «미리 눌러 출석했다고 믿는» 경로를 막는다**(성공 피드백 유무는 확인 불가 · §57-6 #1) |
 
-            **카드 = 외부 이동**이다. ⚠ **필 버튼으로 바꾸지 마라** — 필 버튼은 «페이지 «안» 조작»의 형태다.
-            남색 면(`bg-primary` ↔ 흰 글자 대비 **12.6** AAA)까지 `QrAttendanceCard` 와 같은 값을 쓴다 —
-            **두 페이지가 같은 것을 같은 형태로** 말한다.
-            ⚠ **클래스 문자열이 두 벌이다**(여기 · `src/components/rally/QrAttendanceCard.tsx`).
-              **공통 컴포넌트로 묶지 않았다** — 그쪽 카드는 제목·설명 구성이 다르고 주석이 8/28 판정을
-              통째로 지고 있다. **한쪽 형태를 고치면 다른 쪽도 열어 보라.**
+              ## 형태 — **8/28 카드와 «일부러» 같게 뒀다**(§57-3 (3) 조건 5 · §0.7)
 
-            ## 접근성 — **`aria-label` 을 붙이지 마라**(`union-webapp-dev §8`)
+              **카드 = 외부 이동**이다. ⚠ **필 버튼으로 바꾸지 마라** — 필 버튼은 «페이지 «안» 조작»의 형태다.
+              남색 면(`bg-primary` ↔ 흰 글자 대비 **12.6** AAA)까지 `QrAttendanceCard` 와 같은 값을 쓴다 —
+              **두 페이지가 같은 것을 같은 형태로** 말한다.
+              ⚠ **클래스 문자열이 두 벌이다**(여기 · `src/components/rally/QrAttendanceCard.tsx`).
+                **공통 컴포넌트로 묶지 않았다** — 그쪽 카드는 제목·설명 구성이 다르고 주석이 8/28 판정을
+                통째로 지고 있다. **한쪽 형태를 고치면 다른 쪽도 열어 보라.**
 
-            **카드 전체가 단일 `<a>`** 라 **내부 텍스트(제목 + 설명 + 도메인 줄)가 접근성 이름을 진다.**
-            `aria-label` 을 붙이는 순간 **설명 줄(«당일 지정된 시각에만»)이 링크 낭독에서 사라진다.**
-            외부 이동 **3중 병행**(§14.1): ↗ 아이콘 + 도메인 표기 + 내부 텍스트가 지는 이름.
-            ★ **도메인은 `href` 에서 파생한다**(`UNION_ATTENDANCE_DISPLAY_HOST`) — 리터럴을 적으면
-              링크와 표시가 갈린다. **`break-all` 은 도메인 줄에만**(공백 없는 라틴 덩어리 · §0.8).
-          */}
-          <a
-            href={EXTERNAL_LINKS.unionAttendance}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-card shadow-card ease-out-soft group mt-4 block bg-primary p-4 transition-opacity duration-150 hover:opacity-95 hover:outline-2 hover:-outline-offset-4 hover:outline-white focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
-          >
-            <span className="block break-keep break-words text-lead font-bold text-white group-hover:underline">
-              금융노조 QR 출석체크
-              <ExternalLinkIcon className="ml-1 inline size-5 align-[-3px]" />
-            </span>
-            <span className="mt-1 block break-keep break-words text-caption text-white">
-              당일 지정된 시각에만 체크됩니다.
-            </span>
-            <span className="mt-1.5 block break-all text-caption text-white/80">
-              외부 링크(새 창) · {UNION_ATTENDANCE_DISPLAY_HOST}
-            </span>
-          </a>
+              ## 접근성 — **`aria-label` 을 붙이지 마라**(`union-webapp-dev §8`)
 
-          {/* ★★ **출석체크 QR코드 안내 — 금융노조 배포 원본**(사용자 지시 2026-09-03).
-              자리 근거: **카드 «바로 뒤»** 다 — 카드가 «어디로 가나»를 주고 이 그림이 «어떻게 하나»를 준다.
-              ⛔ **「원본 자료」 섹션으로 옮기지 마라** — 거기는 «출처 증거»(위계 3순위)이고
-                이것은 **당일 행동 정보**다. 카드와 떨어지면 «누른 뒤 무엇을 하나»가 끊긴다.
-
-              ⚠⚠ **이 그림의 시각(1차 10:00~12:00 · 2차 14:30~16:00)은 「총파업 일정」 표의
-                출석체크 시각(11:00~11:30 · 15:00~15:15)과 «다르다».**
-                ★ **의도된 차이다**[사용자 확인 2026-09-03] — 금융노조 QR 시스템이 «열려 있는» 창과
-                지부가 정한 «움직이는» 시각이 다르고, 표의 시각은 그 창 «안»에 든다.
-                ⛔ **둘 중 하나를 고치거나 「같게」 만들지 마라.** 출처가 다르다.
-
-              ⚠ `alt` 는 **그림이 전달하는 «행동 정보»** 만 담는다 — 시각 두 벌과 「1폰 1인증」.
-                ⛔ 그림 속 포스터 문구(`금융노동자 총단결로…`)는 **장식이라 옮기지 마라.**
-              ⚠ **`quality={90}`** — 그림 안에 «읽어야 하는 숫자»가 있다. 75 로 내리지 마라.
-                `sizes` 는 다른 사진 3장과 «같은 슬롯»이다(§V3-IMAGES). */}
-          <figure className="mt-4">
-            {/* ★★ **그림에도 링크를 건다**(사용자 지시 2026-09-03) — 조합원이 QR 그림을 «누른다».
-                ⚠⚠ **바로 위 카드와 «같은 곳»으로 간다 — 링크가 둘이 된다.** 그래서 이 링크는
-                  **«포인터 전용»** 이다: `aria-hidden` + `tabIndex={-1}`.
-                  ★ 그러면 **키보드·스크린리더는 카드 «한 번»만 만나고**(중복 정지점·중복 낭독 0),
-                    **손가락·마우스는 그림을 눌러 갈 수 있다.**
-                  ⚠ **`aria-hidden` 과 «포커스 가능 여부»는 한 쌍이다** — 둘 중 하나만 주면
-                    WCAG 4.1.2 위반이다(포커스는 가는데 이름이 없는 요소가 생긴다).
-                ⛔ **이 링크에 `aria-label` 을 붙이지 마라** — 붙이는 순간 «둘째 링크»가 되살아나
-                  같은 목적지가 두 번 낭독된다.
-                ★★ **그림의 «정보»는 사라지지 않는다** — `alt` 를 비우는 대신
-                  아래 `figcaption`(`sr-only`)이 그것을 진다. **비시각 사용자가 시각 두 벌을 잃지 않는다.**
-                  ⛔ **그 `figcaption` 을 지우지 마라** — 그림 속 `1차 10:00~12:00`·`2차 14:30~16:00` 은
-                    **페이지 어디에도 «글자»로 없다**(표의 시각은 «다른 것»이다). */}
+              **카드 전체가 단일 `<a>`** 라 **내부 텍스트(제목 + 설명 + 도메인 줄)가 접근성 이름을 진다.**
+              `aria-label` 을 붙이는 순간 **설명 줄(«당일 지정된 시각에만»)이 링크 낭독에서 사라진다.**
+              외부 이동 **3중 병행**(§14.1): ↗ 아이콘 + 도메인 표기 + 내부 텍스트가 지는 이름.
+              ★ **도메인은 `href` 에서 파생한다**(`UNION_ATTENDANCE_DISPLAY_HOST`) — 리터럴을 적으면
+                링크와 표시가 갈린다. **`break-all` 은 도메인 줄에만**(공백 없는 라틴 덩어리 · §0.8).
+            */}
             <a
               href={EXTERNAL_LINKS.unionAttendance}
               target="_blank"
               rel="noopener noreferrer"
-              aria-hidden="true"
-              tabIndex={-1}
-              className="ease-out-soft block transition-opacity duration-150 hover:opacity-95"
+              className="rounded-card shadow-card ease-out-soft group mt-4 block bg-primary p-4 transition-opacity duration-150 hover:opacity-95 hover:outline-2 hover:-outline-offset-4 hover:outline-white focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
             >
-              <Image
-                src="/images/strike-2026-09-04/qr-guide.jpg"
-                width={1600}
-                height={892}
-                quality={90}
-                sizes="(min-width: 768px) 624px, calc(100vw - 54px)"
-                alt=""
-                className="rounded-badge border border-border-soft block h-auto w-full"
-              />
+              <span className="block break-keep break-words text-lead font-bold text-white group-hover:underline">
+                금융노조 QR 출석체크
+                <ExternalLinkIcon className="ml-1 inline size-5 align-[-3px]" />
+              </span>
+              <span className="mt-1 block break-keep break-words text-caption text-white">
+                당일 지정된 시각에만 체크됩니다.
+              </span>
+              <span className="mt-1.5 block break-all text-caption text-white/80">
+                외부 링크(새 창) · {UNION_ATTENDANCE_DISPLAY_HOST}
+              </span>
             </a>
-            <figcaption className="sr-only">
-              출석체크 QR코드 안내입니다. 참석확인은 총 2회이고 1차는 10시부터 12시, 2차는 14시 30분부터
-              16시입니다. 핸드폰 한 대로 한 명만 인증할 수 있고, 브라우저의 위치 서비스 이용 동의 설정이
-              필요합니다. 등록하지 못한 경우 지부로 현장 인증샷을 제출하거나 수기접수를 요청합니다.
-            </figcaption>
-          </figure>
 
-          {/* ★★ **9/4 총파업 참여명단(출석부)**(사용자 지시 2026-09-03) — 자리는 «QR 인증 내용 바로 아래»다.
-              ⛔ **QR 카드와 합치거나 「같은 것」이라 설명하지 마라** — 급여 근거가 되는 출석은
-                **① 출석부 ② QR 두 절차**다. 하나로 읽히면 조합원이 다른 하나를 건너뛴다
-                (2026-09-02 에 그 문장을 지운 적이 있다).
-              ⛔ **남색 면(`bg-primary`)으로 올리지 마라** — 바로 위 `아래 링크나 이미지를 클릭하시면
-                QR출석체크와 «동일한 링크»` 가 **면이 같으면 이 카드까지 삼킨다.** 흰 면이 «다른 목적지»를 진다.
-              ⛔ **설명 줄을 짓지 마라** — 사용자가 준 것은 «제목 한 줄»뿐이다.
-              ★ 외부 이동 3중 병행(§14.1): ↗ 아이콘 + `외부 링크(새 창)` + 카드 내부 텍스트가 지는 접근성 이름.
-                **`aria-label` 금지** — 붙이면 도메인·새 창 고지가 낭독에서 사라진다. */}
-          <a
-            href={EXTERNAL_LINKS.strikeAttendanceSheet}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-card shadow-card ease-out-soft group mt-4 block bg-bg p-4 transition-opacity duration-150 hover:opacity-95 hover:outline-2 hover:-outline-offset-4 hover:outline-primary focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
-          >
-            <span className="block break-keep break-words text-lead font-bold text-primary group-hover:underline">
-              9/4 총파업 참여명단(출석부)
-              <ExternalLinkIcon className="ml-1 inline size-5 align-[-3px]" />
-            </span>
-            {/* 도메인은 `href` 에서 파생한다 — 리터럴을 적으면 링크와 표시가 갈린다.
-                `break-all` 은 공백 없는 라틴 덩어리라 필요하다(§0.8). `#4b5563` on 흰 면 = 7.56 AAA */}
-            <span className="mt-1.5 block break-all text-caption text-ink-muted">
-              외부 링크(새 창) · {STRIKE_SHEET_DISPLAY_HOST}
-            </span>
-          </a>
+            {/* ★★ **출석체크 QR코드 안내 — 금융노조 배포 원본**(사용자 지시 2026-09-03).
+                자리 근거: **카드 «바로 뒤»** 다 — 카드가 «어디로 가나»를 주고 이 그림이 «어떻게 하나»를 준다.
+                ⛔ **「원본 자료」 섹션으로 옮기지 마라** — 거기는 «출처 증거»(위계 3순위)이고
+                  이것은 **당일 행동 정보**다. 카드와 떨어지면 «누른 뒤 무엇을 하나»가 끊긴다.
 
-          {/* ── 돌아가기 ── */}
-          <p className="mt-section md:mt-section-lg">
-            <Link
-              href={ROUTES.bargaining}
-              className="ease-out-soft inline-flex min-h-touch items-center gap-2 text-body font-semibold text-primary transition-colors duration-150 hover:underline focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
+                ⚠⚠ **이 그림의 시각(1차 10:00~12:00 · 2차 14:30~16:00)은 「총파업 일정」 표의
+                  출석체크 시각(11:00~11:30 · 15:00~15:15)과 «다르다».**
+                  ★ **의도된 차이다**[사용자 확인 2026-09-03] — 금융노조 QR 시스템이 «열려 있는» 창과
+                  지부가 정한 «움직이는» 시각이 다르고, 표의 시각은 그 창 «안»에 든다.
+                  ⛔ **둘 중 하나를 고치거나 「같게」 만들지 마라.** 출처가 다르다.
+
+                ⚠ `alt` 는 **그림이 전달하는 «행동 정보»** 만 담는다 — 시각 두 벌과 「1폰 1인증」.
+                  ⛔ 그림 속 포스터 문구(`금융노동자 총단결로…`)는 **장식이라 옮기지 마라.**
+                ⚠ **`quality={90}`** — 그림 안에 «읽어야 하는 숫자»가 있다. 75 로 내리지 마라.
+                  `sizes` 는 다른 사진 3장과 «같은 슬롯»이다(§V3-IMAGES). */}
+            <figure className="mt-4">
+              {/* ★★ **그림에도 링크를 건다**(사용자 지시 2026-09-03) — 조합원이 QR 그림을 «누른다».
+                  ⚠⚠ **바로 위 카드와 «같은 곳»으로 간다 — 링크가 둘이 된다.** 그래서 이 링크는
+                    **«포인터 전용»** 이다: `aria-hidden` + `tabIndex={-1}`.
+                    ★ 그러면 **키보드·스크린리더는 카드 «한 번»만 만나고**(중복 정지점·중복 낭독 0),
+                      **손가락·마우스는 그림을 눌러 갈 수 있다.**
+                    ⚠ **`aria-hidden` 과 «포커스 가능 여부»는 한 쌍이다** — 둘 중 하나만 주면
+                      WCAG 4.1.2 위반이다(포커스는 가는데 이름이 없는 요소가 생긴다).
+                  ⛔ **이 링크에 `aria-label` 을 붙이지 마라** — 붙이는 순간 «둘째 링크»가 되살아나
+                    같은 목적지가 두 번 낭독된다.
+                  ★★ **그림의 «정보»는 사라지지 않는다** — `alt` 를 비우는 대신
+                    아래 `figcaption`(`sr-only`)이 그것을 진다. **비시각 사용자가 시각 두 벌을 잃지 않는다.**
+                    ⛔ **그 `figcaption` 을 지우지 마라** — 그림 속 `1차 10:00~12:00`·`2차 14:30~16:00` 은
+                      **페이지 어디에도 «글자»로 없다**(표의 시각은 «다른 것»이다). */}
+              <a
+                href={EXTERNAL_LINKS.unionAttendance}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-hidden="true"
+                tabIndex={-1}
+                className="ease-out-soft block transition-opacity duration-150 hover:opacity-95"
+              >
+                <Image
+                  src="/images/strike-2026-09-04/qr-guide.jpg"
+                  width={1600}
+                  height={892}
+                  quality={90}
+                  sizes="(min-width: 768px) 624px, calc(100vw - 54px)"
+                  alt=""
+                  className="rounded-badge border border-border-soft block h-auto w-full"
+                />
+              </a>
+              <figcaption className="sr-only">
+                출석체크 QR코드 안내입니다. 참석확인은 총 2회이고 1차는 10시부터 12시, 2차는 14시 30분부터
+                16시입니다. 핸드폰 한 대로 한 명만 인증할 수 있고, 브라우저의 위치 서비스 이용 동의 설정이
+                필요합니다. 등록하지 못한 경우 지부로 현장 인증샷을 제출하거나 수기접수를 요청합니다.
+              </figcaption>
+            </figure>
+          </section>
+
+          {/* ── 블록 2 — 참석자 명단 (사용자 지시 2026-09-03) ──
+              ★ 카드는 **흰 면**이다. ⛔ 남색(`bg-primary`)으로 올리지 마라 — 위 섹션의 QR 카드와
+                «같은 것»으로 보인다. 강조는 색이 아니라 **머리글 + 섹션 경계**가 진다. */}
+          <section aria-labelledby="attendee-list-heading" className="mt-section md:mt-section-lg">
+            <SectionHeading id="attendee-list-heading">참석자 명단</SectionHeading>
+            {/* ★★ **9/4 총파업 참여명단(출석부)**(사용자 지시 2026-09-03) — 자리는 «QR 인증 내용 바로 아래»다.
+                ⛔ **QR 카드와 합치거나 「같은 것」이라 설명하지 마라** — 급여 근거가 되는 출석은
+                  **① 출석부 ② QR 두 절차**다. 하나로 읽히면 조합원이 다른 하나를 건너뛴다
+                  (2026-09-02 에 그 문장을 지운 적이 있다).
+                ⛔ **남색 면(`bg-primary`)으로 올리지 마라** — 바로 위 `아래 링크나 이미지를 클릭하시면
+                  QR출석체크와 «동일한 링크»` 가 **면이 같으면 이 카드까지 삼킨다.** 흰 면이 «다른 목적지»를 진다.
+                ⛔ **설명 줄을 짓지 마라** — 사용자가 준 것은 «제목 한 줄»뿐이다.
+                ★ 외부 이동 3중 병행(§14.1): ↗ 아이콘 + `외부 링크(새 창)` + 카드 내부 텍스트가 지는 접근성 이름.
+                  **`aria-label` 금지** — 붙이면 도메인·새 창 고지가 낭독에서 사라진다. */}
+            <a
+              href={EXTERNAL_LINKS.strikeAttendanceSheet}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-panel shadow-card ease-out-soft group mt-6 block bg-bg p-5 md:p-8 transition-opacity duration-150 hover:opacity-95 hover:outline-2 hover:-outline-offset-4 hover:outline-primary focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
             >
-              <ArrowLeftIcon className="size-5" />
-              26년 임단협 투쟁 안내로 돌아가기
-            </Link>
-          </p>
-
+              <span className="block break-keep break-words text-lead font-bold text-primary group-hover:underline">
+                9/4 총파업 참여명단(출석부)
+                <ExternalLinkIcon className="ml-1 inline size-5 align-[-3px]" />
+              </span>
+              {/* 도메인은 `href` 에서 파생한다 — 리터럴을 적으면 링크와 표시가 갈린다.
+                  `break-all` 은 공백 없는 라틴 덩어리라 필요하다(§0.8). `#4b5563` on 흰 면 = 7.56 AAA */}
+              <span className="mt-1.5 block break-all text-caption text-ink-muted">
+                외부 링크(새 창) · {STRIKE_SHEET_DISPLAY_HOST}
+              </span>
+            </a>
+          </section>
 
           {/* ── 블록 2 — 개요 (원문 「2. 개요」 축자) ── */}
           <section aria-labelledby="overview-heading" className="mt-section md:mt-section-lg">
@@ -1187,6 +1198,21 @@ export default function StrikePage() {
               </figure>
             </div>
           </section>
+
+          {/* ── 돌아가기 — **페이지 «맨 아래»다.**
+              ⛔ **위로 올리지 마라** — 09a77f8 에서 QR 블록을 최상단으로 옮길 때 바로 뒤에
+                붙어 있던 이 블록이 «딸려 올라와» 본문 중간(아래로 4,500px 남음)에 놓였고,
+                조합원에게 「여기서 끝」으로 읽혔다. 닫는 링크는 닫는 자리에 둔다. ── */}
+          <p className="mt-section md:mt-section-lg">
+            <Link
+              href={ROUTES.bargaining}
+              className="ease-out-soft inline-flex min-h-touch items-center gap-2 text-body font-semibold text-primary transition-colors duration-150 hover:underline focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
+            >
+              <ArrowLeftIcon className="size-5" />
+              26년 임단협 투쟁 안내로 돌아가기
+            </Link>
+          </p>
+
 
         </div>
       </main>
