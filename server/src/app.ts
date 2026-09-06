@@ -21,9 +21,11 @@ import { SlidingWindowLimiter } from "./lib/rateLimit.js";
 import { validateGuestbookInput } from "./lib/validate.js";
 import { AttachmentsRepository } from "./repos/attachments.js";
 import { AdminCredentialsRepository } from "./repos/credentials.js";
+import { PledgesRepository } from "./repos/pledges.js";
 import { PostsRepository } from "./repos/posts.js";
 import { SessionsRepository } from "./repos/sessions.js";
 import { registerAdminRoutes } from "./routes/admin.js";
+import { registerPledgeRoutes } from "./routes/pledges.js";
 import { registerPublicPostRoutes } from "./routes/posts.js";
 
 const MINUTE = 60_000;
@@ -119,6 +121,7 @@ export async function buildApp({ config }: AppDeps): Promise<FastifyInstance> {
   const attachments = new AttachmentsRepository(pool);
   const sessions = new SessionsRepository(pool);
   const credentials = new AdminCredentialsRepository(pool);
+  const pledges = new PledgesRepository(pool);
 
   // 관리자 비밀번호 해시 부팅 시드 (§12.3). env 값은 admin_credentials 행이 없을 때만 쓰이고,
   // 이후에는 DB 가 권위 값이다. **실패하면 기동을 거부한다** — 자격 증명 저장소를 읽지 못하는
@@ -328,6 +331,20 @@ export async function buildApp({ config }: AppDeps): Promise<FastifyInstance> {
     credentials,
     adminLimiter,
     loginLimiter,
+    errorSchema,
+    tooManyRequests,
+  });
+
+  /* ---------- 공약 이행 상황판 (공개 + admin CRUD) ---------- */
+
+  // 공개/관리자 라우트가 한 파일이다 — 응답 스키마 두 벌이 서로의 차이로만 존재하기 때문.
+  // 근거는 routes/pledges.ts 머리 주석.
+  registerPledgeRoutes(app, {
+    config,
+    pledges,
+    sessions,
+    getLimiter,
+    adminLimiter,
     errorSchema,
     tooManyRequests,
   });

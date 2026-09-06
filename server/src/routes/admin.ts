@@ -8,7 +8,7 @@ import path from "node:path";
 import argon2 from "argon2";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AppConfig } from "../config.js";
-import { SESSION_COOKIE, authenticateAdmin } from "../lib/adminGuard.js";
+import { SESSION_COOKIE, authenticateAdmin, createRequireAdmin } from "../lib/adminGuard.js";
 import { errorBody } from "../lib/errors.js";
 import { resolveAllowedType, sanitizeFilename } from "../lib/fileTypes.js";
 import { LinkFetchError, fetchLinkPreview } from "../lib/linkPreview.js";
@@ -130,24 +130,14 @@ export function registerAdminRoutes(app: FastifyInstance, deps: AdminRouteDeps):
     path: "/admin",
   };
 
-  /**
-   * 공통 인증 preHandler — 로그인 라우트 제외 전 /admin/* 에 적용.
-   * rate limit 은 "실패한 인증 시도"만 카운트한다 (분당 10회) — 토큰 무차별 대입 방어가
-   * 목적이므로 인증된 정상 관리 작업은 제한하지 않는다 (명세 §4.3 정교화, 06 문서 기록).
-   */
-  async function requireAdmin(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-    const decision = adminLimiter.check(request.ip);
-    if (!decision.allowed) {
-      await tooManyRequests(reply, decision.retryAfterSeconds);
-      return;
-    }
-    const method = await authenticateAdmin(request, { adminApiToken: config.adminApiToken, sessions });
-    if (method === null) {
-      adminLimiter.record(request.ip); // 실패 시도만 기록
-      request.log.warn({ route: request.url, result: "unauthorized" }, "admin auth failed");
-      await reply.status(401).send(errorBody("UNAUTHORIZED", "관리자 인증에 실패했습니다."));
-    }
-  }
+  // 공통 인증 preHandler — 정책 본문과 근거는 `lib/adminGuard.ts` 의 createRequireAdmin.
+  // 공약 라우트(routes/pledges.ts)가 같은 팩토리를 쓴다.
+  const requireAdmin = createRequireAdmin({
+    adminApiToken: config.adminApiToken,
+    sessions,
+    adminLimiter,
+    tooManyRequests,
+  });
 
   /**
    * 활성 비밀번호 해시 조회. **DB 행이 권위 값**이고, 행이 없는 예외 상황(마이그레이션 직후
