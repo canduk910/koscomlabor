@@ -6,7 +6,7 @@ import { PLEDGE_DASHBOARD_NAME } from "@/lib/pledges";
 import { ROUTES } from "@/lib/routes";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
-import { ArrowLeftIcon, ConstructionIcon } from "@/components/ui/icons";
+import { ArrowLeftIcon, ConstructionIcon, DocumentIcon } from "@/components/ui/icons";
 import { PledgeBoard } from "@/components/pledges/PledgeBoard";
 
 /**
@@ -59,6 +59,33 @@ export default async function PledgesPage() {
                 ⛔ 여기서 이행 여부를 «설명»하지 마라 — 판정은 상태 배지와 비고가 한다 */}
             코스콤 Dream 프로젝트 공약의 이행 상황입니다.
           </p>
+
+          {/*
+            공약집 원본 (사용자 지시 2026-09-07 — 「상세내역 최상단」).
+            형태·클래스는 `/bargaining-2026` 의 「원본 자료」 카드와 **같은 것**을 쓴다 —
+            이 저장소에서 «내려받는 문서»의 관용구가 그것이다. 새 형태를 만들지 마라.
+
+            ★ **용량을 표기한다.** 7.3MB 는 조합원이 **현장 모바일 데이터로** 받는 무게다.
+              union-design-system §0.6 은 원본을 그대로 올리지 말라고 하지만, 그것은 «자동으로
+              내려받는 인라인 이미지» 규정이다. PDF 는 «눌러서» 받으므로 무게를 줄이는 대신
+              **크기를 먼저 알려 스스로 고르게 한다.** ⛔ 이 표기를 지우지 마라.
+              (압축을 하려면 ghostscript 가 필요한데 이 환경에 없다 — 후속 판단.)
+
+            ⚠ `result.ok` 바깥이다 — **공약 조회가 실패해도 원본은 받을 수 있어야 한다.**
+              안쪽으로 옮기면 API 장애 때 조합원이 원본에도 닿지 못한다.
+          */}
+          <a
+            href="/docs/15gi-dream-pledges.pdf"
+            className="rounded-2xl shadow-card ease-out-soft group mt-8 flex min-h-touch items-center gap-3 bg-bg p-5 transition-shadow hover:shadow-card-hover focus-visible:outline-3 focus-visible:outline-primary focus-visible:outline-offset-2"
+          >
+            <DocumentIcon className="size-6 shrink-0 text-primary" />
+            <span className="min-w-0">
+              <span className="block break-keep break-words text-body font-semibold text-ink group-hover:underline">
+                공약집 원본 (PDF)
+              </span>
+              <span className="mt-1 block text-caption text-ink-muted">11쪽 · 7.3MB</span>
+            </span>
+          </a>
 
           {result.ok ? (
             <PledgeBoard pledges={result.data.pledges} />
