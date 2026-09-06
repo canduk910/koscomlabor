@@ -5,6 +5,7 @@ import {
   isRecord,
   networkFailure,
   readErrorResult,
+  SSR_FETCH_TIMEOUT_MS,
   unconfiguredResult,
 } from "@/lib/api/http";
 
@@ -163,6 +164,8 @@ export async function listPledges(): Promise<ApiResult<PledgeListResult>> {
   try {
     const response = await fetch(`${connection.baseUrl}/pledges`, {
       headers: { Accept: "application/json" },
+      // ⛔ 지우지 마라 — 근거는 `http.ts` 의 SSR_FETCH_TIMEOUT_MS 주석
+      signal: AbortSignal.timeout(SSR_FETCH_TIMEOUT_MS),
     });
     if (!response.ok) return readErrorResult(response, "공약 목록을 불러오지 못했습니다.");
     const payload: unknown = await response.json();

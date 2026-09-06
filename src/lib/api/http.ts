@@ -33,6 +33,21 @@ export type ApiConnection =
   | { status: "unconfigured" }
   | { status: "configured"; baseUrl: string };
 
+/**
+ * **서버 렌더(SSR/ISR)에서 API 를 부를 때의 상한.** ⛔ 지우지 마라 — 없으면 조합원이 기다린다.
+ *
+ * `next.config.ts` 의 `expireTime: 60` 이 만료된 캐시 항목의 재생성을 **조합원 요청 위로** 올렸다.
+ * 그 렌더에는 상한이 없다(`staticPageGenerationTimeout` 은 빌드 전용이다). 업스트림이 먹통이면
+ * `fetch` 는 수십 초가 지나도 reject 하지 않고, 그동안 방문자는 안내 카드가 아니라 **빈 화면**을 본다.
+ * → 상한을 걸면 `fetch` 가 `AbortError` 로 reject 하고 **이미 있는 `catch` 가** 그것을 받아
+ *   `networkFailure(...)` 로 떨어뜨린다. **새 문구·새 분기가 필요 없다** — 기존 안내 카드에 착지한다.
+ *
+ * 값 근거: 프로덕션 API 왕복 실측이 수십 ms 수준이라 3초는 정상 구간을 건드리지 않는다.
+ * ⚠ 타임아웃으로 만들어진 «안내 카드»도 60초 캐시된다 — 그동안 정상으로 돌아와도 화면은 안내가
+ *   남는다. 그것이 낡은 값을 내보내는 것보다 낫다는 판정이다(정직한 빈 상태 > 가짜 동작).
+ */
+export const SSR_FETCH_TIMEOUT_MS = 3000;
+
 export const API_UNCONFIGURED_MESSAGE =
   "백엔드 API가 아직 연결되지 않았습니다 (NEXT_PUBLIC_API_BASE_URL 미설정).";
 
