@@ -9,6 +9,13 @@ import type { PledgeCategory, PledgeStatus } from "@/lib/api/pledges";
  * `POST_CATEGORY_LABELS`(게시물)와 같은 형태다 — 그쪽 주석에 이 방식의 사고 이력이 있다.
  */
 
+/**
+ * 대시보드 이름 — **사용자 지정 문면**(2026-09-07). ⛔ 한 글자도 바꾸지 마라.
+ * 화면 세 곳(메인 대시보드 제목 · `/pledges` 제목 · 브라우저 탭)이 **이 상수 하나**를 쓴다 —
+ * 리터럴을 각 파일에 다시 적으면 이름이 갈려 「전체보기」로 넘어갈 때 다른 것으로 읽힌다.
+ */
+export const PLEDGE_DASHBOARD_NAME = "15기 드림노조 공약 이행 대시보드";
+
 /** 카테고리 라벨 — 공약집이 스스로 붙인 표제 그대로. ⛔ 다듬지 마라 */
 export const PLEDGE_CATEGORY_LABELS: Record<PledgeCategory, string> = {
   strong: "든든한 코스콤",

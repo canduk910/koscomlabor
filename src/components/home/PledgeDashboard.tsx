@@ -1,6 +1,11 @@
 import Link from "next/link";
 import type { ApiPledge } from "@/lib/api/pledges";
-import { PLEDGE_CATEGORY_LABELS, PLEDGE_CATEGORY_ORDER, tallyPledges } from "@/lib/pledges";
+import {
+  PLEDGE_CATEGORY_LABELS,
+  PLEDGE_CATEGORY_ORDER,
+  PLEDGE_DASHBOARD_NAME,
+  tallyPledges,
+} from "@/lib/pledges";
 import { ROUTES } from "@/lib/routes";
 import { ArrowRightIcon } from "@/components/ui/icons";
 import { PledgeBar, PledgeProgress } from "@/components/pledges/PledgeProgress";
@@ -34,8 +39,10 @@ export function PledgeDashboard({
       className={`rounded-panel shadow-card bg-bg p-5 md:p-6 ${className}`}
     >
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <h2 id="pledge-dashboard-title" className="text-h2 text-ink">
-          공약 이행 현황
+        {/* 이름은 `PLEDGE_DASHBOARD_NAME` 하나에서 온다 — 여기 리터럴을 적지 마라.
+            ⚠ `break-keep break-words` 를 빼지 마라: 19자라 200% 확대에서 줄바꿈이 필요하다(§0.8) */}
+        <h2 id="pledge-dashboard-title" className="break-keep break-words text-h2 text-ink">
+          {PLEDGE_DASHBOARD_NAME}
         </h2>
         <Link
           href={ROUTES.pledges}

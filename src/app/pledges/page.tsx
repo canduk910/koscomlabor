@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { listPledges } from "@/lib/api/pledges";
+import { PLEDGE_DASHBOARD_NAME } from "@/lib/pledges";
 import { ROUTES } from "@/lib/routes";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
@@ -22,10 +23,12 @@ import { PledgeBoard } from "@/components/pledges/PledgeBoard";
  *
  * ⚠ API 미설정·실패 시 **가짜 목록을 만들지 않는다** — 왜 비었는지 정직하게 말한다(§15.6R-H).
  */
+// ⛔ 이 줄을 지워 404 를 고치려 하지 마라 — 지우면 `s-maxage=31536000` 이 붙어
+//   **재배포 전까지 영구 404** 가 된다. 낡은 404 를 막는 것은 `next.config.ts` 의 `expireTime` 이다.
 export const revalidate = 60;
 
 export const metadata: Metadata = {
-  title: "공약 이행 현황 — 전국금융산업노동조합 코스콤(한국증권전산)지부",
+  title: `${PLEDGE_DASHBOARD_NAME} — 전국금융산업노동조합 코스콤(한국증권전산)지부`,
   description: "코스콤 Dream 프로젝트 공약의 이행 상황을 달성·협의중·미달성으로 공개합니다.",
   // ⛔ 지우지 마라 — 위 머리 주석 ②. 「대시보드를 통해서만 진입」의 절반이다.
   // ⚠ **«비공개로 빌드 → 공개로 ISR 재생성» 된 응답에는 `nofollow` 가 빠지고 `noindex` 만 남는다**
@@ -45,7 +48,12 @@ export default async function PledgesPage() {
       <SiteHeader asHeading={false} />
       <main className="flex-1">
         <div className="mx-auto mt-8 w-full max-w-page px-4 pb-16 md:mt-14 md:px-8">
-          <h1 className="text-title text-ink md:text-h1">공약 이행 현황</h1>
+          {/* 이름은 `PLEDGE_DASHBOARD_NAME` 하나에서 온다 — 메인 대시보드와 «같은 글자»여야
+              「전체보기」로 넘어온 사람이 같은 것으로 읽는다. 리터럴을 적지 마라.
+              ⚠ `break-keep break-words` 를 빼지 마라(19자 · 200% 확대 §0.8) */}
+          <h1 className="break-keep break-words text-title text-ink md:text-h1">
+            {PLEDGE_DASHBOARD_NAME}
+          </h1>
           <p className="mt-4 max-w-[var(--container-prose)] break-keep break-words text-body text-ink">
             {/* 공약집 표제(「핵심공약 — 코스콤 Dream 프로젝트」)에서 가져온 이름이다.
                 ⛔ 여기서 이행 여부를 «설명»하지 마라 — 판정은 상태 배지와 비고가 한다 */}

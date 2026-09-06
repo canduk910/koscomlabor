@@ -14,6 +14,7 @@ import {
 import {
   PLEDGE_CATEGORY_LABELS,
   PLEDGE_CATEGORY_ORDER,
+  PLEDGE_DASHBOARD_NAME,
   PLEDGE_HIGHLIGHT_LABEL,
   PLEDGE_STATUS_META,
   PLEDGE_STATUS_ORDER,
@@ -229,8 +230,8 @@ export function PledgeAdminPanel({ onSessionExpired }: { onSessionExpired: () =>
       setPublished(result.data.pledgesPublished);
       setNotice(
         result.data.pledgesPublished
-          ? "공약 이행 현황을 공개했습니다. 조합원 화면 반영까지 최대 1분 걸립니다."
-          : "공약 이행 현황을 비공개로 돌렸습니다. 조합원 화면 반영까지 최대 1분 걸립니다.",
+          ? `${PLEDGE_DASHBOARD_NAME}를 공개했습니다. 조합원 화면 반영까지 최대 1분 걸립니다.`
+          : `${PLEDGE_DASHBOARD_NAME}를 비공개로 돌렸습니다. 조합원 화면 반영까지 최대 1분 걸립니다.`,
       );
       return;
     }
@@ -287,8 +288,10 @@ export function PledgeAdminPanel({ onSessionExpired }: { onSessionExpired: () =>
   return (
     <section aria-labelledby="pledge-admin-title" className="mt-10 border-t border-border-soft pt-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="pledge-admin-title" className="text-h2 text-ink">
-          공약 이행 관리
+        {/* 대시보드 이름과 같은 «15기 드림노조 공약 이행» 을 머리에 둔다 — 관리자가 고치는 것이
+            조합원이 보는 그 대시보드임을 화면에서 잇는다. 이름 부분은 `PLEDGE_DASHBOARD_NAME` 파생이다 */}
+        <h2 id="pledge-admin-title" className="break-keep break-words text-h2 text-ink">
+          {PLEDGE_DASHBOARD_NAME.replace(/ 대시보드$/, "")} 관리
         </h2>
         <div className="flex flex-wrap gap-2">
           {open ? (
