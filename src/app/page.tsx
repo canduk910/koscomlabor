@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { listPosts, type PostCategory } from "@/lib/api/posts";
+import { listPledges } from "@/lib/api/pledges";
 import { getApiConnection } from "@/lib/api/http";
 import {
   type PostListItem,
@@ -14,6 +15,7 @@ import { SiteFooter } from "@/components/layout/SiteFooter";
 import { HeroPanel } from "@/components/home/HeroPanel";
 import { DeadlineStrip } from "@/components/home/DeadlineStrip";
 import { OnnuriGuideCard } from "@/components/home/OnnuriGuideCard";
+import { PledgeDashboard } from "@/components/home/PledgeDashboard";
 import { StrikeBanner } from "@/components/home/StrikeBanner";
 import { HomeTabs, type HomeTabItem } from "@/components/home/HomeTabs";
 import { StruggleCalendar } from "@/components/bargaining/StruggleCalendar";
@@ -48,6 +50,12 @@ async function loadCategory(category: PostCategory): Promise<CategoryData> {
 
 export default async function Home() {
   const connection = getApiConnection();
+
+  /* 공약 조회를 **게시물보다 «먼저 띄운다»**(await 하지 않는다) — 아래 Promise.all 과 겹쳐 돌게
+     하려는 것이다. ⚠ 뒤로 옮겨 `await` 하지 마라: 그러면 메인 재생성 시간이 두 왕복의 «합»이 된다.
+     ⚠ `listPledges()` 는 내부에서 전부 catch 하므로 여기서 reject 되지 않는다. */
+  const pledgePromise = connection.status === "configured" ? listPledges() : null;
+
   const [notices, news, education] =
     connection.status === "configured"
       ? await Promise.all([
@@ -56,6 +64,17 @@ export default async function Home() {
           loadCategory("education"),
         ])
       : [UNCONFIGURED, UNCONFIGURED, UNCONFIGURED];
+
+  /* 공약 이행 요약 (2026-09-06).
+     ⚠ **실패하면 `null` 이고 블록을 통째로 렌더하지 않는다** — 통신 실패를 «달성 0건»으로 그리면
+       그것은 사실 주장이 된다(PledgeDashboard 머리 주석).
+     ⚠ **0건도 `null` 이다** — 「공약 0건 중 0건 달성 (0%)」은 빈 막대와 함께 고장으로 읽힌다.
+     ⚠ 게시물 조회와 **분리된 실패**다 — 공약이 안 와도 게시판은 그대로 떠야 한다. */
+  const pledgeResult = pledgePromise === null ? null : await pledgePromise;
+  const pledges =
+    pledgeResult !== null && pledgeResult.ok && pledgeResult.data.length > 0
+      ? pledgeResult.data
+      : null;
 
   // 히어로 urgent 바인딩은 **서버 정렬(urgent 우선 → 최신순)에 기댄다** — 그래서 공지 목록의
   // 첫 항목이 urgent 면 그것이 곧 "urgent 최신 1건"이다(§11.4 모드 1 · 별도 쿼리 없이 파생).
@@ -134,6 +153,12 @@ export default async function Home() {
           <div className="mt-8 md:mt-10">
             <OnnuriGuideCard />
           </div>
+
+          {/* 공약 이행 요약 상황판 — 개별 43건은 `/pledges` 다(사용자 확정 2026-09-06).
+              ⛔ 여기에 목록을 펼치지 마라 · ⛔ 「전체보기」 링크를 빼지 마라 (그 유일한 경로다). */}
+          {pledges !== null ? (
+            <PledgeDashboard pledges={pledges} className="mt-8 md:mt-10" />
+          ) : null}
 
           {/* 게시판 **탭**(사용자 지시 2026-08-22 — `SectionNav` + 세로 스택을 대체. 그 둘은 사용처 0).
               ⚠ **`HomeTabs` 머리 주석을 읽고 나서 손대라** — 탭 사고(§0.4) 재발 방지 장치가 거기 있다 */}

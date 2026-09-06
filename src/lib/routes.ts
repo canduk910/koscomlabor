@@ -131,6 +131,12 @@ export const ROUTES = {
   education: educationPath,
   /** 분류 → 상세 경로 (§15.6R-G) */
   post: (category: PostCategory, id: string): string => POST_DETAIL_PATHS[category](id),
+  /**
+   * 공약 이행 현황 전체보기 (2026-09-06 신설). 메인 요약 상황판의 「전체보기」가 유일한 진입점이다.
+   * ⚠ 메인에 43건을 전부 펼치지 않기로 한 것이 이 페이지가 있는 이유다(사용자 확정) —
+   *   요약을 지우고 여기로 합치거나, 반대로 이 페이지를 지우고 메인에 다 펼치지 마라.
+   */
+  pledges: "/pledges",
   /** 관리자 화면 */
   admin: "/admin",
 } as const;

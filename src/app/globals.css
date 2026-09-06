@@ -46,6 +46,30 @@
   --color-border-strong: #6b7280;  /* 컨트롤 경계(4.83 UI) */
   --color-border-soft: #e5e7eb;    /* 장식 구분선 전용(hr·admin) */
 
+  /* ---- 공약 이행 신호등 (2026-09-06 신설) — **신규 색 2종뿐이다** ----
+   *
+   * 신호등 3칸 중 **적색은 기존 `urgent` 3형제를 그대로 쓴다**(재정의 0). 그래서 늘어난 색은
+   * 초록·호박 둘이다. §2 「의미색 3종 상한」 위에서 이 화면이 가능한 이유가 그 재사용이다.
+   *   달성   done-strong  #14532d  on done-tint    #eafaf0 = 8.43 AAA
+   *   협의중 talking-strong #713f12 on talking-tint #fdf6d8 = 7.99 AAA
+   *   미달성 urgent-strong #9c0d14 on urgent-tint  #fef2f2 = 7.74 AAA  ← 기존 값
+   * 표식(점)은 «UI 컴포넌트» 3:1 기준이며 자기 tint 위에서
+   *   done #15803d 4.79 · talking #b45309 4.86 · urgent #d0101b 5.09 — 전부 여유 있게 통과.
+   * ★ `--color-urgent`(#d0101b)는 여태 사용처 0 이었다. 이 점이 **첫 사용처**다.
+   *
+   * ⛔ **이 여섯 색을 상황판 «밖»으로 내보내지 마라.** 메인페이지에는 이미 파랑(주색)과
+   *   적색(긴급)이 있다 — 여기서 초록·호박이 카드 면·테두리·본문으로 번지면 한 화면의
+   *   의미색이 다섯이 되고 «색이 무엇을 뜻하는가»가 무너진다. 쓰임은 **작은 배지·점·
+   *   진행 막대 조각**으로 한정한다.
+   * ⛔ 4번째 상태를 만들지 마라 — 신호등은 세 칸이라는 것이 이 화면의 전부다.
+   */
+  --color-done: #15803d;           /* 표식·막대 조각 */
+  --color-done-strong: #14532d;    /* 배지 텍스트 */
+  --color-done-tint: #eafaf0;      /* 배지 바탕 */
+  --color-talking: #b45309;
+  --color-talking-strong: #713f12;
+  --color-talking-tint: #fdf6d8;
+
   /* ---- 폰트 — 변경 0 ---- */
   --font-sans: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
   --font-display: "Gmarket Sans", "Pretendard Variable", Pretendard,
