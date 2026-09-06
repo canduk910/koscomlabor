@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { listPledges } from "@/lib/api/pledges";
 import { ROUTES } from "@/lib/routes";
 import { SiteHeader } from "@/components/layout/SiteHeader";
@@ -10,8 +11,14 @@ import { PledgeBoard } from "@/components/pledges/PledgeBoard";
 /**
  * 공약 이행 현황 전체보기 (사용자 지시 2026-09-06).
  *
- * 메인의 요약 상황판이 유일한 진입점이다 — 메인에 43건을 전부 펼치지 않기로 한 것이
- * 이 페이지가 있는 이유다(사용자 확정). `ROUTES.pledges` 주석 참조.
+ * ★★ **이 페이지는 대시보드를 통해서만 들어온다**(사용자 확정 2026-09-06). 두 장치가 그것을 진다:
+ *   ① 관리자가 «비공개»로 두면 **404** 다 — 주소를 알아도 열리지 않는다
+ *   ② `noindex` 라 **검색으로 발견되지 않는다**
+ *   ⛔ 어느 하나도 빼지 마라. 링크가 메인 상황판 하나뿐이라는 사실만으로는
+ *     «대시보드를 통해서만»이 성립하지 않는다 — 주소는 공유되고 검색엔진은 기어 다닌다.
+ *
+ * ★ **«비공개»(404)와 «통신 실패»(안내 문구)를 갈라라.** 서버가 죽었을 때 「없는 페이지」를
+ *   보여주면 조합원은 페이지가 «폐지됐다»고 읽는다. 404 는 우리가 «알고» 닫았을 때만이다.
  *
  * ⚠ API 미설정·실패 시 **가짜 목록을 만들지 않는다** — 왜 비었는지 정직하게 말한다(§15.6R-H).
  */
@@ -20,10 +27,18 @@ export const revalidate = 60;
 export const metadata: Metadata = {
   title: "공약 이행 현황 — 전국금융산업노동조합 코스콤(한국증권전산)지부",
   description: "코스콤 Dream 프로젝트 공약의 이행 상황을 달성·협의중·미달성으로 공개합니다.",
+  // ⛔ 지우지 마라 — 위 머리 주석 ②. 「대시보드를 통해서만 진입」의 절반이다.
+  // ⚠ **«비공개로 빌드 → 공개로 ISR 재생성» 된 응답에는 `nofollow` 가 빠지고 `noindex` 만 남는다**
+  //   (실측 2026-09-06 · 정상 빌드된 `/admin` 은 `noindex, nofollow`). **고장이 아니다** —
+  //   검색 비노출을 지는 것은 `noindex` 이고 그것은 두 경우 모두 붙는다. 여기를 손대지 마라.
+  robots: { index: false, follow: false },
 };
 
 export default async function PledgesPage() {
   const result = await listPledges();
+
+  // 비공개 = 우리가 «알고» 닫은 상태 → 404. 통신 실패는 여기서 걸리지 않는다(아래 안내로 간다)
+  if (result.ok && !result.data.published) notFound();
 
   return (
     <>
@@ -38,7 +53,7 @@ export default async function PledgesPage() {
           </p>
 
           {result.ok ? (
-            <PledgeBoard pledges={result.data} />
+            <PledgeBoard pledges={result.data.pledges} />
           ) : (
             <div className="rounded-card mt-8 border border-border-strong bg-surface px-4 py-12 text-center">
               <ConstructionIcon className="mx-auto size-10 text-border-strong" />

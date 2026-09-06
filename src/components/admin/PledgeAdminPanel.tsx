@@ -6,7 +6,9 @@ import {
   type PledgeStatus,
   PLEDGE_NOTE_MAX,
   adminDeletePledge,
+  adminGetPledgeVisibility,
   adminListPledges,
+  adminSetPledgeVisibility,
   adminUpdatePledge,
 } from "@/lib/api/pledges";
 import {
@@ -178,6 +180,12 @@ export function PledgeAdminPanel({ onSessionExpired }: { onSessionExpired: () =>
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  /**
+   * 공개 여부. **`null` = 아직 모른다** — `false`(비공개) 와 구별해야 한다.
+   * 모르는 동안 「공개하기」 버튼을 내면, 이미 공개 중인데 «공개하기»가 떠 있는 화면이 된다.
+   */
+  const [published, setPublished] = useState<boolean | null>(null);
+  const [visibilityBusy, setVisibilityBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -195,6 +203,43 @@ export function PledgeAdminPanel({ onSessionExpired }: { onSessionExpired: () =>
       cancelled = true;
     };
   }, [reloadToken, onSessionExpired]);
+
+  // 공개 여부는 목록과 **따로** 조회한다 — 목록이 실패해도 «지금 공개 중인가»는 알아야 하고,
+  // 관리자가 그 상태에서 «비공개로» 내릴 수 있어야 한다.
+  useEffect(() => {
+    let cancelled = false;
+    void adminGetPledgeVisibility().then((result) => {
+      if (cancelled) return;
+      if (result.ok) setPublished(result.data.pledgesPublished);
+      else if (result.reason === "unauthorized") onSessionExpired();
+      // 그 밖의 실패는 `null`(모름) 로 남긴다 — 틀린 상태를 단언하지 않는다
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [onSessionExpired]);
+
+  async function toggleVisibility() {
+    if (published === null || visibilityBusy) return;
+    const next = !published;
+    setVisibilityBusy(true);
+    const result = await adminSetPledgeVisibility(next);
+    setVisibilityBusy(false);
+    if (result.ok) {
+      setPublished(result.data.pledgesPublished);
+      setNotice(
+        result.data.pledgesPublished
+          ? "공약 이행 현황을 공개했습니다. 조합원 화면 반영까지 최대 1분 걸립니다."
+          : "공약 이행 현황을 비공개로 돌렸습니다. 조합원 화면 반영까지 최대 1분 걸립니다.",
+      );
+      return;
+    }
+    if (result.reason === "unauthorized") {
+      onSessionExpired();
+      return;
+    }
+    setNotice(result.message);
+  }
 
   const reload = useCallback(() => {
     setList({ status: "loading" });
@@ -265,6 +310,57 @@ export function PledgeAdminPanel({ onSessionExpired }: { onSessionExpired: () =>
             {open ? "접기" : "펼치기"}
           </button>
         </div>
+      </div>
+
+      {/*
+        ★★ **공개 / 비공개 — 접힘 컨테이너 «밖»이다.** 이것이 조합원 화면을 켜고 끄는 스위치라
+        패널을 펼치지 않아도 «지금 공개 중인가»가 보여야 한다.
+        ★ 문면은 사용자가 확정했다(2026-09-06 · 「공개 / 비공개」). **바꾸지 마라.**
+        ★ 상태를 **색으로만** 말하지 않는다 — 글자(공개/비공개)가 정본이고 배지 바탕은 보조다.
+        ⚠ `published === null` 은 «아직 모른다» 다. 그때는 버튼을 내지 않는다 —
+          모르는 채로 「공개하기」를 보이면 이미 공개 중인 화면을 다시 공개하는 것처럼 읽힌다.
+
+        ⛔⛔ **신호등 색(done/talking/urgent)을 여기 쓰지 마라 — 처음에 그렇게 만들었다가 되돌렸다.**
+          이 패널 안에서 초록이 「달성」과 「공개」 두 뜻을 갖게 되고, 바로 아래 43행의 배지와
+          같은 색이 «다른 것»을 가리킨다. globals.css 의 «신호등 색을 상황판 밖으로 내보내지 마라»가
+          가리키는 것이 정확히 이 자리다.
+          → 대신 **기존 토큰**을 쓴다(신규 색 0):
+            공개   `bg-primary-soft text-primary`      9.23 AAA
+            비공개 `bg-accent-tint text-accent-strong` 7.84 AAA — 오렌지는 이 저장소에서
+                   «오류»가 아니라 «상시 주의 환기»다(초기 비밀번호 배너와 같은 쓰임).
+      */}
+      <div className="rounded-badge mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 bg-surface p-3">
+        <span className="text-caption font-semibold text-ink">조합원 화면</span>
+        {published === null ? (
+          <span role="status" className="text-caption text-ink-muted">
+            공개 여부를 확인하는 중입니다…
+          </span>
+        ) : (
+          <>
+            <span
+              className={`rounded-badge px-2 py-0.5 text-caption font-bold ${
+                published ? "bg-primary-soft text-primary" : "bg-accent-tint text-accent-strong"
+              }`}
+            >
+              {published ? "공개" : "비공개"}
+            </span>
+            <span className="min-w-0 flex-1 break-keep break-words text-caption text-ink-muted">
+              {published
+                ? "메인 상황판과 전체보기 페이지가 조합원에게 보입니다."
+                : "메인 상황판이 뜨지 않고 전체보기 페이지도 열리지 않습니다."}
+            </span>
+            <button
+              type="button"
+              onClick={toggleVisibility}
+              disabled={visibilityBusy}
+              // 「비공개로 돌리기」는 **파괴 동작이 아니다**(되돌릴 수 있고 데이터는 그대로다) —
+              // 위험 버튼(적색)은 삭제에 예약돼 있다. 「공개하기」가 이 줄의 주 동작이다
+              className={published ? ADMIN_SECONDARY_BUTTON_CLASS : ADMIN_PRIMARY_BUTTON_CLASS}
+            >
+              {visibilityBusy ? "바꾸는 중…" : published ? "비공개로 돌리기" : "공개하기"}
+            </button>
+          </>
+        )}
       </div>
 
       {/* ★ 접힌 상태에서도 보이는 요약 — §0.4 의 «접힌 개수 명시» 요구를 지는 줄이다 */}

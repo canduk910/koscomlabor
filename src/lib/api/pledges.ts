@@ -67,6 +67,26 @@ export interface PledgeInput {
 /** 부분 수정 — 보낸 키만 바뀐다(서버가 기존 값 위에 병합 후 전체 재검증). */
 export type PledgePatch = Partial<PledgeInput>;
 
+/**
+ * 공개 목록 응답 — **배열이 아니라 봉투다**(서버 `publicListSchema` 와 짝).
+ * `published: false` 면 서버가 데이터를 아예 안 보낸다 → `pledges` 는 빈 배열이다.
+ * ★ 화면은 이 둘을 «다르게» 다뤄야 한다:
+ *   `published === false` → 의도된 비공개(상세 페이지는 404)
+ *   `ok === false`        → 통신 실패(「불러오지 못했습니다」)
+ *   ⛔ 둘을 합치지 마라 — 서버가 죽었을 때 「없는 페이지」를 보여주게 된다.
+ */
+export interface PledgeListResult {
+  published: boolean;
+  pledges: ApiPledge[];
+}
+
+/** 공개 여부 (관리자 전용) */
+export interface PledgeVisibility {
+  pledgesPublished: boolean;
+  /** ISO 8601 UTC | null */
+  updatedAt: string | null;
+}
+
 /** 서버 한도와 동일 수치 (클라이언트 선검증용) */
 export const PLEDGE_TITLE_MAX = 200;
 export const PLEDGE_DETAIL_MAX = 2_000;
@@ -131,8 +151,12 @@ function parseArray<T>(payload: unknown, parse: (v: unknown) => T | null): T[] |
 /**
  * 공개 공약 목록 — **전건**. 페이징 파라미터가 없다(서버도 받지 않는다).
  * 화면이 진행률을 내므로 일부만 오면 숫자가 조용히 틀린다 — `routes/pledges.ts` 참조.
+ *
+ * ⚠ 응답이 봉투 형식이 아니면 `invalid-response` 다 — **관용 파싱을 넣지 마라.**
+ *   구버전 API(최상위 배열)를 «공개»로 해석하면, 웹이 API 보다 먼저 배포된 구간에
+ *   **비공개여야 할 상황판이 새어 나간다.** 형식이 다르면 «못 읽음»이고, 못 읽으면 안 보인다.
  */
-export async function listPledges(): Promise<ApiResult<ApiPledge[]>> {
+export async function listPledges(): Promise<ApiResult<PledgeListResult>> {
   const connection = getApiConnection();
   if (connection.status === "unconfigured") return unconfiguredResult();
 
@@ -141,9 +165,13 @@ export async function listPledges(): Promise<ApiResult<ApiPledge[]>> {
       headers: { Accept: "application/json" },
     });
     if (!response.ok) return readErrorResult(response, "공약 목록을 불러오지 못했습니다.");
-    const parsed = parseArray(await response.json(), parsePledge);
+    const payload: unknown = await response.json();
+    if (!isRecord(payload) || typeof payload.published !== "boolean") {
+      return invalidResponse("공약 목록 응답 형식이 올바르지 않습니다.");
+    }
+    const parsed = parseArray(payload.pledges, parsePledge);
     if (parsed === null) return invalidResponse("공약 목록 응답 형식이 올바르지 않습니다.");
-    return { ok: true, data: parsed };
+    return { ok: true, data: { published: payload.published, pledges: parsed } };
   } catch {
     return networkFailure("공약 서버에 연결하지 못했습니다.");
   }
@@ -169,6 +197,43 @@ async function adminRequest(
   } catch {
     return networkFailure("서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.");
   }
+}
+
+function parseVisibility(value: unknown): PledgeVisibility | null {
+  if (!isRecord(value) || typeof value.pledgesPublished !== "boolean") return null;
+  const updatedAt = readNullableString(value.updatedAt);
+  if (updatedAt === undefined) return null;
+  return { pledgesPublished: value.pledgesPublished, updatedAt };
+}
+
+export async function adminGetPledgeVisibility(): Promise<ApiResult<PledgeVisibility>> {
+  const result = await adminRequest(
+    "/admin/pledges/visibility",
+    { method: "GET" },
+    "공개 여부를 불러오지 못했습니다.",
+  );
+  if (!result.ok) return result;
+  const parsed = parseVisibility(result.data);
+  if (parsed === null) return invalidResponse("공개 여부 응답 형식이 올바르지 않습니다.");
+  return { ok: true, data: parsed };
+}
+
+export async function adminSetPledgeVisibility(
+  pledgesPublished: boolean,
+): Promise<ApiResult<PledgeVisibility>> {
+  const result = await adminRequest(
+    "/admin/pledges/visibility",
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pledgesPublished }),
+    },
+    "공개 여부를 바꾸지 못했습니다.",
+  );
+  if (!result.ok) return result;
+  const parsed = parseVisibility(result.data);
+  if (parsed === null) return invalidResponse("공개 여부 응답 형식이 올바르지 않습니다.");
+  return { ok: true, data: parsed };
 }
 
 export async function adminListPledges(): Promise<ApiResult<ApiAdminPledge[]>> {

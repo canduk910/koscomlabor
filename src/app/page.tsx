@@ -66,14 +66,16 @@ export default async function Home() {
       : [UNCONFIGURED, UNCONFIGURED, UNCONFIGURED];
 
   /* 공약 이행 요약 (2026-09-06).
-     ⚠ **실패하면 `null` 이고 블록을 통째로 렌더하지 않는다** — 통신 실패를 «달성 0건»으로 그리면
-       그것은 사실 주장이 된다(PledgeDashboard 머리 주석).
-     ⚠ **0건도 `null` 이다** — 「공약 0건 중 0건 달성 (0%)」은 빈 막대와 함께 고장으로 읽힌다.
+     상황판이 렌더되는 조건은 **셋 다 참일 때뿐**이다 — 하나라도 아니면 `null` 이고 블록이 사라진다:
+       ① 관리자가 «공개»로 켰다(`published`)   ⑵ 조회가 성공했다   ⑶ 공약이 1건 이상이다
+     ⚠ **비공개**(①)와 **통신 실패**(②)는 화면에서 같은 결과지만 **원인이 다르다** —
+       상세 페이지(`/pledges`)는 둘을 갈라야 하므로 그쪽에서는 합치지 마라.
+     ⚠ 통신 실패를 «달성 0건»으로 그리면 그것은 사실 주장이 된다(PledgeDashboard 머리 주석).
      ⚠ 게시물 조회와 **분리된 실패**다 — 공약이 안 와도 게시판은 그대로 떠야 한다. */
   const pledgeResult = pledgePromise === null ? null : await pledgePromise;
   const pledges =
-    pledgeResult !== null && pledgeResult.ok && pledgeResult.data.length > 0
-      ? pledgeResult.data
+    pledgeResult !== null && pledgeResult.ok && pledgeResult.data.published && pledgeResult.data.pledges.length > 0
+      ? pledgeResult.data.pledges
       : null;
 
   // 히어로 urgent 바인딩은 **서버 정렬(urgent 우선 → 최신순)에 기댄다** — 그래서 공지 목록의

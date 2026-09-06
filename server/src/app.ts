@@ -24,6 +24,7 @@ import { AdminCredentialsRepository } from "./repos/credentials.js";
 import { PledgesRepository } from "./repos/pledges.js";
 import { PostsRepository } from "./repos/posts.js";
 import { SessionsRepository } from "./repos/sessions.js";
+import { SettingsRepository } from "./repos/settings.js";
 import { registerAdminRoutes } from "./routes/admin.js";
 import { registerPledgeRoutes } from "./routes/pledges.js";
 import { registerPublicPostRoutes } from "./routes/posts.js";
@@ -122,6 +123,7 @@ export async function buildApp({ config }: AppDeps): Promise<FastifyInstance> {
   const sessions = new SessionsRepository(pool);
   const credentials = new AdminCredentialsRepository(pool);
   const pledges = new PledgesRepository(pool);
+  const settings = new SettingsRepository(pool);
 
   // 관리자 비밀번호 해시 부팅 시드 (§12.3). env 값은 admin_credentials 행이 없을 때만 쓰이고,
   // 이후에는 DB 가 권위 값이다. **실패하면 기동을 거부한다** — 자격 증명 저장소를 읽지 못하는
@@ -342,6 +344,7 @@ export async function buildApp({ config }: AppDeps): Promise<FastifyInstance> {
   registerPledgeRoutes(app, {
     config,
     pledges,
+    settings,
     sessions,
     getLimiter,
     adminLimiter,
