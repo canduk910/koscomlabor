@@ -19,6 +19,7 @@ import { PostForm } from "@/components/admin/PostForm";
 import { PasswordChangeForm } from "@/components/admin/PasswordChangeForm";
 import { DeleteDialog } from "@/components/admin/DeleteDialog";
 import { SortPanel } from "@/components/admin/SortPanel";
+import { PledgeAdminPanel } from "@/components/admin/PledgeAdminPanel";
 import {
   ADMIN_DANGER_BUTTON_CLASS,
   ADMIN_FIELD_CLASS,
@@ -146,6 +147,21 @@ export function AdminApp() {
   const reload = useCallback(() => {
     setList({ status: "loading" });
     setReloadToken((token) => token + 1);
+  }, []);
+
+  /**
+   * 공약 패널의 세션 만료 — 게시물 쪽 패널 상태까지 함께 닫고 로그인 화면으로 나간다.
+   * ⚠ **이 훅을 아래 조기 반환(`if (!configured) …`) 뒤로 내리지 마라** — 훅이 조건부로
+   *   호출되어 phase 가 바뀌는 순간 훅 순서가 깨진다. 아래의 다른 핸들러들은 훅이 아니라
+   *   평범한 함수라 그 자리에 있어도 되는 것이다.
+   * ⚠ `useCallback` 이 아니면 매 렌더마다 새 함수가 되어 `PledgeAdminPanel` 의 조회 effect 가
+   *   무한 재실행된다 (그쪽 의존성 배열에 들어간다).
+   */
+  const handlePledgeSessionExpired = useCallback(() => {
+    setPasswordPanelOpen(false);
+    setSortPanelOpen(false);
+    setEditing(null);
+    setPhase("login");
   }, []);
 
   if (!configured) {
@@ -356,6 +372,13 @@ export function AdminApp() {
             {editing === "new" ? "새 게시물 등록" : "게시물 수정"}
           </h3>
           <PostForm
+            /* ★★ **`key` 를 지우지 마라 — 지우면 «다른 게시물이 덮어써진다».**
+               폼을 연 채 아래 목록에서 다른 글의 「수정」을 누르면 `editing` 만 바뀌는데,
+               key 가 없으면 React 가 같은 인스턴스를 재사용하고 PostForm 의 필드는 전부
+               `useState(initial?.x)` 라 마운트 때 한 번만 초기화된다 → 화면에는 앞 글의 값이
+               남고 `initial.id` 만 뒤 글이 되어 「저장」이 **뒤 글을 앞 글 내용으로 덮는다.**
+               (2026-09-06 공약 패널 검토에서 같은 결함이 잡혀 이쪽도 함께 막았다.) */
+            key={editing === "new" ? "new" : editing.id}
             initial={editing === "new" ? null : editing}
             onSaved={(savedNotice) => {
               setNotice(savedNotice); // 폼이 사라지므로 결과 문구는 여기서 표시한다
@@ -435,6 +458,10 @@ export function AdminApp() {
           )
         ) : null}
       </div>
+
+      {/* 공약 이행 관리 — 게시물과 **다른 저장소**라 목록을 공유하지 않는다(별도 조회·별도 상태).
+          기본 접힘 + 접힌 상태에서도 건수·집계 노출(§0.4). 근거는 PledgeAdminPanel 머리 주석. */}
+      <PledgeAdminPanel onSessionExpired={handlePledgeSessionExpired} />
 
       {deleting !== null ? (
         <DeleteDialog
